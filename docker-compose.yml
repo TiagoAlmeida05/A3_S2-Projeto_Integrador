@@ -1,9 +1,0 @@
-services:
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: qda_db
-    ports:
-      - "5432:5432"

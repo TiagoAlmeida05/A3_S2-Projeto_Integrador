@@ -84,14 +84,7 @@ npm install          # Installs React & Tailwind
 
 To run the project on `localhost`, you need to start the components in this specific order. Open **4 terminal tabs**:
 
-### Tab 1: Database (Docker)
-
-```bash
-docker-compose up -d
-
-```
-
-### Tab 2: Backend (FastAPI)
+### Tab 1: Backend (FastAPI)
 
 *Ensure venv is active*
 
@@ -101,7 +94,7 @@ uvicorn main:app --reload --port 8000
 
 ```
 
-### Tab 3: Frontend (Vite)
+### Tab 2: Frontend (Vite)
 
 ```bash
 cd frontend
@@ -109,7 +102,7 @@ npm run dev
 
 ```
 
-### Tab 4: Desktop (Electron)
+### Tab 3: Desktop (Electron)
 
 *Wait for Tab 3 to show "Local: http://localhost:5173"*
 
@@ -126,7 +119,7 @@ npm start
 * **Main Branch:** Protected. Never push directly to `main`.
 * **Feature Branches:** Create a branch for every task (`feature/add-pdf-import`).
 * **Pull Requests:** At least one peer review is required before merging.
-* **Database:** If you change `backend/models.py`, notify the team so they can update their local Postgres schemas.
+* **Database:** If you change backend/models.py, you must delete your local .db file and let FastAPI regenerate it, or write an Alembic migration script. Do not commit the .db file to GitHub.
 
 ---
 
@@ -136,7 +129,3 @@ npm start
 * **WSLg:** If you are using WSL, ensure you are on Windows 11 or have a Wayland/X11 server configured to see the Electron GUI.
 
 ---
-
-### Next Step
-
-Since the README is ready, would you like me to write the **`main.js`** script for the root folder so the team can actually launch the Electron window and see the React app?
