@@ -8,7 +8,7 @@ This project uses a **Sidecar Architecture**:
 
 * **Frontend:** React + Tailwind CSS running inside **Electron**.
 * **Backend:** FastAPI (Python) handling heavy processing (AI, PDF parsing, Exports).
-* **Database:** PostgreSQL managed via **Docker**.
+* **Database:** SQLite
 
 ---
 
