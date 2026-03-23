@@ -8,7 +8,7 @@ This project uses a **Sidecar Architecture**:
 
 * **Frontend:** React + Tailwind CSS running inside **Electron**.
 * **Backend:** FastAPI (Python) handling heavy processing (AI, PDF parsing, Exports).
-* **Database:** PostgreSQL managed via **Docker**.
+* **Database:** SQLite
 
 ---
 
@@ -19,7 +19,6 @@ This project uses a **Sidecar Architecture**:
 | `/frontend` | The User Interface. | React components, Tailwind styles, Fetch API calls. |
 | `/backend` | The "Brain" of the app. | FastAPI routes, SQLModel definitions, AI logic. |
 | `main.js` | Electron Entry Point. | Manages the desktop window and spawns the backend. |
-| `docker-compose.yml` | Infrastructure. | Definitions for the PostgreSQL container. |
 | `requirements.txt` | Python Deps. | Libraries like `fastapi`, `sqlmodel`, `psycopg2`. |
 
 ---
