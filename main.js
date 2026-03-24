@@ -9,7 +9,8 @@ function createWindow () {
     }
   })
 
-  // This connects Electron to your Vite frontend (Tab 2)
+  win.maximize()
+  
   win.loadURL('http://localhost:5173')
 }
 
