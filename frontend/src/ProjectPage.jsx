@@ -5,6 +5,18 @@ function ProjectPage() {
   const { id } = useParams(); 
   const [documents, setDocuments] = useState([]);
   const [uploadStatus, setUploadStatus] = useState("");
+  const [projectName, setProjectName] = useState("");
+
+  const fetchProjectName = () => {
+    fetch(`http://127.0.0.1:8000/projects/${id}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.name) {
+          setProjectName(data.name);
+        }
+      })
+      .catch(err => console.error(err));
+  };
 
   const fetchDocuments = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}/documents/`)
@@ -15,6 +27,7 @@ function ProjectPage() {
 
   useEffect(() => {
     fetchDocuments();
+    fetchProjectName();
   }, [id]);
 
   const handleFileUpload = (event) => {
@@ -48,7 +61,7 @@ function ProjectPage() {
     <div style={{ padding: '40px', fontFamily: 'sans-serif', textAlign: 'left' }}>
       <Link to="/" style={{ color: '#646cff', textDecoration: 'none' }}>← Back to Dashboard</Link>
       
-      <h2 style={{ marginTop: '20px' }}>Project Workspace</h2>
+      <h2 style={{ marginTop: '20px' }}>Workspace: {projectName}</h2>
 
       <div style={{ padding: '20px', border: '1px solid #ccc', borderRadius: '8px', marginTop: '20px' }}>
         <h3>Documents</h3>
