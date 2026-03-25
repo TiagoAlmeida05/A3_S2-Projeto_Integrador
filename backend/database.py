@@ -1,41 +1,19 @@
-import sqlite3
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-DB_NAME = 'database.db'
+SQLALCHEMY_DATABASE_URL = "sqlite:///./qda_data.db"
 
-def get_db_connection():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
 
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            description TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def create_project(name, description):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO projects (name, description) VALUES (?, ?)', (name, description))
-    conn.commit()
-    new_id = cursor.lastrowid
-    conn.close()
-    return new_id
+Base = declarative_base()
 
-def get_all_projects():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM projects ORDER BY id DESC')
-    projects = cursor.fetchall()
-    conn.close()
-    return [dict(project) for project in projects]
-
-if __name__ == '__main__':
-    init_db()
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
