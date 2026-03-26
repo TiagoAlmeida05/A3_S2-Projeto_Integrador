@@ -111,3 +111,16 @@ def get_project_documents(project_id: int, db: Session = Depends(get_db)):
     documents = db.query(models.Document).filter(models.Document.project_id == project_id).all()
     
     return [{"id": doc.id, "filename": doc.filename, "created_at": doc.created_at} for doc in documents]
+
+
+@app.get("/projects/{project_id}/documents/{document_id}")
+def get_document(project_id: int, document_id: int, db: Session = Depends(get_db)):
+    doc = db.query(models.Document).filter(
+        models.Document.id == document_id, 
+        models.Document.project_id == project_id
+    ).first()
+    
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    return {"id": doc.id, "filename": doc.filename, "content": doc.content}

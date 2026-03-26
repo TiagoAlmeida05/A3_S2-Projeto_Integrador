@@ -6,6 +6,7 @@ function ProjectPage() {
   const [documents, setDocuments] = useState([]);
   const [uploadStatus, setUploadStatus] = useState("");
   const [projectName, setProjectName] = useState("");
+  const [activeDocument, setActiveDocument] = useState(null);
 
   const fetchProjectName = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}`)
@@ -23,6 +24,13 @@ function ProjectPage() {
       .then(res => res.json())
       .then(data => setDocuments(data))
       .catch(err => console.error(err));
+  };
+
+  const handleDocumentClick = (docId) => {
+    fetch(`http://127.0.0.1:8000/projects/${id}/documents/${docId}`)
+      .then(res => res.json())
+      .then(data => setActiveDocument(data))
+      .catch(err => console.error("Failed to fetch document content:", err));
   };
 
   useEffect(() => {
@@ -134,45 +142,79 @@ function ProjectPage() {
   };
 
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif', textAlign: 'left' }}>
-      <Link to="/" style={{ color: '#646cff', textDecoration: 'none' }}>← Back to Dashboard</Link>
+    <div style={{ padding: '40px', fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
-      <h2 style={{ marginTop: '20px' }}>Workspace: {projectName}</h2>
+      {/* HEADER */}
+      <div>
+        <Link to="/" style={{ color: '#646cff', textDecoration: 'none' }}>← Back to Dashboard</Link>
+        <h2 style={{ marginTop: '20px' }}>Workspace: {projectName}</h2>
+      </div>
 
-      <div style={{ padding: '20px', border: '1px solid #ccc', borderRadius: '8px', marginTop: '20px' }}>
-        <h3>Documents</h3>
+      {/*SIDE-BY-SIDE LAYOUT */}
+      <div style={{ display: 'flex', gap: '20px', flex: 1, marginTop: '20px', overflow: 'hidden' }}>
         
-        {/* THE IMPORT BUTTON */}
-        <div style={{ marginBottom: '20px' }}>
-          <input
-            type="file"
-            multiple // Fulfills the "select multiple files" user story!
-            id="file-upload"
-            accept=".txt,.md,.rtf"
-            style={{ display: 'none' }} // Hides the ugly default HTML input
-            onChange={handleFileUpload}
-          />
-          <label 
-            htmlFor="file-upload" 
-            style={{ padding: '10px 20px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', display: 'inline-block' }}
-          >
-            ➕ Import Documents
-          </label>
-          <span style={{ marginLeft: '15px', color: '#646cff' }}>{uploadStatus}</span>
+        {/* LEFT COLUMN: DOCUMENT LIST */}
+        <div style={{ width: '300px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', padding: '20px', backgroundColor: '#1a1a1a' }}>
+          <h3>Documents</h3>
+          
+          <div style={{ marginBottom: '20px' }}>
+            <input
+              type="file"
+              multiple
+              id="file-upload"
+              accept=".txt,.md,.rtf"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
+            />
+            <label htmlFor="file-upload" style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', display: 'block', textAlign: 'center' }}>
+              ➕ Import Documents
+            </label>
+            <div style={{ marginTop: '10px', color: '#646cff', fontSize: '14px', textAlign: 'center' }}>{uploadStatus}</div>
+          </div>
+
+          <ul style={{ listStyleType: 'none', padding: 0, overflowY: 'auto', flex: 1 }}>
+            {documents.length === 0 ? (
+              <p style={{ color: '#888' }}>No documents yet.</p>
+            ) : (
+              documents.map(doc => (
+                <li 
+                  key={doc.id} 
+                  onClick={() => handleDocumentClick(doc.id)} 
+                  style={{ 
+                    padding: '10px', 
+                    backgroundColor: activeDocument?.id === doc.id ? '#646cff' : '#2a2a2a', // Highlights the selected file!
+                    color: 'white', 
+                    marginBottom: '5px', 
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
+                  }}
+                >
+                  📄 {doc.filename}
+                </li>
+              ))
+            )}
+          </ul>
         </div>
 
-        {/* LIST OF IMPORTED FILES */}
-        {documents.length === 0 ? (
-          <p style={{ color: '#888' }}>No documents imported yet.</p>
-        ) : (
-          <ul style={{ listStyleType: 'none', padding: 0 }}>
-            {documents.map(doc => (
-              <li key={doc.id} style={{ padding: '10px', backgroundColor: '#f4f3ec', color: '#333', marginBottom: '5px', borderRadius: '4px' }}>
-                📄 {doc.filename}
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* TEXT VIEWER */}
+        <div style={{ flex: 1, border: '1px solid #ccc', borderRadius: '8px', padding: '30px', backgroundColor: '#fff', color: '#333', overflowY: 'auto' }}>
+          {activeDocument ? (
+            <div>
+              <h2 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginTop: 0 }}>
+                {activeDocument.filename}
+              </h2>
+              <div style={{ whiteSpace: 'pre-wrap', fontSize: '16px', lineHeight: '1.6', fontFamily: 'system-ui, sans-serif' }}>
+                {activeDocument.content}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+              <p>Select a document from the sidebar to start reading.</p>
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );
