@@ -31,14 +31,77 @@ function ProjectPage() {
   }, [id]);
 
   const handleFileUpload = (event) => {
-    const files = event.target.files;
+    const files = Array.from(event.target.files)  ;
     if (files.length === 0) return;
 
-    setUploadStatus("Uploading...");
-    
+    setUploadStatus("Checking files...");
     const formData = new FormData();
+
+    const existingNames = documents.map(doc => doc.filename);
+    let filesToUploadCount = 0;
+    
     for (let i = 0; i < files.length; i++) {
-      formData.append("files", files[i]);
+
+      let cur = files[i];
+      let shouldUpload = true;
+      let finalName = cur.name;
+      let isNameValid = false;
+
+      while (!isNameValid) {
+        if (existingNames.includes(finalName)) {
+          
+          const DotIndex = finalName.lastIndexOf('.');
+          const ext = DotIndex !== -1 ? finalName.substring(DotIndex) : "";
+          const base = DotIndex !== -1 ? finalName.substring(0, DotIndex) : finalName;
+          const suggestedName = `${base}_copy${ext}`;
+
+          const userInput = window.prompt(
+            `The file "${finalName}" already exists.\n\nPlease type a unique name below, or click Cancel to skip.`,
+            suggestedName 
+          );
+
+          // If they click Cancel, we immediately break the loop and skip the file.
+          if (userInput === null) {
+            shouldUpload = false;
+            break; 
+          }
+
+          let trimmedInput = userInput.trim();
+          
+          // If they just hit enter on a blank box, restart the loop and ask again
+          if (trimmedInput === "") {
+            continue; 
+          }
+
+          // Put the extension back if they deleted it from the name
+          if (ext && !trimmedInput.toLowerCase().endsWith(ext.toLowerCase())) {
+            trimmedInput += ext;
+          }
+
+          finalName = trimmedInput;
+          
+        } else {
+          isNameValid = true; //normal case
+        }
+      }
+
+      if (shouldUpload) {
+        if (finalName !== cur.name) {
+          cur = new File([cur], finalName, { type: cur.type });
+        }
+        
+        formData.append("files", cur);
+        filesToUploadCount++;
+        // Add it to our tracking array so we don't allow duplicates in this same batch
+        existingNames.push(finalName); 
+      }
+    }
+
+    //error handling
+    if (filesToUploadCount === 0) {
+      setUploadStatus("Upload cancelled. No files were added.");
+      event.target.value = null; // Reset the input
+      return;
     }
 
     fetch(`http://127.0.0.1:8000/projects/${id}/documents/`, {
@@ -67,6 +130,7 @@ function ProjectPage() {
         setUploadStatus("Upload failed.");
         console.error(err);
       });
+    event.target.value = null;
   };
 
   return (
