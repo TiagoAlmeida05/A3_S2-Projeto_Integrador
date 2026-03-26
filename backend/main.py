@@ -68,36 +68,42 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 async def upload_documents(project_id: int, files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
 
     ALLOWED_EXTENSIONS = {".txt", ".md", ".rtf"}
-    uploaded_names = []
+    successful_uploads = []
+    failed_uploads = []
     
     for file in files:
 
         _, ext = os.path.splitext(file.filename)
 
         if ext.lower() not in ALLOWED_EXTENSIONS:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"File type '{ext}' not supported. Only .txt, .md, and .rtf are allowed."
+           failed_uploads.append({"filename": file.filename, "reason": "Unsupported file type"})
+           continue
+        
+        try:
+            # 1. Read the file
+            content = await file.read()
+            text_content = content.decode("utf-8") 
+            
+            # 2. Create the Document object
+            new_doc = models.Document(
+                project_id=project_id,
+                filename=file.filename,
+                content=text_content
             )
-        
-        # 1. Read the file
-        content = await file.read()
-        text_content = content.decode("utf-8") 
-        
-        # 2. Create the Document object
-        new_doc = models.Document(
-            project_id=project_id,
-            filename=file.filename,
-            content=text_content
-        )
-        
-        db.add(new_doc)
-        uploaded_names.append(file.filename)
+            
+            db.add(new_doc)
+            successful_uploads.append(file.filename)
+
+        except UnicodeDecodeError:
+            failed_uploads.append({"filename": file.filename, "reason": "Unreadable text encoding"})
+        except Exception as e:
+           
+            failed_uploads.append({"filename": file.filename, "reason": "Corrupted file"})
         
     # Commit all files to the database at once!
     db.commit()
     
-    return {"message": f"Successfully uploaded {len(uploaded_names)} files!", "files": uploaded_names}
+    return {"message": f"Successfully uploaded {len(files)} files!", "successful": successful_uploads, "failed": failed_uploads}
 
 @app.get("/projects/{project_id}/documents/")
 def get_project_documents(project_id: int, db: Session = Depends(get_db)):

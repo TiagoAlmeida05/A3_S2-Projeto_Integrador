@@ -47,9 +47,21 @@ function ProjectPage() {
     })
       .then(res => res.json())
       .then(data => {
-        setUploadStatus("Upload complete!");
+        if (data.failed && data.failed.length > 0) {
+          
+          const errorList = data.failed.map(f => `${f.filename} (${f.reason})`).join(", ");
+          
+          if (data.successful.length > 0) {
+            setUploadStatus(`Uploaded ${data.successful.length} files. Failed: ${errorList}`);
+          } else {
+            setUploadStatus(`All uploads failed: ${errorList}`);
+          }
+        }
+        else {
+          setUploadStatus("Upload complete!");
+          setTimeout(() => setUploadStatus(""), 3000); // Clear message after 3s
+        } 
         fetchDocuments(); 
-        setTimeout(() => setUploadStatus(""), 3000); // Clear message after 3s
       })
       .catch(err => {
         setUploadStatus("Upload failed.");
