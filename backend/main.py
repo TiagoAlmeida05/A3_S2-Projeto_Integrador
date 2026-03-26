@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
+import os
 import models
 from database import engine, get_db
 
@@ -65,9 +66,20 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 
 @app.post("/projects/{project_id}/documents/")
 async def upload_documents(project_id: int, files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
+
+    ALLOWED_EXTENSIONS = {".txt", ".md", ".rtf"}
     uploaded_names = []
     
     for file in files:
+
+        _, ext = os.path.splitext(file.filename)
+
+        if ext.lower() not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"File type '{ext}' not supported. Only .txt, .md, and .rtf are allowed."
+            )
+        
         # 1. Read the file
         content = await file.read()
         text_content = content.decode("utf-8") 

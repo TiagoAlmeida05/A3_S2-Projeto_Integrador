@@ -48,7 +48,7 @@ function Dashboard() {
       <h1>jUPiter-QDA Dashboard</h1>
       <p>Your free, open-source qualitative data analysis tool.</p>
 
-      {/* NEW: Clean Header Area with the Button */}
+      {/* Clean Header Area with the Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2>My Projects</h2>
         <button 

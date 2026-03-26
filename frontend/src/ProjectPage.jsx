@@ -71,8 +71,8 @@ function ProjectPage() {
           <input
             type="file"
             multiple // Fulfills the "select multiple files" user story!
-            accept=".txt"
             id="file-upload"
+            accept=".txt,.md,.rtf"
             style={{ display: 'none' }} // Hides the ugly default HTML input
             onChange={handleFileUpload}
           />
