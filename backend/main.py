@@ -1,5 +1,5 @@
 from typing import Optional, List
-from fastapi import FastAPI, Depends, UploadFile, File
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -45,6 +45,7 @@ def root():
 @app.post("/projects", response_model=ProjectResponse)
 def create_project_route(project: ProjectCreate, db: Session = Depends(get_db)):
     # Create the SQLAlchemy object
+    # user_id parameter disabled for now
     new_project = models.Project(name=project.name, description=project.description)
     db.add(new_project)
     db.commit()
@@ -83,12 +84,14 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
             # 1. Read the file
             content = await file.read()
             text_content = content.decode("utf-8") 
+            file_type = ext.lower().lstrip(".") or "text"
             
             # 2. Create the Document object
             new_doc = models.Document(
                 project_id=project_id,
                 filename=file.filename,
-                content=text_content
+                content=text_content,
+                type=file_type
             )
             
             db.add(new_doc)
@@ -110,7 +113,7 @@ def get_project_documents(project_id: int, db: Session = Depends(get_db)):
    
     documents = db.query(models.Document).filter(models.Document.project_id == project_id).all()
     
-    return [{"id": doc.id, "filename": doc.filename, "created_at": doc.created_at} for doc in documents]
+    return [{"id": doc.id, "filename": doc.filename, "type": doc.type, "created_at": doc.created_at} for doc in documents]
 
 
 @app.get("/projects/{project_id}/documents/{document_id}")
@@ -123,4 +126,4 @@ def get_document(project_id: int, document_id: int, db: Session = Depends(get_db
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
         
-    return {"id": doc.id, "filename": doc.filename, "content": doc.content}
+    return {"id": doc.id, "filename": doc.filename, "type": doc.type, "content": doc.content}
