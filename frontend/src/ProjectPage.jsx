@@ -7,6 +7,7 @@ function ProjectPage() {
   const [uploadStatus, setUploadStatus] = useState("");
   const [projectName, setProjectName] = useState("");
   const [activeDocument, setActiveDocument] = useState(null);
+  const [hoveredDocId, setHoveredDocId] = useState(null);
 
   const fetchProjectName = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}`)
@@ -141,6 +142,36 @@ function ProjectPage() {
     event.target.value = null;
   };
 
+  const handleDeleteDocument = async (docId, docName) => {
+    
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${docName}"? This cannot be undone.`);
+    if (!confirmDelete) return;
+
+    try {
+      
+      const response = await fetch(`http://127.0.0.1:8000/projects/${id}/documents/${docId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        
+        setDocuments(prevDocs => prevDocs.filter(doc => doc.id !== docId));
+        
+        if (activeDocument && activeDocument.id === docId) {
+          setActiveDocument(null);
+        }
+        
+        setUploadStatus(`Deleted ${docName}`);
+        setTimeout(() => setUploadStatus(""), 3000);
+      } else {
+        setUploadStatus("Failed to delete document.");
+      }
+    } catch (err) {
+      console.error(err);
+      setUploadStatus(" Server error during deletion.");
+    }
+  };
+
   return (
     <div style={{ padding: '40px', fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
@@ -180,6 +211,10 @@ function ProjectPage() {
                 <li 
                   key={doc.id} 
                   onClick={() => handleDocumentClick(doc.id)} 
+
+                  onMouseEnter={() => setHoveredDocId(doc.id)}
+                  onMouseLeave={() => setHoveredDocId(null)}
+
                   style={{ 
                     padding: '10px', 
                     backgroundColor: activeDocument?.id === doc.id ? '#646cff' : '#2a2a2a', // Highlights the selected file!
@@ -190,7 +225,32 @@ function ProjectPage() {
                     transition: 'background-color 0.2s'
                   }}
                 >
-                  📄 {doc.filename}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    📄 {doc.filename}
+                  </span>
+                  
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation(); 
+                      handleDeleteDocument(doc.id, doc.filename);
+                    }}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      color: '#ff4444',
+                      cursor: 'pointer',
+                      padding: '2px 6px',
+                      fontSize: '16px',
+                      borderRadius: '4px',
+
+                      visibility: hoveredDocId === doc.id ? 'visible' : 'hidden',
+                      opacity: hoveredDocId === doc.id ? 1 : 0,
+                      transition: 'opacity 0.2s ease-in-out' 
+                    }}
+                    title="Delete Document"
+                  >
+                    ✖
+                  </button>
                 </li>
               ))
             )}
