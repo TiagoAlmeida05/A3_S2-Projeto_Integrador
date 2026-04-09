@@ -13,7 +13,7 @@
 
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from database import Base
 
 class Project(Base):
@@ -23,7 +23,7 @@ class Project(Base):
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     # user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Disabled for now
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # owner = relationship("User", back_populates="projects")  # Disabled for now
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
@@ -37,7 +37,7 @@ class Document(Base):
     filename = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     type = Column(String, nullable=True, default="text")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     project = relationship("Project", back_populates="documents")
     segments = relationship("Segment", back_populates="document", cascade="all, delete-orphan")
@@ -49,8 +49,8 @@ class Code(Base):
     name = Column(String, nullable=False)
     color = Column(String, nullable=False, default="#FFFFFF")
     description = Column(Text, nullable=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
-    parent_id = Column(Integer, ForeignKey("codes.id"), nullable=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), ondelete="CASCADE", nullable=False)
+    parent_id = Column(Integer, ForeignKey("codes.id"), ondelete="CASCADE", nullable=True)
 
     project = relationship("Project", back_populates="codes")
     segments = relationship("Segment", back_populates="code", cascade="all, delete-orphan")
@@ -63,8 +63,8 @@ class Segment(Base):
     start_char = Column(Integer, nullable=False)
     end_char = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
-    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
-    code_id = Column(Integer, ForeignKey("codes.id"), nullable=False)
+    document_id = Column(Integer, ForeignKey("documents.id"), ondelete="CASCADE", nullable=False)
+    code_id = Column(Integer, ForeignKey("codes.id"), ondelete="CASCADE", nullable=False)
 
     document = relationship("Document", back_populates="segments")
     code = relationship("Code", back_populates="segments")
@@ -76,5 +76,6 @@ class Memo(Base):
     text = Column(Text, nullable=False)
     target_type = Column(String, nullable=False)
     target_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     
