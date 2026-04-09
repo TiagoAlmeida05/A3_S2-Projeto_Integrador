@@ -96,7 +96,7 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
         try:
             # 1. Read the file
             content = await file.read()
-            text_content = content.decode("utf-8") 
+            text_content = content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
             file_type = ext.lower().lstrip(".") or "text"
             
             # 2. Create the Document object
@@ -182,6 +182,21 @@ def create_code(project_id: int, code: CodeCreate, db: Session = Depends(get_db)
 def get_project_codes(project_id: int, db: Session = Depends(get_db)):
     codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
     return codes
+
+@app.delete("/projects/{project_id}/codes/{code_id}")
+def delete_code(project_id: int, code_id: int, db: Session = Depends(get_db)):
+    code = db.query(models.Code).filter(
+        models.Code.id == code_id,
+        models.Code.project_id == project_id
+    ).first()
+
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+    
+    db.delete(code)
+    db.commit()
+
+    return {"message":"Code deleted successfully"}
 
 @app.post("/projects/{project_id}/segments")
 def create_segment(project_id: int, segment: SegmentCreate, db: Session = Depends(get_db)):

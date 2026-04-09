@@ -1,16 +1,8 @@
 import { useState, useEffect } from 'react';
 
-function CodeSidebar({ projectId }) {
-  const [codes, setCodes] = useState([]);
+function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes }) {
   const [newCodeName, setNewCodeName] = useState("");
   const [newCodeColor, setNewCodeColor] = useState("#646cff");
-
-  useEffect(() => {
-    fetch(`http://127.0.0.1:8000/projects/${projectId}/codes`)
-      .then(res => res.json())
-      .then(data => setCodes(data))
-      .catch(err => console.error("Failed to fetch codes:", err));
-  }, [projectId]);
 
   const handleCreateCode = async (e) => {
     e.preventDefault();
@@ -27,16 +19,15 @@ function CodeSidebar({ projectId }) {
       });
 
       if (response.ok) {
-        const createdCode = await response.json();
-        setCodes(prev => [...prev, createdCode]); // Add to the list instantly
         setNewCodeName(""); // Clear the input
+        if(onRefreshCodes) onRefreshCodes();
       }
     } catch (error) {
       console.error("Failed to create code:", error);
     }
   };
 
-  return (
+return (
     <>
       <h3 style={{ marginTop: 0 }}>Master Codes</h3>
       
@@ -63,7 +54,7 @@ function CodeSidebar({ projectId }) {
 
       {/* List of Existing Codes */}
       <ul style={{ listStyleType: 'none', padding: 0, overflowY: 'auto', flex: 1 }}>
-        {codes.length === 0 ? (
+        {(!codes || codes.length === 0) ? (
           <p style={{ color: '#888', fontSize: '14px' }}>No codes created yet.</p>
         ) : (
           codes.map(code => (
@@ -77,11 +68,30 @@ function CodeSidebar({ projectId }) {
                 borderRadius: '4px',
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between', // Spreads items left and right
                 gap: '10px'
               }}
             >
-              <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: code.color }}></div>
-              <span>{code.name}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '12px', height: '12px', borderRadius: '50%', backgroundColor: code.color }}></div>
+                <span>{code.name}</span>
+              </div>
+              
+              {/* 3. THE NEW DELETE BUTTON */}
+              <button 
+                onClick={() => onDeleteCode(code.id)}
+                style={{ 
+                  backgroundColor: 'transparent', 
+                  border: 'none', 
+                  color: '#ff6b6b', 
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  padding: '0 5px'
+                }}
+                title="Delete Code"
+              >
+                🗑️
+              </button>
             </li>
           ))
         )}

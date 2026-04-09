@@ -29,6 +29,10 @@ function ProjectPage() {
   const [selectionRect, setSelectionRect] = useState(null);
   const [selectionOffsets, setSelectionOffsets] = useState(null);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+
+  const [quickCodeMode, setQuickCodeMode] = useState("new");
+  const [selectedExistingCodeId, setSelectedExistingCodeId] = useState("");
+
   const [quickCodeName, setQuickCodeName] = useState("");
   const [quickCodeColor, setQuickCodeColor] = useState("#646cff");
 
@@ -133,6 +137,14 @@ function ProjectPage() {
     setSelectionText(selectedText);
     setSelectionRect({ top: safeTop, left: safeLeft });
     setSelectionOffsets(offsetValues);
+
+    if (projectCodes.length > 0) {
+      setQuickCodeMode("existing");
+      setSelectedExistingCodeId(projectCodes[0].id.toString())
+    } else {
+      setQuickCodeMode("new");
+    }
+
     setQuickCodeName(selectedText.length > 30 ? `${selectedText.slice(0, 27)}...` : selectedText);
     setQuickCodeColor("#646cff");
     setQuickMenuOpen(true);
@@ -141,31 +153,34 @@ function ProjectPage() {
   const handleQuickCodeAction = async () => {
     if (!selectionText || !activeDocument || !selectionOffsets) return;
     
-    const offsets = selectionOffsets;
-    const codeName = quickCodeName.trim() || (selectionText.length > 30 ? `${selectionText.slice(0, 27)}...` : selectionText);
-    
+    const offsets = selectionOffsets;    
     setUploadStatus('Creating quick code...');
 
     try {
-      // Create the code
-      const codeResponse = await fetch(`${API_BASE}/projects/${id}/codes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: codeName,
-          color: quickCodeColor,
-          description: 'Created from selected text',
-          parent_id: null
-        })
-      });
+      let finalCodeID;
+      if( quickCodeMode === "new") {
+        const codeName = quickCodeName.trim() || (selectionText.length > 30 ? '${selectionText.slice(0, 27)}...' : selectionText);
 
-      const createdCode = await codeResponse.json();
-      if (!codeResponse.ok) throw new Error(createdCode.detail || 'Failed to create quick code');
+        const codeResponse = await fetch(`${API_BASE}/projects/${id}/codes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: codeName,
+            color: quickCodeColor,
+            description: 'Created from selected text',
+            parent_id: null
+          })
+        });
 
-      // Refresh codes so highlight color is up-to-date
-      await fetch(`${API_BASE}/projects/${id}/codes`)
-        .then(res => res.json())
-        .then(data => setProjectCodes(data));
+        const createdCode = await codeResponse.json();
+        if (!codeResponse.ok) throw new Error(createdCode.detail || 'Failed to create quick code');
+
+        finalCodeID = createdCode.id;
+
+        fetchCodes();
+      } else {
+        finalCodeID = parseInt(selectedExistingCodeId);
+      }
 
       //Create the segment
       const segmentResponse = await fetch(`${API_BASE}/projects/${id}/segments`, {
@@ -173,7 +188,7 @@ function ProjectPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           document_id: activeDocument.id,
-          code_id: createdCode.id,
+          code_id: finalCodeID,
           start_char: offsets.start,
           end_char: offsets.end,
           content: selectionText
@@ -183,7 +198,7 @@ function ProjectPage() {
       const createdSegment = await segmentResponse.json();
       if (!segmentResponse.ok) throw new Error(createdSegment.detail || 'Failed to save segment');
 
-      setUploadStatus('Quick code created and applied!');
+      setUploadStatus('Code applied!');
       setTimeout(() => setUploadStatus(''), 3000);
       clearTextSelection();
       window.getSelection()?.removeAllRanges();
@@ -193,7 +208,24 @@ function ProjectPage() {
       
     } catch (error) {
       console.error(error);
-      setUploadStatus('Failed to apply quick code.');
+      setUploadStatus('Failed to apply code.');
+    }
+  };
+
+  const handleDeleteCode = async (codeId) => {
+    const confirmDelete = window.confirm("Are you sure you want to delete this code? This will remove all highlights associated with it.")
+    if(!confirmDelete) return;
+
+    try{
+      const response = await fetch(`${API_BASE}/projects/${id}/codes/${codeId}`, {method: 'DELETE'});
+      if(response.ok){
+        setProjectCodes(prev => prev.filter(c => c.id !== codeId));
+        setDocumentSegments(prev => prev.filter(s => s.code_id !== codeId));
+      } else {
+        console.error("Failed to delete code");
+      }
+    } catch (error){
+      console.error("Error deleting code:", error);
     }
   };
 
@@ -395,7 +427,7 @@ function ProjectPage() {
     return parts;
   };
 
-  return (
+return (
     <div style={{ padding: 0, margin: 0, fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
       {/* HEADER */}
@@ -438,7 +470,12 @@ function ProjectPage() {
             />
           )}
           {activeTab === 'codes' && (
-            <CodeSidebar projectId={id} />
+            <CodeSidebar 
+                projectId={id} 
+                codes={projectCodes} 
+                onDeleteCode={handleDeleteCode} 
+                onRefreshCodes={fetchCodes} 
+            />
           )}
         </div>
 
@@ -446,7 +483,7 @@ function ProjectPage() {
         <div style={{ flex: 1, border: '1px solid #ccc', borderRadius: '8px', padding: '30px', backgroundColor: '#fff', color: '#333', overflowY: 'auto', position: 'relative' }}>
           {activeDocument ? (
             <div>
-              <h2 style={{ borderBottom: '2px solid #eee', paddingBottom: '10px', marginTop: 0 }}>
+              <h2 style={{ borderBottom: '2px solid #aaa', paddingBottom: '10px', marginTop: 0, color: '#000', fontWeight: '500' }}>
                 {activeDocument.filename}
               </h2>
               
@@ -460,7 +497,7 @@ function ProjectPage() {
                 {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes)}
               </div>
 
-              {/* QUICK CODE POPUP MENU */}
+              {/* NEW: QUICK CODE POPUP MENU WITH DROPDOWN */}
               {quickMenuOpen && selectionRect && (
                 <div style={{ position: 'fixed', top: selectionRect.top + 8, left: selectionRect.left, zIndex: 1000, backgroundColor: '#23232a', border: '1px solid #444', borderRadius: '10px', padding: '10px', minWidth: '240px', color: 'white', boxShadow: '0 12px 30px rgba(0, 0, 0, 0.25)' }}>
                   <div style={{ marginBottom: '8px', fontSize: '13px', color: '#b0b0c3' }}>Selected</div>
@@ -469,29 +506,56 @@ function ProjectPage() {
                   </div>
                   
                   <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
-                    <input
-                      type="text"
-                      value={quickCodeName}
-                      onChange={(e) => setQuickCodeName(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickCodeAction(); } }}
-                      placeholder="Code name"
-                      style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #555', backgroundColor: '#1f1f28', color: 'white' }}
-                    />
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <label htmlFor="quick-color" style={{ color: '#b0b0c3', fontSize: '13px', minWidth: '70px' }}>Color</label>
-                      <input
-                        id="quick-color"
-                        type="color"
-                        value={quickCodeColor}
-                        onChange={(e) => setQuickCodeColor(e.target.value)}
-                        style={{ width: '40px', height: '40px', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
-                      />
-                    </div>
+                    
+                    {/* The Dropdown Menu */}
+                    <select 
+                      value={quickCodeMode === "new" ? "new" : selectedExistingCodeId}
+                      onChange={(e) => {
+                        if (e.target.value === "new") {
+                          setQuickCodeMode("new");
+                        } else {
+                          setQuickCodeMode("existing");
+                          setSelectedExistingCodeId(e.target.value);
+                        }
+                      }}
+                      style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #555', backgroundColor: '#1f1f28', color: 'white', cursor: 'pointer' }}
+                    >
+                      {projectCodes.length > 0 && <optgroup label="Existing Codes">
+                        {projectCodes.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </optgroup>}
+                      <option value="new">✨ Create New Code...</option>
+                    </select>
+
+                    {/* Only show name and color inputs if "Create New" is selected */}
+                    {quickCodeMode === "new" && (
+                        <>
+                            <input
+                                type="text"
+                                value={quickCodeName}
+                                onChange={(e) => setQuickCodeName(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleQuickCodeAction(); } }}
+                                placeholder="Code name"
+                                style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #555', backgroundColor: '#1f1f28', color: 'white', boxSizing: 'border-box' }}
+                            />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <label htmlFor="quick-color" style={{ color: '#b0b0c3', fontSize: '13px', minWidth: '70px' }}>Color</label>
+                                <input
+                                id="quick-color"
+                                type="color"
+                                value={quickCodeColor}
+                                onChange={(e) => setQuickCodeColor(e.target.value)}
+                                style={{ width: '40px', height: '40px', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+                                />
+                            </div>
+                        </>
+                    )}
                   </div>
                   
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={handleQuickCodeAction} style={{ flex: 1, padding: '8px 10px', backgroundColor: '#646cff', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer' }}>
-                      Quick-Code
+                      Apply Code
                     </button>
                     <button onClick={clearTextSelection} style={{ padding: '8px 10px', backgroundColor: '#444', border: 'none', borderRadius: '8px', color: 'white', cursor: 'pointer' }}>
                       Cancel
@@ -508,7 +572,6 @@ function ProjectPage() {
         </div>
       </div>
       
-      {/* MODALS */}
       <CollisionModal dialog={conflictDialog} resolve={conflictDialog.resolve} />
     </div>
   );
