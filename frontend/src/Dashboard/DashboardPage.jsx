@@ -83,7 +83,7 @@ function DashboardPage() {
                 </div>
                 <Link to={`/project/${proj.id}`}>
                   <button style={{ padding: '8px 16px', backgroundColor: '#aa3bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                    Open Workspace ➔
+                    Open Project ➔
                   </button>
                 </Link>
               </div>
