@@ -1,6 +1,19 @@
+# from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
+# from sqlalchemy.orm import relationship
+# from datetime import datetime
+# from database import Base
+
+# === USER FUNCTIONALITY DISABLED FOR NOW ===
+# class User(Base):
+#     __tablename__ = "users"
+#     id = Column(Integer, primary_key=True, index=True)
+#     name = Column(String, nullable=False, index=True)
+#     email = Column(String, nullable=False, unique=True, index=True)
+#     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
+
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from database import Base
 
 class Project(Base):
@@ -9,9 +22,12 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    # user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Disabled for now
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # owner = relationship("User", back_populates="projects")  # Disabled for now
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
+    codes = relationship("Code", back_populates="project", cascade="all, delete-orphan")
 
 class Document(Base):
     __tablename__ = "documents"
@@ -20,8 +36,46 @@ class Document(Base):
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     filename = Column(String, nullable=False)
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    type = Column(String, nullable=True, default="text")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     project = relationship("Project", back_populates="documents")
+    segments = relationship("Segment", back_populates="document", cascade="all, delete-orphan")
+
+class Code(Base):
+    __tablename__ = "codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    color = Column(String, nullable=False, default="#FFFFFF")
+    description = Column(Text, nullable=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), ondelete="CASCADE", nullable=False)
+    parent_id = Column(Integer, ForeignKey("codes.id"), ondelete="CASCADE", nullable=True)
+
+    project = relationship("Project", back_populates="codes")
+    segments = relationship("Segment", back_populates="code", cascade="all, delete-orphan")
+    parent = relationship("Code", remote_side=[id], backref="children")
+
+class Segment(Base):
+    __tablename__ = "segments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    start_char = Column(Integer, nullable=False)
+    end_char = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    document_id = Column(Integer, ForeignKey("documents.id"), ondelete="CASCADE", nullable=False)
+    code_id = Column(Integer, ForeignKey("codes.id"), ondelete="CASCADE", nullable=False)
+
+    document = relationship("Document", back_populates="segments")
+    code = relationship("Code", back_populates="segments")
+
+class Memo(Base):
+    __tablename__ = "memos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    text = Column(Text, nullable=False)
+    target_type = Column(String, nullable=False)
+    target_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     
