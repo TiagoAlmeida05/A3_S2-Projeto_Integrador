@@ -61,22 +61,31 @@ def root():
 def create_project_route(project: ProjectCreate, db: Session = Depends(get_db)):
     # Create the SQLAlchemy object
     # user_id parameter disabled for now
+
+    final_path = None
+
     if project.local_path:
         # project with same path
+
+        final_path = os.path.join(project.local_path, project.name)
+
         existing_project = db.query(models.Project).filter(models.Project.local_path == project.local_path).first()
         if existing_project:
             raise HTTPException(status_code=400, detail="Another workspace is already using this folder.")
         
-        # folder needs to be empty
-        if os.path.exists(project.local_path):
-            # os.listdir() gets everything in the folder. If it has items, it's not empty!
-            if len(os.listdir(project.local_path)) > 0:
-                raise HTTPException(status_code=400, detail="The selected folder is not empty. Please choose an empty folder to prevent overwriting files.")
+        if os.path.exists(final_path):
+            raise HTTPException(status_code=400, detail=f"The '{project.name}' folder already exists in this directory. Choose another directory or change the name of the project.")
 
+        # create folder
+        try:
+            os.makedirs(final_path, exist_ok=True)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Erro do sistema ao tentar criar a pasta: {str(e)}")
+        
     new_project = models.Project(
         name=project.name, 
         description=project.description,
-        local_path=project.local_path
+        local_path=final_path
     )
     db.add(new_project)
     db.commit()

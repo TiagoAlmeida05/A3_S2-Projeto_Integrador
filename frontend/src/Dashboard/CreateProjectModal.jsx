@@ -76,7 +76,7 @@ function CreateProjectModal({ isOpen, onClose, onCreate }) {
               </p>
             ) : (
               <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666' }}>
-                Where your raw files and exports will be stored.
+                A new folder named <strong>"{name || 'Your Project'}"</strong> will be created inside this location.
               </p>
             )}
           </div>

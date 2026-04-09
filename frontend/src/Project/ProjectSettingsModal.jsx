@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription, onSave }) {
+function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription, currentLocalPath, onSave }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -46,6 +46,17 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
             rows="4" 
             style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white', resize: 'vertical' }} 
           />
+        </div>
+
+        <div style={{ marginBottom: '25px', padding: '15px', backgroundColor: '#1a1a1a', borderRadius: '4px', border: '1px dashed #444' }}>
+          <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '5px' }}>Permanent Local Path</label>
+          <div style={{ fontSize: '13px', color: '#aaa', wordBreak: 'break-all' }}>
+            {/* You will need to pass the localPath as a prop to this modal! */}
+            📂 {currentLocalPath || "Stored in database only"}
+          </div>
+          <p style={{ fontSize: '11px', color: '#666', marginTop: '5px', marginBottom: 0 }}>
+            Changing the project name above will not change the folder name on your hard drive to prevent data loss.
+          </p>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>

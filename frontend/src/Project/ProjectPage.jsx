@@ -9,7 +9,7 @@ function ProjectPage() {
   const { id } = useParams(); 
   const [documents, setDocuments] = useState([]);
   const [uploadStatus, setUploadStatus] = useState("");
-  const [projectDetails, setProjectDetails] = useState({ name: "", description: "" });
+  const [projectDetails, setProjectDetails] = useState({ name: "", description: "",localPath: "" }); 
   const [activeDocument, setActiveDocument] = useState(null);
   const [conflictDialog, setConflictDialog] = useState({
     isOpen: false,
@@ -25,7 +25,7 @@ function ProjectPage() {
       .then(res => res.json())
       .then(data => {
         if (data.name) {
-          setProjectDetails({ name: data.name, description: data.description || "" });
+          setProjectDetails({ name: data.name, description: data.description || "" , localPath: data.local_path || ""});
         }
       })
       .catch(err => console.error(err));
@@ -350,6 +350,7 @@ function ProjectPage() {
         onClose={() => setIsSettingsOpen(false)}
         currentName={projectDetails.name}
         currentDescription={projectDetails.description}
+        currentLocalPath={projectDetails.localPath}
         onSave={handleSaveSettings}
       />
     </div>
