@@ -8,6 +8,12 @@ function ProjectPage() {
   const [projectName, setProjectName] = useState("");
   const [activeDocument, setActiveDocument] = useState(null);
   const [hoveredDocId, setHoveredDocId] = useState(null);
+  const [conflictDialog, setConflictDialog] = useState({
+    isOpen: false,
+    filename: "",
+    suggestedName: "",
+    resolve: null
+  });
 
   const fetchProjectName = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}`)
@@ -39,14 +45,14 @@ function ProjectPage() {
     fetchProjectName();
   }, [id]);
 
-  const handleFileUpload = (event) => {
+  const handleFileUpload = async (event) => {
     const files = Array.from(event.target.files)  ;
     if (files.length === 0) return;
 
     setUploadStatus("Checking files...");
     const formData = new FormData();
 
-    const existingNames = documents.map(doc => doc.filename);
+    let existingNames = documents.map(doc => doc.filename);
     let filesToUploadCount = 0;
     
     for (let i = 0; i < files.length; i++) {
@@ -54,44 +60,66 @@ function ProjectPage() {
       let cur = files[i];
       let shouldUpload = true;
       let finalName = cur.name;
-      let isNameValid = false;
+      
+      let isNameValid = !existingNames.includes(finalName);
 
-      while (!isNameValid) {
-        if (existingNames.includes(finalName)) {
-          
+      while (!isNameValid && shouldUpload) {
+
           const DotIndex = finalName.lastIndexOf('.');
           const ext = DotIndex !== -1 ? finalName.substring(DotIndex) : "";
           const base = DotIndex !== -1 ? finalName.substring(0, DotIndex) : finalName;
-          const suggestedName = `${base}_copy${ext}`;
+          const suggestedN = `${base}_copy${ext}`;
 
-          const userInput = window.prompt(
-            `The file "${finalName}" already exists.\n\nPlease type a unique name below, or click Cancel to skip.`,
-            suggestedName 
-          );
+          const userChoice = await new Promise((resolve) => {
+            setConflictDialog({
+              isOpen: true,
+              filename: finalName,
+              suggestedName: suggestedN,
+              resolve: resolve //modal buttons
+            });
+         });
 
-          // If they click Cancel, we immediately break the loop and skip the file.
-          if (userInput === null) {
+          if (userChoice.action === 'skip') {
             shouldUpload = false;
-            break; 
+            break;
           }
 
-          let trimmedInput = userInput.trim();
-          
-          // If they just hit enter on a blank box, restart the loop and ask again
-          if (trimmedInput === "") {
-            continue; 
-          }
-
-          // Put the extension back if they deleted it from the name
-          if (ext && !trimmedInput.toLowerCase().endsWith(ext.toLowerCase())) {
-            trimmedInput += ext;
-          }
-
-          finalName = trimmedInput;
-          
-        } else {
-          isNameValid = true; //normal case
+          else if (userChoice.action === 'replace') {
+            const oldDoc = documents.find(d => d.filename === finalName);
+            if (oldDoc) {
+              setUploadStatus(`Replacing ${finalName}...`);
+              try {
+                const delRes = await fetch(`http://127.0.0.1:8000/projects/${id}/documents/${oldDoc.id}`, { method: 'DELETE' });
+                if (delRes.ok) {
+                  isNameValid = true;
+                  if (activeDocument && activeDocument.id === oldDoc.id) setActiveDocument(null);
+                  existingNames = existingNames.filter(n => n !== finalName);
+                } else {
+                  window.alert(" Server failed to delete. Skipping.");
+                  shouldUpload = false;
+                }
+              } catch (err) {
+                window.alert("❌ Network error. Skipping.");
+                shouldUpload = false;
+              }
+            }
         }
+          else if (userChoice.action === 'rename') {
+            let trimmedInput = userChoice.value.trim();
+              // If they just hit enter on a blank box, restart the loop and ask again
+              if (trimmedInput === "") {
+                continue; 
+              }
+            // Put the extension back if they deleted it from the name
+            if (ext && !trimmedInput.toLowerCase().endsWith(ext.toLowerCase())) {
+              trimmedInput += ext;
+            }
+            finalName = trimmedInput;
+
+            if (!existingNames.includes(finalName)) {
+              isNameValid = true;
+            }
+          }
       }
 
       if (shouldUpload) {
@@ -105,6 +133,8 @@ function ProjectPage() {
         existingNames.push(finalName); 
       }
     }
+
+    setConflictDialog(prev => ({ ...prev, isOpen: false }));
 
     //error handling
     if (filesToUploadCount === 0) {
@@ -178,7 +208,7 @@ function ProjectPage() {
       {/* HEADER */}
       <div>
         <Link to="/" style={{ color: '#646cff', textDecoration: 'none' }}>← Back to Dashboard</Link>
-        <h2 style={{ marginTop: '20px' }}>Workspace: {projectName}</h2>
+        <h2 style={{ marginTop: '20px' }}>Project: {projectName}</h2>
       </div>
 
       {/*SIDE-BY-SIDE LAYOUT */}
@@ -198,7 +228,7 @@ function ProjectPage() {
               onChange={handleFileUpload}
             />
             <label htmlFor="file-upload" style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', display: 'block', textAlign: 'center' }}>
-              ➕ Import Documents
+              Import Documents
             </label>
             <div style={{ marginTop: '10px', color: '#646cff', fontSize: '14px', textAlign: 'center' }}>{uploadStatus}</div>
           </div>
@@ -222,6 +252,11 @@ function ProjectPage() {
                     marginBottom: '5px', 
                     borderRadius: '4px',
                     cursor: 'pointer',
+                    display: 'flex',                 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    width: '100%', 
+                    boxSizing: 'border-box',
                     transition: 'background-color 0.2s'
                   }}
                 >
@@ -239,7 +274,7 @@ function ProjectPage() {
                       border: 'none',
                       color: '#ff4444',
                       cursor: 'pointer',
-                      padding: '2px 6px',
+                      padding: '6px',
                       fontSize: '16px',
                       borderRadius: '4px',
 
@@ -249,7 +284,10 @@ function ProjectPage() {
                     }}
                     title="Delete Document"
                   >
-                    ✖
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
                   </button>
                 </li>
               ))
@@ -276,6 +314,62 @@ function ProjectPage() {
         </div>
 
       </div>
+      {/* --- CUSTOM COLLISION MODAL --- */}
+      {conflictDialog.isOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000 // Ensures it floats on top of everything
+        }}>
+          <div style={{
+            backgroundColor: '#242424', padding: '30px', borderRadius: '8px',
+            border: '1px solid #444', width: '400px', color: 'white',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+          }}>
+            <h3 style={{ marginTop: 0, color: '#ffcc00' }}>⚠️ File Already Exists</h3>
+            <p>The file <strong>"{conflictDialog.filename}"</strong> already exists in this project.</p>
+            
+            <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+              <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: '5px' }}>
+                Rename it (Extension added automatically):
+              </label>
+              <input 
+                type="text" 
+                defaultValue={conflictDialog.suggestedName}
+                id="rename-input"
+                style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
+              <button 
+                onClick={() => conflictDialog.resolve({ action: 'skip' })}
+                style={{ flex: 1, padding: '10px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Skip File
+              </button>
+              
+              <button 
+                onClick={() => conflictDialog.resolve({ action: 'replace' })}
+                style={{ flex: 1, padding: '10px', backgroundColor: '#8b0000', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Replace Old
+              </button>
+              
+              <button 
+                onClick={() => {
+                  const newName = document.getElementById('rename-input').value;
+                  conflictDialog.resolve({ action: 'rename', value: newName });
+                }}
+                style={{ flex: 1.5, padding: '10px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
