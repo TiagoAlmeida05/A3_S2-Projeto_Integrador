@@ -5,7 +5,6 @@ function CodeSidebar({ projectId }) {
   const [newCodeName, setNewCodeName] = useState("");
   const [newCodeColor, setNewCodeColor] = useState("#646cff");
 
-  // Fetch codes when the sidebar loads
   useEffect(() => {
     fetch(`http://127.0.0.1:8000/projects/${projectId}/codes`)
       .then(res => res.json())
@@ -13,7 +12,6 @@ function CodeSidebar({ projectId }) {
       .catch(err => console.error("Failed to fetch codes:", err));
   }, [projectId]);
 
-  // Handle creating a new code
   const handleCreateCode = async (e) => {
     e.preventDefault();
     if (!newCodeName.trim()) return;
