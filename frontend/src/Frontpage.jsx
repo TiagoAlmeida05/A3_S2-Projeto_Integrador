@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Link, useNavigate} from 'react-router-dom';
-import ProjectPage from './ProjectPage';
+import ProjectPage from './Project/ProjectPage';
 import './App.css'
 
 function Dashboard() {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import CodeSidebar from './CodeSidebar';
 
 function ProjectPage() {
   const { id } = useParams(); 
@@ -345,16 +346,7 @@ function ProjectPage() {
           </>
           )}
           {activeTab === 'codes' && (
-            <>
-              <h3>Master Codes</h3>
-              <p style={{ color: '#888', fontSize: '14px' }}>
-                Your project codes will appear here regardless of which document you are viewing.
-              </p>
-              {/* You can add a temporary button just to visualize the UI */}
-              <button style={{ padding: '8px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', marginTop: '10px' }}>
-                + Create New Code
-              </button>
-            </>
+            <CodeSidebar projectId={id} />
           )}
         
         </div>
