@@ -8,6 +8,9 @@ function ProjectPage() {
   const [projectName, setProjectName] = useState("");
   const [activeDocument, setActiveDocument] = useState(null);
 
+
+  const [activeTab, setActiveTab] = useState('documents');
+
   const fetchProjectName = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}`)
       .then(res => res.json())
@@ -142,59 +145,120 @@ function ProjectPage() {
   };
 
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
+    <div style={{padding: 0,margin: 0, fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
       {/* HEADER */}
-      <div>
+
+      <div style={{ padding: '15px 20px', backgroundColor: '#111', borderBottom: '1px solid #333' }}>
         <Link to="/" style={{ color: '#646cff', textDecoration: 'none' }}>← Back to Dashboard</Link>
         <h2 style={{ marginTop: '20px' }}>Workspace: {projectName}</h2>
       </div>
 
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ 
+          width: '60px', 
+          backgroundColor: '#111', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          paddingTop: '20px',
+          borderRight: '1px solid #333'
+        }}>
+          <button 
+            onClick={() => setActiveTab('documents')}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              padding: '10px',
+              opacity: activeTab === 'documents' ? 1 : 0.4, // Highlights the active icon
+              borderLeft: activeTab === 'documents' ? '3px solid #646cff' : '3px solid transparent'
+            }}
+            title="Documents"
+          >
+            📄
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('codes')}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              padding: '10px',
+              marginTop: '10px',
+              opacity: activeTab === 'codes' ? 1 : 0.4,
+              borderLeft: activeTab === 'codes' ? '3px solid #646cff' : '3px solid transparent'
+            }}
+            title="Codes"
+          >
+            🏷️
+          </button>
+        </div>
+
       {/*SIDE-BY-SIDE LAYOUT */}
-      <div style={{ display: 'flex', gap: '20px', flex: 1, marginTop: '20px', overflow: 'hidden' }}>
         
         {/* LEFT COLUMN: DOCUMENT LIST */}
         <div style={{ width: '300px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', padding: '20px', backgroundColor: '#1a1a1a' }}>
-          <h3>Documents</h3>
-          
-          <div style={{ marginBottom: '20px' }}>
-            <input
-              type="file"
-              multiple
-              id="file-upload"
-              accept=".txt,.md,.rtf"
-              style={{ display: 'none' }}
-              onChange={handleFileUpload}
-            />
-            <label htmlFor="file-upload" style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', display: 'block', textAlign: 'center' }}>
-              ➕ Import Documents
-            </label>
-            <div style={{ marginTop: '10px', color: '#646cff', fontSize: '14px', textAlign: 'center' }}>{uploadStatus}</div>
-          </div>
 
-          <ul style={{ listStyleType: 'none', padding: 0, overflowY: 'auto', flex: 1 }}>
-            {documents.length === 0 ? (
-              <p style={{ color: '#888' }}>No documents yet.</p>
-            ) : (
-              documents.map(doc => (
-                <li 
-                  key={doc.id} 
-                  onClick={() => handleDocumentClick(doc.id)} 
-                  style={{ 
-                    padding: '10px', 
-                    backgroundColor: activeDocument?.id === doc.id ? '#646cff' : '#2a2a2a', // Highlights the selected file!
-                    color: 'white', 
-                    marginBottom: '5px', 
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s'
-                  }}
-                >
-                  📄 {doc.filename}
-                </li>
-              ))
-            )}
-          </ul>
+          {activeTab === 'documents' && (
+            <>
+            <h3>Documents</h3>
+            
+            <div style={{ marginBottom: '20px' }}>
+              <input
+                type="file"
+                multiple
+                id="file-upload"
+                accept=".txt,.md,.rtf"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+              <label htmlFor="file-upload" style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', display: 'block', textAlign: 'center' }}>
+                ➕ Import Documents
+              </label>
+              <div style={{ marginTop: '10px', color: '#646cff', fontSize: '14px', textAlign: 'center' }}>{uploadStatus}</div>
+            </div>
+
+            <ul style={{ listStyleType: 'none', padding: 0, overflowY: 'auto', flex: 1 }}>
+              {documents.length === 0 ? (
+                <p style={{ color: '#888' }}>No documents yet.</p>
+              ) : (
+                documents.map(doc => (
+                  <li 
+                    key={doc.id} 
+                    onClick={() => handleDocumentClick(doc.id)} 
+                    style={{ 
+                      padding: '10px', 
+                      backgroundColor: activeDocument?.id === doc.id ? '#646cff' : '#2a2a2a', // Highlights the selected file!
+                      color: 'white', 
+                      marginBottom: '5px', 
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                  >
+                    📄 {doc.filename}
+                  </li>
+                ))
+              )}
+            </ul>
+            </>
+          )}
+          {activeTab === 'codes' && (
+            <>
+              <h3>Master Codes</h3>
+              <p style={{ color: '#888', fontSize: '14px' }}>
+                Your project codes will appear here regardless of which document you are viewing.
+              </p>
+              {/* You can add a temporary button just to visualize the UI */}
+              <button style={{ padding: '8px', backgroundColor: '#333', color: 'white', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', marginTop: '10px' }}>
+                + Create New Code
+              </button>
+            </>
+          )}
         </div>
 
         {/* TEXT VIEWER */}
