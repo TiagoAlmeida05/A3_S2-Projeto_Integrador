@@ -43,6 +43,13 @@ class CodeCreate(BaseModel):
     description: Optional[str] = None
     parent_id: Optional[int] = None
 
+class SegmentCreate(BaseModel):
+    document_id: int
+    code_id: int
+    start_char: int
+    end_char: int
+    content: str
+
 
 @app.get("/")
 def root():
@@ -175,3 +182,56 @@ def create_code(project_id: int, code: CodeCreate, db: Session = Depends(get_db)
 def get_project_codes(project_id: int, db: Session = Depends(get_db)):
     codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
     return codes
+
+@app.post("/projects/{project_id}/segments")
+def create_segment(project_id: int, segment: SegmentCreate, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    doc = db.query(models.Document).filter(
+        models.Document.id == segment.document_id,
+        models.Document.project_id == project_id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    code = db.query(models.Code).filter(
+        models.Code.id == segment.code_id,
+        models.Code.project_id == project_id
+    ).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+
+    new_segment = models.Segment(
+        document_id=segment.document_id,
+        code_id=segment.code_id,
+        start_char=segment.start_char,
+        end_char=segment.end_char,
+        content=segment.content
+    )
+    db.add(new_segment)
+    db.commit()
+    db.refresh(new_segment)
+    return new_segment
+
+@app.get("/projects/{project_id}/segments")
+def get_segments(project_id: int, document_id: Optional[int] = None, db: Session = Depends(get_db)):
+    query = db.query(models.Segment).join(models.Document).filter(
+        models.Document.project_id == project_id
+    )
+    if document_id:
+        query = query.filter(models.Segment.document_id == document_id)
+    
+    segments = query.all()
+    return [
+        {
+            "id": seg.id,
+            "document_id": seg.document_id,
+            "code_id": seg.code_id,
+            "start_char": seg.start_char,
+            "end_char": seg.end_char,
+            "content": seg.content
+        }
+        for seg in segments
+    ]
