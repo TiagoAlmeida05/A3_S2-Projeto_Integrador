@@ -43,6 +43,10 @@ class CodeCreate(BaseModel):
     description: Optional[str] = None
     parent_id: Optional[int] = None
 
+class ProjectUpdate(BaseModel):
+    name: str
+    description: Optional[str] = None
+
 
 @app.get("/")
 def root():
@@ -68,7 +72,7 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         return {"error": "Project not found"}
-    return {"name": project.name}
+    return {"name": project.name, "description": project.description}
 
 
 @app.post("/projects/{project_id}/documents/")
@@ -175,3 +179,19 @@ def create_code(project_id: int, code: CodeCreate, db: Session = Depends(get_db)
 def get_project_codes(project_id: int, db: Session = Depends(get_db)):
     codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
     return codes
+
+@app.put("/projects/{project_id}", response_model=ProjectResponse)
+def update_project(project_id: int, project_data: ProjectUpdate, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Update the fields
+    project.name = project_data.name
+    project.description = project_data.description
+    
+    db.commit()
+    db.refresh(project)
+    
+    return project

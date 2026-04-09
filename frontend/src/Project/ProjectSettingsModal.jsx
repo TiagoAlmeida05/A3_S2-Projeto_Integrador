@@ -1,0 +1,71 @@
+import { useState, useEffect } from 'react';
+
+function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription, onSave }) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+
+  // Whenever the modal opens, pre-fill the text boxes with the current data
+  useEffect(() => {
+    if (isOpen) {
+      setName(currentName || "");
+      setDescription(currentDescription || "");
+    }
+  }, [isOpen, currentName, currentDescription]);
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    if (!name.trim()) {
+      alert("Project name cannot be empty.");
+      return;
+    }
+    onSave(name, description);
+  };
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ backgroundColor: '#242424', padding: '30px', borderRadius: '8px', border: '1px solid #444', width: '400px', color: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+        
+        <h3 style={{ marginTop: 0 }}>⚙️ Project Settings</h3>
+        
+        <div style={{ marginTop: '20px', marginBottom: '15px' }}>
+          <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: '5px' }}>Project Name</label>
+          <input 
+            type="text" 
+            value={name} 
+            onChange={(e) => setName(e.target.value)} 
+            style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white' }} 
+          />
+        </div>
+
+        <div style={{ marginBottom: '25px' }}>
+          <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: '5px' }}>Description</label>
+          <textarea 
+            value={description} 
+            onChange={(e) => setDescription(e.target.value)} 
+            rows="4" 
+            style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white', resize: 'vertical' }} 
+          />
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          <button 
+            onClick={onClose} 
+            style={{ padding: '10px 15px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleSave} 
+            style={{ padding: '10px 15px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            Save Changes
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+export default ProjectSettingsModal;
