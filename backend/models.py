@@ -24,7 +24,7 @@ class Project(Base):
     description = Column(Text, nullable=True)
     # user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Disabled for now
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
+    local_path = Column(String, nullable= True)
     # owner = relationship("User", back_populates="projects")  # Disabled for now
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     codes = relationship("Code", back_populates="project", cascade="all, delete-orphan")
