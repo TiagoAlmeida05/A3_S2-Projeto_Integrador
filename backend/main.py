@@ -37,6 +37,12 @@ class ProjectResponse(BaseModel):
     class Config:
         from_attributes = True # Allows Pydantic to read SQLAlchemy objects
 
+class CodeCreate(BaseModel):
+    name: str
+    color: str = "#FFFFFF"
+    description: Optional[str] = None
+    parent_id: Optional[int] = None
+
 
 @app.get("/")
 def root():
@@ -143,3 +149,29 @@ def delete_document(project_id: int, document_id: int, db: Session = Depends(get
     db.commit()
     
     return {"message": "Document deleted successfully"}
+
+@app.post("/projects/{project_id}/codes")
+def create_code(project_id: int, code: CodeCreate, db: Session = Depends(get_db)):
+    
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    new_code = models.Code(
+        name=code.name,
+        color=code.color,
+        description=code.description,
+        project_id=project_id,
+        parent_id=code.parent_id
+    )
+    
+    db.add(new_code)
+    db.commit()
+    db.refresh(new_code)
+    
+    return new_code
+
+@app.get("/projects/{project_id}/codes")
+def get_project_codes(project_id: int, db: Session = Depends(get_db)):
+    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
+    return codes

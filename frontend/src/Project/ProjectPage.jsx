@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import CodeSidebar from './CodeSidebar';
+import DocumentSidebar from './DocumentSidebar';
+import CollisionModal from './CollisionModal';
 
 function ProjectPage() {
   const { id } = useParams(); 
@@ -14,6 +17,9 @@ function ProjectPage() {
     suggestedName: "",
     resolve: null
   });
+
+
+  const [activeTab, setActiveTab] = useState('documents');
 
   const fetchProjectName = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}`)
@@ -203,96 +209,77 @@ function ProjectPage() {
   };
 
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
+    <div style={{padding: 0,margin: 0, fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
       {/* HEADER */}
-      <div>
+
+      <div style={{ padding: '15px 20px', backgroundColor: '#111', borderBottom: '1px solid #333' }}>
         <Link to="/" style={{ color: '#646cff', textDecoration: 'none' }}>← Back to Dashboard</Link>
-        <h2 style={{ marginTop: '20px' }}>Project: {projectName}</h2>
+        <h2 style={{ marginTop: '20px' }}>Workspace: {projectName}</h2>
       </div>
 
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div style={{ 
+          width: '60px', 
+          backgroundColor: '#111', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          paddingTop: '20px',
+          borderRight: '1px solid #333'
+        }}>
+          <button 
+            onClick={() => setActiveTab('documents')}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              padding: '10px',
+              opacity: activeTab === 'documents' ? 1 : 0.4, // Highlights the active icon
+              borderLeft: activeTab === 'documents' ? '3px solid #646cff' : '3px solid transparent'
+            }}
+            title="Documents"
+          >
+            📄
+          </button>
+          
+          <button 
+            onClick={() => setActiveTab('codes')}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              padding: '10px',
+              marginTop: '10px',
+              opacity: activeTab === 'codes' ? 1 : 0.4,
+              borderLeft: activeTab === 'codes' ? '3px solid #646cff' : '3px solid transparent'
+            }}
+            title="Codes"
+          >
+            🏷️
+          </button>
+        </div>
+
       {/*SIDE-BY-SIDE LAYOUT */}
-      <div style={{ display: 'flex', gap: '20px', flex: 1, marginTop: '20px', overflow: 'hidden' }}>
         
         {/* LEFT COLUMN: DOCUMENT LIST */}
         <div style={{ width: '300px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', padding: '20px', backgroundColor: '#1a1a1a' }}>
-          <h3>Documents</h3>
-          
-          <div style={{ marginBottom: '20px' }}>
-            <input
-              type="file"
-              multiple
-              id="file-upload"
-              accept=".txt,.md,.rtf"
-              style={{ display: 'none' }}
-              onChange={handleFileUpload}
+        {activeTab === 'documents' && (
+            <DocumentSidebar 
+              documents={documents}
+              activeDocumentId={activeDocument?.id}
+              uploadStatus={uploadStatus}
+              onFileUpload={handleFileUpload}
+              onDocumentClick={handleDocumentClick}
+              onDeleteDocument={handleDeleteDocument}
             />
-            <label htmlFor="file-upload" style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', display: 'block', textAlign: 'center' }}>
-              Import Documents
-            </label>
-            <div style={{ marginTop: '10px', color: '#646cff', fontSize: '14px', textAlign: 'center' }}>{uploadStatus}</div>
-          </div>
-
-          <ul style={{ listStyleType: 'none', padding: 0, overflowY: 'auto', flex: 1 }}>
-            {documents.length === 0 ? (
-              <p style={{ color: '#888' }}>No documents yet.</p>
-            ) : (
-              documents.map(doc => (
-                <li 
-                  key={doc.id} 
-                  onClick={() => handleDocumentClick(doc.id)} 
-
-                  onMouseEnter={() => setHoveredDocId(doc.id)}
-                  onMouseLeave={() => setHoveredDocId(null)}
-
-                  style={{ 
-                    padding: '10px', 
-                    backgroundColor: activeDocument?.id === doc.id ? '#646cff' : '#2a2a2a', // Highlights the selected file!
-                    color: 'white', 
-                    marginBottom: '5px', 
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    display: 'flex',                 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    width: '100%', 
-                    boxSizing: 'border-box',
-                    transition: 'background-color 0.2s'
-                  }}
-                >
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    📄 {doc.filename}
-                  </span>
-                  
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation(); 
-                      handleDeleteDocument(doc.id, doc.filename);
-                    }}
-                    style={{
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      color: '#ff4444',
-                      cursor: 'pointer',
-                      padding: '6px',
-                      fontSize: '16px',
-                      borderRadius: '4px',
-
-                      visibility: hoveredDocId === doc.id ? 'visible' : 'hidden',
-                      opacity: hoveredDocId === doc.id ? 1 : 0,
-                      transition: 'opacity 0.2s ease-in-out' 
-                    }}
-                    title="Delete Document"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6"></polyline>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                    </svg>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
+          )}
+          {activeTab === 'codes' && (
+            <CodeSidebar projectId={id} />
+          )}
+        
         </div>
 
         {/* TEXT VIEWER */}
@@ -315,61 +302,10 @@ function ProjectPage() {
 
       </div>
       {/* --- CUSTOM COLLISION MODAL --- */}
-      {conflictDialog.isOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000 // Ensures it floats on top of everything
-        }}>
-          <div style={{
-            backgroundColor: '#242424', padding: '30px', borderRadius: '8px',
-            border: '1px solid #444', width: '400px', color: 'white',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
-          }}>
-            <h3 style={{ marginTop: 0, color: '#ffcc00' }}>⚠️ File Already Exists</h3>
-            <p>The file <strong>"{conflictDialog.filename}"</strong> already exists in this project.</p>
-            
-            <div style={{ marginTop: '20px', marginBottom: '20px' }}>
-              <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: '5px' }}>
-                Rename it (Extension added automatically):
-              </label>
-              <input 
-                type="text" 
-                defaultValue={conflictDialog.suggestedName}
-                id="rename-input"
-                style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-              <button 
-                onClick={() => conflictDialog.resolve({ action: 'skip' })}
-                style={{ flex: 1, padding: '10px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                Skip File
-              </button>
-              
-              <button 
-                onClick={() => conflictDialog.resolve({ action: 'replace' })}
-                style={{ flex: 1, padding: '10px', backgroundColor: '#8b0000', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                Replace Old
-              </button>
-              
-              <button 
-                onClick={() => {
-                  const newName = document.getElementById('rename-input').value;
-                  conflictDialog.resolve({ action: 'rename', value: newName });
-                }}
-                style={{ flex: 1.5, padding: '10px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-              >
-                Rename
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CollisionModal 
+        dialog={conflictDialog} 
+        resolve={conflictDialog.resolve} 
+      />
     </div>
   );
 }
