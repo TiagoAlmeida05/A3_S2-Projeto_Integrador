@@ -50,6 +50,11 @@ class SegmentCreate(BaseModel):
     end_char: int
     content: str
 
+class CodeUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    description: Optional[str] = None
+    parent_id: Optional[int] = None
 
 @app.get("/")
 def root():
@@ -197,6 +202,27 @@ def delete_code(project_id: int, code_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message":"Code deleted successfully"}
+
+@app.put("/projects/{project_id}/codes/{code_id}")
+def update_code(project_id: int, code_id: int, code_update: CodeUpdate, db: Session = Depends(get_db)):
+    code = db.query(models.Code).filter(
+        models.Code.id == code_id,
+        models.Code.project_id == project_id
+    ).first()
+
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+    
+    if code_update.name is not None:
+        code.name = code_update.name
+    if code_update.color is not None:
+        code.color = code_update.color
+
+    db.commit()
+    db.refresh(code)
+
+    return code
+    
 
 @app.post("/projects/{project_id}/segments")
 def create_segment(project_id: int, segment: SegmentCreate, db: Session = Depends(get_db)):

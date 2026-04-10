@@ -384,46 +384,44 @@ function ProjectPage() {
   const renderHighlightedContent = (content, segments, codes) => {
     if (!segments || segments.length === 0) return content;
 
-    // Sort segments by start_char
-    const sortedSegments = [...segments].sort((a, b) => a.start_char - b.start_char);
+    let boundaries = new Set([0, content.length]);
+
+    segments.forEach(seg => {
+      boundaries.add(seg.start_char);
+      boundaries.add(seg.end_char);
+    })
+
+    const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
 
     const parts = [];
-    let lastEnd = 0;
 
-    sortedSegments.forEach(segment => {
-      // Add text before the segment
-      if (segment.start_char > lastEnd) {
-        parts.push(content.slice(lastEnd, segment.start_char));
+    for (let i = 0; i < sortedBoundaries.length - 1; i++){
+      const start = sortedBoundaries[i];
+      const end = sortedBoundaries[i + 1];
+      if (start === end) continue;
+
+      const chunkText = content.slice(start, end);
+      const coveringSegments = segments.filter(seg => seg.start_char <= start && seg.end_char >= end);
+
+      if(coveringSegments.length > 0) {
+        coveringSegments.sort((a, b) => b.id - a.id);
+        const winningSegment = coveringSegments[0];
+        const code = codes.find(c => c.id === winningSegment.code_id);
+        const color = code ? code.color : 'transparent';
+
+        parts.push(
+          <span
+            key={`${start}-${end}`}
+            style={{ backgroundColor: color, padding: '2px 0px', borderRadius: '3px', cursor: 'pointer' }}
+            title={code ? code.name : 'Code'}
+          >
+            {chunkText}
+          </span>
+        );
+      }else {
+        parts.push(<span key={`${start}-${end}`}>{chunkText}</span>);
       }
-
-      // Find the code for this segment
-      const code = codes.find(c => c.id === segment.code_id);
-      const color = code ? code.color : '#646cff';
-
-      // Add the highlighted segment
-      parts.push(
-        <span
-          key={segment.id}
-          style={{
-            backgroundColor: color,
-            padding: '2px 4px',
-            borderRadius: '3px',
-            cursor: 'pointer'
-          }}
-          title={code ? code.name : 'Code'}
-        >
-          {content.slice(segment.start_char, segment.end_char)}
-        </span>
-      );
-
-      lastEnd = segment.end_char;
-    });
-
-    // Add remaining text
-    if (lastEnd < content.length) {
-      parts.push(content.slice(lastEnd));
     }
-
     return parts;
   };
 
