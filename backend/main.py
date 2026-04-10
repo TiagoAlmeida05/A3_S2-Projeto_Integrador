@@ -52,6 +52,18 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     local_path: Optional[str] = None
 
+class SegmentCreate(BaseModel):
+    document_id: int
+    code_id: int
+    start_char: int
+    end_char: int
+    content: str
+
+class CodeUpdate(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+    description: Optional[str] = None
+    parent_id: Optional[int] = None
 
 @app.get("/")
 def root():
@@ -125,7 +137,7 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
         try:
             # 1. Read the file
             content = await file.read()
-            text_content = content.decode("utf-8") 
+            text_content = content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
             file_type = ext.lower().lstrip(".") or "text"
 
             if project.local_path:
@@ -255,3 +267,92 @@ def choose_folder():
     else:
         raise HTTPException(status_code=400, detail="No folder selected")
     
+
+@app.delete("/projects/{project_id}/codes/{code_id}")
+def delete_code(project_id: int, code_id: int, db: Session = Depends(get_db)):
+    code = db.query(models.Code).filter(
+        models.Code.id == code_id,
+        models.Code.project_id == project_id
+    ).first()
+
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+    
+    db.delete(code)
+    db.commit()
+
+    return {"message":"Code deleted successfully"}
+
+@app.put("/projects/{project_id}/codes/{code_id}")
+def update_code(project_id: int, code_id: int, code_update: CodeUpdate, db: Session = Depends(get_db)):
+    code = db.query(models.Code).filter(
+        models.Code.id == code_id,
+        models.Code.project_id == project_id
+    ).first()
+
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+    
+    if code_update.name is not None:
+        code.name = code_update.name
+    if code_update.color is not None:
+        code.color = code_update.color
+
+    db.commit()
+    db.refresh(code)
+
+    return code
+    
+
+@app.post("/projects/{project_id}/segments")
+def create_segment(project_id: int, segment: SegmentCreate, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    doc = db.query(models.Document).filter(
+        models.Document.id == segment.document_id,
+        models.Document.project_id == project_id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    code = db.query(models.Code).filter(
+        models.Code.id == segment.code_id,
+        models.Code.project_id == project_id
+    ).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
+
+    new_segment = models.Segment(
+        document_id=segment.document_id,
+        code_id=segment.code_id,
+        start_char=segment.start_char,
+        end_char=segment.end_char,
+        content=segment.content
+    )
+    db.add(new_segment)
+    db.commit()
+    db.refresh(new_segment)
+    return new_segment
+
+@app.get("/projects/{project_id}/segments")
+def get_segments(project_id: int, document_id: Optional[int] = None, db: Session = Depends(get_db)):
+    query = db.query(models.Segment).join(models.Document).filter(
+        models.Document.project_id == project_id
+    )
+    if document_id:
+        query = query.filter(models.Segment.document_id == document_id)
+    
+    segments = query.all()
+    return [
+        {
+            "id": seg.id,
+            "document_id": seg.document_id,
+            "code_id": seg.code_id,
+            "start_char": seg.start_char,
+            "end_char": seg.end_char,
+            "content": seg.content
+        }
+        for seg in segments
+    ]
