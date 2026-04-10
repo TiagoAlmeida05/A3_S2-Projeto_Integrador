@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import CodeSidebar from './CodeSidebar';
 import DocumentSidebar from './DocumentSidebar';
 import CollisionModal from './CollisionModal';
+import MarginSidebar from './MarginSidebar';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
@@ -22,7 +23,6 @@ function ProjectPage() {
   // UI & Navigation State
   const [activeTab, setActiveTab] = useState('documents');
   const [uploadStatus, setUploadStatus] = useState("");
-  const [hoveredDocId, setHoveredDocId] = useState(null); 
   
   // Quick-Code & Text Selection State
   const [selectionText, setSelectionText] = useState("");
@@ -43,6 +43,8 @@ function ProjectPage() {
     suggestedName: "",
     resolve: null
   });
+
+  const [marginBars, setMarginBars] = useState([]);
 
   // DATA FETCHING
 
@@ -379,6 +381,76 @@ function ProjectPage() {
     }
   };
 
+  useEffect(() => {
+    if (!activeDocument || !viewerRef.current || documentSegments.length === 0) {
+      setMarginBars([]);
+      return;
+    }
+
+    const measureTimer = setTimeout(() => {
+      const containerBounds = viewerRef.current.getBoundingClientRect();
+      const chunks = viewerRef.current.querySelectorAll('.highlight-chunk');
+      const segmentBounds = {};
+
+      chunks.forEach(chunk => {
+        const ids = chunk.getAttribute('data-segment-ids');
+        if (!ids) return;
+
+        const chunkRect = chunk.getBoundingClientRect();
+        const top = chunkRect.top - containerBounds.top;
+        const bottom = top + chunkRect.height;
+
+        ids.split(',').forEach(id => {
+          if (!segmentBounds[id]) {
+            segmentBounds[id] = { top, bottom };
+          } else {
+            segmentBounds[id].top = Math.min(segmentBounds[id].top, top);
+            segmentBounds[id].bottom = Math.max(segmentBounds[id].bottom, bottom);
+          }
+        });
+      });
+
+      const rawBars = documentSegments.map(seg => {
+        const bounds = segmentBounds[seg.id];
+        if (!bounds) return null;
+
+        const code = projectCodes.find(c => c.id === seg.code_id);
+        return {
+          id: seg.id,
+          codeName: code ? code.name : 'Unknown',
+          color: code ? code.color : '#ccc',
+          top: bounds.top,
+          height: bounds.bottom - bounds.top,
+          track: 0 
+        };
+      }).filter(Boolean);
+
+      rawBars.sort((a, b) => a.top - b.top);
+      rawBars.forEach(bar => {
+        let currentTrack = 0;
+        let conflict = true;
+        while (conflict) {
+          const overlappingBar = rawBars.find(other => 
+            other !== bar && 
+            other.track === currentTrack && 
+            other.top < bar.top + bar.height && 
+            other.top + other.height > bar.top
+          );
+          if (overlappingBar) {
+            currentTrack++; 
+          } else {
+            conflict = false;
+          }
+        }
+        bar.track = currentTrack;
+      });
+
+      setMarginBars(rawBars);
+    }, 50);
+
+    return () => clearTimeout(measureTimer);
+  }, [activeDocument, documentSegments, projectCodes]);
+
   // RENDER
 
   const renderHighlightedContent = (content, segments, codes) => {
@@ -408,10 +480,14 @@ function ProjectPage() {
         const winningSegment = coveringSegments[0];
         const code = codes.find(c => c.id === winningSegment.code_id);
         const color = code ? code.color : 'transparent';
+        
+        const allSegmentIds = coveringSegments.map(s => s.id).join(',');
 
         parts.push(
           <span
             key={`${start}-${end}`}
+            className="highlight-chunk"
+            data-segment-ids={allSegmentIds} 
             style={{ backgroundColor: color, padding: '2px 0px', borderRadius: '3px', cursor: 'pointer' }}
             title={code ? code.name : 'Code'}
           >
@@ -484,15 +560,20 @@ return (
               <h2 style={{ borderBottom: '2px solid #aaa', paddingBottom: '10px', marginTop: 0, color: '#000', fontWeight: '500' }}>
                 {activeDocument.filename}
               </h2>
-              
-              <div
-                ref={viewerRef}
-                tabIndex={0}
-                onMouseUp={handleTextSelection}
-                onKeyUp={handleTextSelection}
-                style={{ whiteSpace: 'pre-wrap', fontSize: '16px', lineHeight: '1.6', fontFamily: 'system-ui, sans-serif', outline: 'none' }}
-              >
-                {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes)}
+              <div style={{ display: 'flex', position: 'relative', marginTop: '20px' }}>
+                
+                <div
+                  ref={viewerRef}
+                  tabIndex={0}
+                  onMouseUp={handleTextSelection}
+                  onKeyUp={handleTextSelection}
+                  style={{ width: '75%', paddingRight: '30px', whiteSpace: 'pre-wrap', fontSize: '16px', lineHeight: '1.6', fontFamily: 'system-ui, sans-serif', outline: 'none', position: 'relative' }}
+                >
+                  {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes)}
+                </div>
+
+                <MarginSidebar marginBars={marginBars} />
+
               </div>
 
               {/* NEW: QUICK CODE POPUP MENU WITH DROPDOWN */}
