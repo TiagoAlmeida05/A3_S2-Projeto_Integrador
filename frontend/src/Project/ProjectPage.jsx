@@ -21,6 +21,11 @@ function ProjectPage() {
   const [documentSegments, setDocumentSegments] = useState([]);
   const [projectCodes, setProjectCodes] = useState([]);
   const [marginBars, setMarginBars] = useState([]);
+  const [codePanelOpen, setCodePanelOpen] = useState(false);
+  const [activeCode, setActiveCode] = useState(null);
+  const [codeSegments, setCodeSegments] = useState([]);
+  const [selectedQuoteId, setSelectedQuoteId] = useState(null);
+  const [pendingQuoteJump, setPendingQuoteJump] = useState(null);
   
   // UI & Navigation State
   const [activeTab, setActiveTab] = useState('documents');
@@ -72,6 +77,18 @@ function ProjectPage() {
       .catch(err => console.error(err));
   };
 
+  const openCodePanel = (code) => {
+    setActiveCode(code);
+    setCodePanelOpen(true);
+setSelectedQuoteId(null);
+    setPendingQuoteJump(null);
+    
+    fetch(`${API_BASE}/codes/${code.id}/segments`)
+      .then(res => res.json())
+      .then(data => setCodeSegments(data))
+      .catch(err => console.error("Failed to load code segments:", err));
+  };
+
   const handleDocumentClick = (docId) => {
     fetch(`${API_BASE}/projects/${id}/documents/${docId}`)
       .then(res => res.json())
@@ -84,6 +101,42 @@ function ProjectPage() {
       .then(data => setDocumentSegments(data))
       .catch(err => console.error("Failed to fetch segments:", err));
   };
+
+  const scrollToQuote = (quoteId) => {
+    if (!viewerRef.current) return;
+    const element = viewerRef.current.querySelector(`[data-segment-ids~="${quoteId}"]`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const handleQuoteClick = async (quote) => {
+    setSelectedQuoteId(quote.id);
+
+    if (!activeDocument || activeDocument.id !== quote.document_id) {
+      try {
+        const docRes = await fetch(`${API_BASE}/projects/${id}/documents/${quote.document_id}`);
+        const docData = await docRes.json();
+        setActiveDocument(docData);
+
+        const segRes = await fetch(`${API_BASE}/projects/${id}/segments?document_id=${quote.document_id}`);
+        const segData = await segRes.json();
+        setDocumentSegments(segData);
+
+        setPendingQuoteJump({ quoteId: quote.id, document_id: quote.document_id });
+      } catch (err) {
+        console.error("Failed to load quote document:", err);
+      }
+    } else {
+      setPendingQuoteJump({ quoteId: quote.id, document_id: quote.document_id });
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingQuoteJump || !activeDocument || pendingQuoteJump.document_id !== activeDocument.id) return;
+    scrollToQuote(pendingQuoteJump.quoteId);
+    setPendingQuoteJump(null);
+  }, [activeDocument, documentSegments, pendingQuoteJump]);
 
   useEffect(() => {
     fetchDocuments();
@@ -401,7 +454,7 @@ function ProjectPage() {
         const top = chunkRect.top - containerBounds.top;
         const bottom = top + chunkRect.height;
 
-        ids.split(',').forEach(id => {
+        ids.split(' ').forEach(id => {
           if (!segmentBounds[id]) {
             segmentBounds[id] = { top, bottom };
           } else {
@@ -482,14 +535,22 @@ function ProjectPage() {
         const code = codes.find(c => c.id === winningSegment.code_id);
         const color = code ? code.color : 'transparent';
         
-        const allSegmentIds = coveringSegments.map(s => s.id).join(',');
+        const allSegmentIds = coveringSegments.map(s => s.id).join(' ');
+        const isSelectedSegment = selectedQuoteId && coveringSegments.some(s => s.id === selectedQuoteId);
 
         parts.push(
           <span
             key={`${start}-${end}`}
             className="highlight-chunk"
             data-segment-ids={allSegmentIds} 
-            style={{ backgroundColor: color, padding: '2px 0px', borderRadius: '3px', cursor: 'pointer' }}
+            style={{
+              backgroundColor: color,
+              padding: '2px 0px',
+              borderRadius: '3px',
+              cursor: 'pointer',
+              outline: isSelectedSegment ? '2px solid #ffcc00' : 'none',
+              outlineOffset: isSelectedSegment ? '2px' : undefined,
+            }}
             title={code ? code.name : 'Code'}
           >
             {chunkText}
@@ -598,9 +659,70 @@ return (
                 codes={projectCodes} 
                 onDeleteCode={handleDeleteCode} 
                 onRefreshCodes={fetchCodes} 
+                onOpenCodePanel={openCodePanel}
             />
           )}
         </div>
+
+        {codePanelOpen && (
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', padding: '20px', backgroundColor: '#111', color: '#fff', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px' }}>Compiled Quotes</h3>
+                <div style={{ color: '#aaa', fontSize: '13px', marginTop: '6px' }}>{activeCode?.name || 'Selected code'}</div>
+              </div>
+              <button
+                onClick={() => { setCodePanelOpen(false); setActiveCode(null); setCodeSegments([]); setSelectedQuoteId(null); }}
+                style={{ backgroundColor: 'transparent', border: '1px solid #444', color: '#ccc', borderRadius: '6px', padding: '8px 12px', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
+
+            {codeSegments.length === 0 ? (
+              <p style={{ color: '#888' }}>No quotes found for this code yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {codeSegments.map(quote => {
+                  const before = quote.context.slice(0, quote.highlight_start);
+                  const highlight = quote.context.slice(quote.highlight_start, quote.highlight_end);
+                  const after = quote.context.slice(quote.highlight_end);
+                  const isSelected = quote.id === selectedQuoteId;
+
+                  return (
+                    <button
+                      key={quote.id}
+                      onClick={() => handleQuoteClick(quote)}
+                      style={{
+                        textAlign: 'left',
+                        backgroundColor: isSelected ? '#1f1f2a' : '#17171d',
+                        border: '1px solid #333',
+                        borderRadius: '8px',
+                        padding: '14px',
+                        color: 'white',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s ease',
+                        width: '100%',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{quote.document_filename}</span>
+                        <span style={{ color: '#9aa0b8', fontSize: '12px' }}>{quote.position_label}</span>
+                      </div>
+                      <div style={{ fontSize: '14px', lineHeight: '1.5', color: '#ddd' }}>
+                        {before}
+                        <span style={{ backgroundColor: '#646cff', color: '#fff', borderRadius: '4px', padding: '0 3px' }}>
+                          {highlight}
+                        </span>
+                        {after}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* RIGHT COLUMN: TEXT VIEWER */}
         <div style={{ flex: 1, border: '1px solid #ccc', borderRadius: '8px', padding: '30px', backgroundColor: '#fff', color: '#333', overflowY: 'auto', position: 'relative' }}>
