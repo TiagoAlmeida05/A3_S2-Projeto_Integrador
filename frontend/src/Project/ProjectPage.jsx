@@ -161,7 +161,7 @@ function ProjectPage() {
     try {
       let finalCodeID;
       if( quickCodeMode === "new") {
-        const codeName = quickCodeName.trim() || (selectionText.length > 30 ? '${selectionText.slice(0, 27)}...' : selectionText);
+        const codeName = quickCodeName.trim() || (selectionText.length > 30 ? `${selectionText.slice(0, 27)}...` : selectionText);
 
         const codeResponse = await fetch(`${API_BASE}/projects/${id}/codes`, {
           method: 'POST',
@@ -576,7 +576,7 @@ return (
 
               </div>
 
-              {/* NEW: QUICK CODE POPUP MENU WITH DROPDOWN */}
+              {/* QUICK CODE POPUP MENU WITH DROPDOWN */}
               {quickMenuOpen && selectionRect && (
                 <div style={{ position: 'fixed', top: selectionRect.top + 8, left: selectionRect.left, zIndex: 1000, backgroundColor: '#23232a', border: '1px solid #444', borderRadius: '10px', padding: '10px', minWidth: '240px', color: 'white', boxShadow: '0 12px 30px rgba(0, 0, 0, 0.25)' }}>
                   <div style={{ marginBottom: '8px', fontSize: '13px', color: '#b0b0c3' }}>Selected</div>

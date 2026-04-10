@@ -128,9 +128,19 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes }) {
 
                 /* THE NORMAL DISPLAY ROW */
                 <div style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
-                    <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: code.color }}></div>
-                    <span style={{ fontSize: '15px' }}>{code.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                    <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: code.color, flexShrink: 0 }}></div>
+                    <span 
+                      title={code.name} 
+                      style={{ 
+                        fontSize: '15px',
+                        whiteSpace: 'nowrap', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis' 
+                      }}
+                    >
+                      {code.name}
+                    </span>
                   </div>
                   <div style={{ display: 'flex', gap: '5px' }}>
                     <button 
