@@ -356,3 +356,40 @@ def get_segments(project_id: int, document_id: Optional[int] = None, db: Session
         }
         for seg in segments
     ]
+
+@app.get("/codes/{code_id}/segments")
+def get_segments_by_code(code_id: int, db: Session = Depends(get_db)):
+
+    segments = (
+        db.query(models.Segment)
+        .join(models.Document)
+        .filter(models.Segment.code_id == code_id)
+        .order_by(models.Segment.document_id, models.Segment.start_char)
+        .all()
+    )
+
+    results = []
+
+    for seg in segments:
+        doc_text = seg.document.content
+
+        context_radius = 200 
+
+        start = max(0, seg.start_char - context_radius)
+        end = min(len(doc_text), seg.end_char + context_radius)
+
+        context_text = doc_text[start:end]
+
+        results.append({
+            "id": seg.id,
+            "document_id": seg.document_id,
+            "document_filename": seg.document.filename,
+            "start_char": seg.start_char,
+            "end_char": seg.end_char,
+            "position_label": f"{seg.document.filename}, pos: {seg.start_char}-{seg.end_char}",
+            "context": context_text,
+            "highlight_start": seg.start_char - start,
+            "highlight_end": seg.end_char - start,
+        })
+
+    return results

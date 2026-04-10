@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
-function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes }) {
+function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel }) {
   const [newCodeName, setNewCodeName] = useState("");
   const [newCodeColor, setNewCodeColor] = useState("#646cff");
 
@@ -127,7 +127,11 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes }) {
               ) : (
 
                 /* THE NORMAL DISPLAY ROW */
-                <div style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                <div
+                  onDoubleClick={() => onOpenCodePanel?.(code)}
+                  title="Double-click to open compiled quotes"
+                  style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', cursor: 'pointer' }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
                     <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: code.color, flexShrink: 0 }}></div>
                     <span 
@@ -144,14 +148,14 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes }) {
                   </div>
                   <div style={{ display: 'flex', gap: '5px' }}>
                     <button 
-                      onClick={() => startEditing(code)}
+                      onClick={(e) => { e.stopPropagation(); startEditing(code); }}
                       style={{ backgroundColor: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '16px', padding: '0 5px' }}
                       title="Edit Code"
                     >
                       ✏️
                     </button>
                     <button 
-                      onClick={() => onDeleteCode(code.id)}
+                      onClick={(e) => { e.stopPropagation(); onDeleteCode(code.id); }}
                       style={{ backgroundColor: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '16px', padding: '0 5px' }}
                       title="Delete Code"
                     >
