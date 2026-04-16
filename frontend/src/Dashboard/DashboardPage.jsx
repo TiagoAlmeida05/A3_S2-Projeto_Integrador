@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate} from 'react-router-dom';
 import CreateProjectModal from './CreateProjectModal';
+import ImportProjectModal from './ImportProjectModal';
 import '/src/App.css'
 
 function DashboardPage() {
   const [projectStatus, setProjectStatus] = useState("")
   const [showForm, setShowForm] = useState(false)
   const [projects, setProjects] = useState([])
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const navigate = useNavigate()
 
@@ -54,12 +56,23 @@ function DashboardPage() {
       {/* Clean Header Area with the Button */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2>My Projects</h2>
-        <button 
-          onClick={() => setShowForm(true)} 
-          style={{ padding: '10px 20px', fontSize: '16px', cursor: 'pointer', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '4px' }}
-        >
-          + Create New Project
-        </button>
+        <div style={{ display: 'flex', gap: '15px' }}>
+            <button 
+              onClick={() => setIsImportModalOpen(true)}
+              style={{ padding: '10px 20px', fontSize: '15px', cursor: 'pointer', backgroundColor: 'transparent', color: '#646cff', border: '1px solid #646cff', borderRadius: '6px', fontWeight: 'bold' }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(100, 108, 255, 0.1)'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              Import Project
+            </button>
+            
+            <button 
+              onClick={() => setShowForm(true)} 
+              style={{ padding: '10px 20px', fontSize: '15px', cursor: 'pointer', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}
+            >
+              Create New Project
+            </button>
+          </div>
       </div>
 
       {/* The Pop-Up Modal Overlay */}
@@ -67,6 +80,17 @@ function DashboardPage() {
         isOpen={showForm}
         onClose={() => setShowForm(false)}
         onCreate={handleCreateProject}
+      />
+
+      
+      <ImportProjectModal 
+        isOpen={isImportModalOpen} 
+        onClose={() => setIsImportModalOpen(false)} 
+        onImportSuccess={(newProjectId) => {
+          setIsImportModalOpen(false);
+          // Redirect them to the newly imported project page!
+          window.location.href = `/project/${newProjectId}`; 
+        }}
       />
 
       {/* Project List */}

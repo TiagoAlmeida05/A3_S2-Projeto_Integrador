@@ -513,3 +513,143 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
             "Content-Disposition": f'attachment; filename="{safe_filename}.qdpx"'
         }
     )
+
+@app.post("/projects/import/refi", response_model=ProjectResponse)
+async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    if not file.filename.endswith('.qdpx'):
+        raise HTTPException(status_code=400, detail="File must be a .qdpx package")
+
+    try:
+        # Unzip the file in memory
+        content = await file.read()
+        zip_ref = zipfile.ZipFile(io.BytesIO(content))
+        
+        # Read the XML blueprint
+        xml_data = zip_ref.read("project.qde")
+        root = ET.fromstring(xml_data)
+
+        #easier parsing
+        for elem in root.iter():
+            if '}' in elem.tag:
+                elem.tag = elem.tag.split('}', 1)[1]
+
+        # Create the Project
+        base_name = root.attrib.get("name", "Imported Project")
+        proj_name = base_name
+        
+        #prevent duplicate names
+        counter = 1
+        while db.query(models.Project).filter(models.Project.name == proj_name).first() is not None:
+            proj_name = f"{base_name} ({counter})"
+            counter += 1
+
+        desc_elem = root.find("Description")
+        proj_desc = desc_elem.text if desc_elem is not None else None
+
+        new_project = models.Project(name=proj_name, description=proj_desc)
+        db.add(new_project)
+        db.commit()
+        db.refresh(new_project)
+
+        # Extract Codes 
+        guid_to_code_id = {} # Maps XML GUID to SQLite ID
+        
+        for code_elem in root.findall(".//Code"):
+            guid = code_elem.attrib.get("guid")
+            name = code_elem.attrib.get("name")
+            color = code_elem.attrib.get("color", "#646cff")
+            
+            c_desc_elem = code_elem.find("Description")
+            description = c_desc_elem.text if c_desc_elem is not None else None
+
+            new_code = models.Code(
+                project_id=new_project.id,
+                name=name,
+                color=color,
+                description=description
+            )
+            db.add(new_code)
+            db.commit()
+            db.refresh(new_code)
+            
+            guid_to_code_id[guid] = new_code.id
+
+        # Extract Documents and Segments
+        for source_elem in root.findall(".//TextSource"):
+            doc_guid = source_elem.attrib.get("guid")
+            doc_name = source_elem.attrib.get("name")
+            
+            # Get the text content
+            doc_content = ""
+            plain_text_path = source_elem.attrib.get("plainTextPath")
+            
+            if plain_text_path and plain_text_path.startswith("internal://"):
+                raw_filename = plain_text_path.split("/")[-1]
+                
+                # Search the ZIP file to find exactly where s the file
+                zip_path = None
+                for name in zip_ref.namelist():
+                    if name.endswith(raw_filename):
+                        zip_path = name
+                        break
+                
+                if zip_path:
+                    try:
+                        raw_bytes = zip_ref.read(zip_path)
+                        try:
+                            doc_content = raw_bytes.decode('utf-8-sig') 
+                        except UnicodeDecodeError:
+                            doc_content = raw_bytes.decode('utf-8', errors='ignore')
+                    except Exception as e:
+                        print(f"Failed to read file {zip_path} from ZIP: {e}")
+            else:
+                # Fallback to embedded text if the software didn't zip a physical file
+                pt_elem = source_elem.find("PlainTextContent")
+                if pt_elem is not None and pt_elem.text:
+                    doc_content = pt_elem.text
+
+            new_doc = models.Document(
+                project_id=new_project.id,
+                filename=doc_name,
+                content=doc_content,
+                type="txt"
+            )
+            db.add(new_doc)
+            db.commit()
+            db.refresh(new_doc)
+
+            # Extract the coded segments for this document
+            for sel_elem in source_elem.findall(".//PlainTextSelection"):
+                start_pos = int(sel_elem.attrib.get("startPosition", 0))
+                end_pos = int(sel_elem.attrib.get("endPosition", 0))
+                
+                for coding_elem in sel_elem.findall(".//Coding"):
+                    code_ref = coding_elem.find("CodeRef")
+                    if code_ref is not None:
+                        target_guid = code_ref.attrib.get("targetGUID")
+                        
+                        # Translate the GUID to database ID
+                        actual_code_id = guid_to_code_id.get(target_guid)
+                        
+                        if actual_code_id:
+                            # Slice the string to get the exact highlighted text
+                            segment_text = doc_content[start_pos:end_pos]
+                            
+                            new_segment = models.Segment(
+                                document_id=new_doc.id,
+                                code_id=actual_code_id,
+                                start_char=start_pos,
+                                end_char=end_pos,
+                                content=segment_text
+                            )
+                            db.add(new_segment)
+
+        db.commit()
+        return new_project
+
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=400, detail="Invalid QDPX package (Not a valid ZIP file)")
+    except Exception as e:
+        db.rollback() # If anything fails, cancel the database transaction
+        print(f"Import Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process QDPX: {str(e)}")
