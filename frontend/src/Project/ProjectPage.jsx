@@ -590,6 +590,62 @@ setSelectedQuoteId(null);
     }
   };
 
+  const handleExportREFI = async () => {
+    setUploadStatus("Generating REFI-QDA export...");
+    
+    try {
+      const response = await fetch(`${API_BASE}/projects/${id}/export/refi`);
+      if (!response.ok) throw new Error("Failed to generate export");
+      const blob = await response.blob();
+
+      if (window.showSaveFilePicker) {
+        try {
+          //pauses JavaScript until the user picks a folder
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: `${projectDetails.name.replace(/ /g, "_")}.qdpx`,
+            types: [{
+              description: 'REFI-QDA Project Package',
+              accept: { 'application/zip': ['.qdpx'] },
+            }],
+          });
+
+          // Once they pick a folder, we write the file directly to their hard drive
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setUploadStatus("Export saved successfully!");
+          setTimeout(() => setUploadStatus(""), 4000);
+
+        } catch (pickerError) {
+          if (pickerError.name === 'AbortError') {
+            setUploadStatus(""); 
+            return; 
+          }
+          throw pickerError; 
+        }
+
+      } else {
+        //for older browsers
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `${projectDetails.name.replace(/ /g, "_")}.qdpx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+
+        setUploadStatus(" Export ready for download!");
+        setTimeout(() => setUploadStatus(""), 4000);
+      }
+
+    } catch (error) {
+      console.error(error);
+      setUploadStatus(" Export failed.");
+      setTimeout(() => setUploadStatus(""), 4000);
+    }
+  };
+
 return (
     <div style={{ padding: 0, margin: 0, fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
@@ -599,19 +655,36 @@ return (
         <h2 style={{ marginTop: '20px' }}>Project: {projectDetails.name}</h2>
       </div>
 
-      <button 
-          onClick={() => setIsSettingsOpen(true)}
-          style={{ backgroundColor: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', borderRadius: '4px' }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#222'}
-          onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-        >
-          {/* Professional SVG Gear Icon */}
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-          Settings
-        </button>
+      <div style={{ display: 'flex', gap: '10px' }}>
+          
+          <button 
+            onClick={handleExportREFI}
+            style={{ backgroundColor: 'transparent', border: 'none', color: '#4CAF50', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', borderRadius: '4px', fontWeight: 'bold' }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1a2e1f'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            title="Export as REFI-QDA XML"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export REFI XML
+          </button>
+        <button 
+            onClick={() => setIsSettingsOpen(true)}
+            style={{ backgroundColor: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', borderRadius: '4px' }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#222'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            {/* Professional SVG Gear Icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Settings
+          </button>
+        </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         
