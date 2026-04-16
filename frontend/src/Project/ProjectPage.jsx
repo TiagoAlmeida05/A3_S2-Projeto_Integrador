@@ -590,6 +590,62 @@ setSelectedQuoteId(null);
     }
   };
 
+  const handleExportREFI = async () => {
+    setUploadStatus("Generating REFI-QDA export...");
+    
+    try {
+      const response = await fetch(`${API_BASE}/projects/${id}/export/refi`);
+      if (!response.ok) throw new Error("Failed to generate export");
+      const blob = await response.blob();
+
+      if (window.showSaveFilePicker) {
+        try {
+          //pauses JavaScript until the user picks a folder
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: `${projectDetails.name.replace(/ /g, "_")}.qdpx`,
+            types: [{
+              description: 'REFI-QDA Project Package',
+              accept: { 'application/zip': ['.qdpx'] },
+            }],
+          });
+
+          // Once they pick a folder, we write the file directly to their hard drive
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setUploadStatus("Export saved successfully!");
+          setTimeout(() => setUploadStatus(""), 4000);
+
+        } catch (pickerError) {
+          if (pickerError.name === 'AbortError') {
+            setUploadStatus(""); 
+            return; 
+          }
+          throw pickerError; 
+        }
+
+      } else {
+        //for older browsers
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = `${projectDetails.name.replace(/ /g, "_")}.qdpx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+
+        setUploadStatus(" Export ready for download!");
+        setTimeout(() => setUploadStatus(""), 4000);
+      }
+
+    } catch (error) {
+      console.error(error);
+      setUploadStatus(" Export failed.");
+      setTimeout(() => setUploadStatus(""), 4000);
+    }
+  };
+
 return (
     <div style={{ padding: 0, margin: 0, fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
@@ -602,7 +658,7 @@ return (
       <div style={{ display: 'flex', gap: '10px' }}>
           
           <button 
-            onClick={() => window.location.href = `http://127.0.0.1:8000/projects/${id}/export/refi`}
+            onClick={handleExportREFI}
             style={{ backgroundColor: 'transparent', border: 'none', color: '#4CAF50', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', borderRadius: '4px', fontWeight: 'bold' }}
             onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1a2e1f'}
             onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
