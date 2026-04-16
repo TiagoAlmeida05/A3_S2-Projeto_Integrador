@@ -8,6 +8,16 @@ import MarginSidebar from './MarginSidebar';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
+const hexToRGBA = (hex, opacity) => {
+  if (!hex) return 'transparent';
+  hex = hex.replace('#', '');
+  if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+};
+
 function ProjectPage() {
   const { id } = useParams(); 
   const viewerRef = useRef(null);
@@ -529,27 +539,25 @@ setSelectedQuoteId(null);
       const chunkText = content.slice(start, end);
       const coveringSegments = segments.filter(seg => seg.start_char <= start && seg.end_char >= end);
 
-      if(coveringSegments.length > 0) {
+      if (coveringSegments.length > 0) {
         coveringSegments.sort((a, b) => b.id - a.id);
         const winningSegment = coveringSegments[0];
         const code = codes.find(c => c.id === winningSegment.code_id);
-        const color = code ? code.color : 'transparent';
-        
+        const solidColor = code ? code.color : 'transparent';
+        const transparentColor = code ? hexToRGBA(code.color, 0.3) : 'transparent';
         const allSegmentIds = coveringSegments.map(s => s.id).join(' ');
-        const isSelectedSegment = selectedQuoteId && coveringSegments.some(s => s.id === selectedQuoteId);
 
         parts.push(
           <span
             key={`${start}-${end}`}
             className="highlight-chunk"
-            data-segment-ids={allSegmentIds} 
-            style={{
-              backgroundColor: color,
-              padding: '2px 0px',
-              borderRadius: '3px',
-              cursor: 'pointer',
-              outline: isSelectedSegment ? '2px solid #ffcc00' : 'none',
-              outlineOffset: isSelectedSegment ? '2px' : undefined,
+            data-segment-ids={allSegmentIds}
+            style={{ 
+              backgroundColor: transparentColor, 
+              borderBottom: `2px solid ${solidColor}`,
+              padding: '2px 0px', 
+              borderRadius: '3px', 
+              cursor: 'pointer' 
             }}
             title={code ? code.name : 'Code'}
           >
