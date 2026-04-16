@@ -4,6 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
+import xml.etree.ElementTree as ET
+import uuid
+from fastapi.responses import Response
+
+import zipfile
+import io
 import os
 import models
 from database import engine, get_db
@@ -393,3 +399,117 @@ def get_segments_by_code(code_id: int, db: Session = Depends(get_db)):
         })
 
     return results
+
+#Required by REFI-QDA
+def generate_guid(prefix: str, item_id: int) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"jupiter.qda.{prefix}.{item_id}"))
+
+@app.get("/projects/{project_id}/export/refi")
+def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    ET.register_namespace("", "urn:QDA-XML:project:1.0")
+    
+    # Generate a single user GUID to own the project
+    master_user_guid = str(uuid.uuid4())
+
+    #Root Element
+    root = ET.Element("{urn:QDA-XML:project:1.0}Project", attrib={
+        "name": project.name,
+        "origin": "jUPiter QDA",
+        "creatingUserGUID": master_user_guid
+    })
+
+    # Users
+    users = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Users")
+    ET.SubElement(users, "{urn:QDA-XML:project:1.0}User", attrib={
+        "guid": master_user_guid, 
+        "name": "jUPiter User"
+    })
+
+    # CodeBook 
+    codebook = ET.SubElement(root, "{urn:QDA-XML:project:1.0}CodeBook")
+    codes_elem = ET.SubElement(codebook, "{urn:QDA-XML:project:1.0}Codes")
+
+    code_guid_map = {}
+    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
+    
+    for c in codes:
+        cg = generate_guid("code", c.id)
+        code_guid_map[c.id] = cg
+        code_attribs = {"guid": cg, "name": c.name, "isCodable": "true"}
+        if c.color: 
+            code_attribs["color"] = c.color
+            
+        code_elem = ET.SubElement(codes_elem, "{urn:QDA-XML:project:1.0}Code", attrib=code_attribs)
+        if c.description:
+            cd_desc = ET.SubElement(code_elem, "{urn:QDA-XML:project:1.0}Description")
+            cd_desc.text = c.description
+
+    zip_files_to_write = {}
+
+    # Sources
+    sources = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Sources")
+    docs = db.query(models.Document).filter(models.Document.project_id == project_id).all()
+    
+    for d in docs:
+        doc_guid = generate_guid("doc", d.id)
+        internal_filename = f"{doc_guid}.txt"
+        
+        source_elem = ET.SubElement(sources, "{urn:QDA-XML:project:1.0}TextSource", attrib={
+            "guid": doc_guid,
+            "name": d.filename,
+            "plainTextPath": f"internal://{internal_filename}",
+            "creatingUser": master_user_guid
+        })
+
+        zip_files_to_write[f"Sources/{internal_filename}"] = d.content
+
+        doc_segments = db.query(models.Segment).filter(models.Segment.document_id == d.id).all()
+        for seg in doc_segments:
+            sel_guid = generate_guid("selection", seg.id)
+            
+            sel_elem = ET.SubElement(source_elem, "{urn:QDA-XML:project:1.0}PlainTextSelection", attrib={
+                "guid": sel_guid,
+                "name": f"Selection-{seg.id}",
+                "startPosition": str(seg.start_char),
+                "endPosition": str(seg.end_char),
+                "creatingUser": master_user_guid
+            })
+
+            coding_elem = ET.SubElement(sel_elem, "{urn:QDA-XML:project:1.0}Coding", attrib={
+                "guid": generate_guid("coding", seg.id),
+                "creatingUser": master_user_guid
+            })
+
+            ET.SubElement(coding_elem, "{urn:QDA-XML:project:1.0}CodeRef", attrib={
+                "targetGUID": code_guid_map[seg.code_id]
+            })
+
+    # Description
+    if project.description:
+        desc = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Description")
+        desc.text = project.description
+
+    # === Compile to ZIP (QDPX) ===
+    xml_str = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    safe_filename = project.name.replace(" ", "_")
+    
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        zip_file.writestr("project.qde", xml_str)
+        
+        for filepath, content in zip_files_to_write.items():
+            zip_file.writestr(filepath, content.encode('utf-8'))
+
+    zip_bytes = zip_buffer.getvalue()
+
+    return Response(
+        content=zip_bytes, 
+        media_type="application/zip", 
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}.qdpx"'
+        }
+    )
