@@ -10,4 +10,8 @@ __pycache__/
 
 # OS
 .DS_Store
-qda_data.db
+
+# Database
+backend/qda_data.db
+*.db
+*.sqlite3
