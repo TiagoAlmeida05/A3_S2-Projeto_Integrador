@@ -271,6 +271,13 @@ function ProjectPage() {
       
       // Add the new segment to the state
       setDocumentSegments(prev => [...prev, createdSegment]);
+
+      if (codePanelOpen && activeCode && activeCode.id === finalCodeID) {
+        fetch(`${API_BASE}/codes/${finalCodeID}/segments`)
+          .then(res => res.json())
+          .then(data => setCodeSegments(data))
+          .catch(err => console.error("Failed to refresh code segments:", err));
+      }
       
     } catch (error) {
       console.error(error);
@@ -292,6 +299,25 @@ function ProjectPage() {
       }
     } catch (error){
       console.error("Error deleting code:", error);
+    }
+  };
+
+  const handleDeleteSegment = async (e, segmentId) => {
+    e.stopPropagation();
+    const confirmDelete = window.confirm("Are you sure you want to delete this highlighted quote?");
+    if(!confirmDelete) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/projects/${id}/segments/${segmentId}`, {method: 'DELETE'});
+      if(response.ok){
+        setCodeSegments(prev => prev.filter(s => s.id !== segmentId));
+        setDocumentSegments(prev => prev.filter(s => s.id !== segmentId));
+        if(selectedQuoteId === segmentId) setSelectedQuoteId(null);
+      } else {
+        console.error("Failed to delete segment");
+      }
+    } catch (error){
+      console.error("Error deleting segment:", error);
     }
   };
 
@@ -780,8 +806,9 @@ return (
         </div>
 
         {codePanelOpen && (
-          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', padding: '20px', backgroundColor: '#111', color: '#fff', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', backgroundColor: '#111', color: '#fff', overflow: 'hidden' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px', backgroundColor: '#1a1a1a', borderBottom: '1px solid #333' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px' }}>Compiled Quotes</h3>
                 <div style={{ color: '#aaa', fontSize: '13px', marginTop: '6px' }}>{activeCode?.name || 'Selected code'}</div>
@@ -794,48 +821,61 @@ return (
               </button>
             </div>
 
-            {codeSegments.length === 0 ? (
-              <p style={{ color: '#888' }}>No quotes found for this code yet.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {codeSegments.map(quote => {
-                  const before = quote.context.slice(0, quote.highlight_start);
-                  const highlight = quote.context.slice(quote.highlight_start, quote.highlight_end);
-                  const after = quote.context.slice(quote.highlight_end);
-                  const isSelected = quote.id === selectedQuoteId;
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+              {codeSegments.length === 0 ? (
+                <p style={{ color: '#888', margin: 0 }}>No quotes found for this code yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {codeSegments.map(quote => {
+                    const before = quote.context.slice(0, quote.highlight_start);
+                    const highlight = quote.context.slice(quote.highlight_start, quote.highlight_end);
+                    const after = quote.context.slice(quote.highlight_end);
+                    const isSelected = quote.id === selectedQuoteId;
 
-                  return (
-                    <button
-                      key={quote.id}
-                      onClick={() => handleQuoteClick(quote)}
-                      style={{
-                        textAlign: 'left',
-                        backgroundColor: isSelected ? '#1f1f2a' : '#17171d',
-                        border: '1px solid #333',
-                        borderRadius: '8px',
-                        padding: '14px',
-                        color: 'white',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.2s ease',
-                        width: '100%',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{quote.document_filename}</span>
-                        <span style={{ color: '#9aa0b8', fontSize: '12px' }}>{quote.position_label}</span>
-                      </div>
-                      <div style={{ fontSize: '14px', lineHeight: '1.5', color: '#ddd' }}>
-                        {before}
-                        <span style={{ backgroundColor: '#646cff', color: '#fff', borderRadius: '4px', padding: '0 3px' }}>
-                          {highlight}
-                        </span>
-                        {after}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                    return (
+                      <button
+                        key={quote.id}
+                        onClick={() => handleQuoteClick(quote)}
+                        style={{
+                          textAlign: 'left',
+                          backgroundColor: isSelected ? '#1f1f2a' : '#17171d',
+                          border: '1px solid #333',
+                          borderRadius: '8px',
+                          padding: '14px',
+                          color: 'white',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s ease',
+                          width: '100%',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontWeight: '600', fontSize: '14px' }}>{quote.document_filename}</span>
+                            <span style={{ color: '#9aa0b8', fontSize: '12px' }}>{quote.position_label}</span>
+                          </div>
+                          
+                          <div 
+                            onClick={(e) => handleDeleteSegment(e, quote.id)}
+                            style={{ color: '#ff6b6b', fontSize: '16px', cursor: 'pointer', padding: '4px' }}
+                            title="Delete Quote"
+                          >
+                            🗑️
+                          </div>
+                        </div>
+                        
+                        <div style={{ fontSize: '14px', lineHeight: '1.5', color: '#ddd' }}>
+                          {before}
+                          <span style={{ backgroundColor: '#646cff', color: '#fff', borderRadius: '4px', padding: '0 3px' }}>
+                            {highlight}
+                          </span>
+                          {after}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

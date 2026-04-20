@@ -8,15 +8,14 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   const [editName, setEditName] = useState("");
   const [editColor, setEditColor] = useState("");
 
-  const [draggedIndex, setDraggedIndex] = useState(null);
-  const [dragOverIndex, setDragOverIndex] = useState(null);
-
   const [contextMenu, setContextMenu] = useState(null);
-  
   const [addingSubCodeTo, setAddingSubCodeTo] = useState(null);
-  
   const [subCodeName, setSubCodeName] = useState("");
   const [subCodeColor, setSubCodeColor] = useState("#4CAF50");
+
+  const [draggedId, setDraggedId] = useState(null);
+  const [dragOverId, setDragOverId] = useState(null);
+  const [dragPosition, setDragPosition] = useState(null); // "before", "after", "inside"
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
@@ -100,33 +99,97 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     setEditColor(code.color)
   };
 
-  const handleDragStart = (e, index) => {
-    setDraggedIndex(index);
+  const handleDragStart = (e, codeId) => {
+    setDraggedId(codeId);
     e.dataTransfer.effectAllowed = "move";
   };
 
-  const handleDragOver = (e, index) => {
+  const handleDragOver = (e, targetCode) => {
     e.preventDefault();
-    setDragOverIndex(index);
+    e.stopPropagation();
+    if (draggedId === targetCode.id) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+
+    let position = "inside";
+    if (y < rect.height * 0.25) position = "before";
+    else if (y > rect.height * 0.75) position = "after";
+
+    if (position === "inside" && targetCode.parent_id !== null) {
+      position = "after";
+    }
+
+    setDragOverId(targetCode.id);
+    setDragPosition(position);
   };
 
   const handleDragLeave = () => {
-    setDragOverIndex(null);
+    setDragOverId(null);
+    setDragPosition(null);
   }
 
-  const handleDrop = async (e, targetIndex) => {
+  const handleDrop = async (e, targetCode) => {
     e.preventDefault();
-    setDragOverIndex(null);
-    if (draggedIndex === null || draggedIndex === targetIndex) return;
+    e.stopPropagation();
+    
+    if (!draggedId || draggedId === targetCode.id){
+      setDragOverId(null);
+      setDragPosition(null);
+      return;
+    }
 
-    const newCodes = [...codes];
-    const [draggedCode] = newCodes.splice(draggedIndex, 1);
-    newCodes.splice(targetIndex, 0, draggedCode);
+    const draggedCode = codes.find(c => c.id === draggedId);
+    const draggedChildren = codes.filter(c => c.parent_id === draggedId);
 
-    // Update the codes array
-    if (onReorderCodes) onReorderCodes(newCodes);
+    let newParentId = targetCode.parent_id;
+    if (dragPosition === "inside") {
+      newParentId = targetCode.id;
+    }
 
-    setDraggedIndex(null);
+    if (newParentId === draggedId) {
+      setDraggedId(null);
+      return;
+    }
+
+    draggedCode.parent_id = newParentId;
+
+    let remainingCodes = codes.filter(c => c.id !== draggedId && c.parent_id !== draggedId);
+    
+    const targetIndex = remainingCodes.findIndex(c => c.id === targetCode.id);
+    let insertIndex = targetIndex;
+
+    if (dragPosition === "after" || dragPosition === "inside") {
+      let lastChildIndex = targetIndex;
+      while(lastChildIndex + 1 < remainingCodes.length && remainingCodes[lastChildIndex + 1].parent_id === targetCode.id) {
+        lastChildIndex++;
+      }
+      insertIndex = lastChildIndex + 1;
+    }
+    remainingCodes.splice(insertIndex, 0, draggedCode, ...draggedChildren);
+
+    const reorderPayload = remainingCodes.map((c, idx) => ({
+      id: c.id,
+      parent_id: c.parent_id,
+      order_index: idx
+    }));
+
+    if (onReorderCodes) onReorderCodes(remainingCodes);
+
+    try {
+      await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/reorder`, {
+        method: 'PUT',
+        headers: {'Content-Type' : 'application/json'},
+        body: JSON.stringify({codes: reorderPayload})
+      });
+      if (onRefreshCodes) onRefreshCodes();
+    } catch (error) {
+      console.error("Failed to reorder codes:", error);
+    }
+
+    setDraggedId(null);
+    setDragOverId(null);
+    setDragPosition(null);
   };
 
   const handleContextMenu = (e, codeId) => {
@@ -179,21 +242,25 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
         ) : (
           renderCodes.map((code, index) => {
             const isSubCode = code.parent_id != null;
+            const isDraggingOver = dragOverId === code.id;
 
             return (
               <li 
                 key={code.id} 
                 draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
+                onDragStart={(e) => handleDragStart(e, code.id)}
+                onDragOver={(e) => handleDragOver(e, code)}
                 onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, index)}
+                onDrop={(e) => handleDrop(e, code)}
                 style={{ 
                   marginBottom: '5px',
-                  opacity: draggedIndex === index ? 0.4 : 1,
-                  borderTop: dragOverIndex === index ? '2px solid #646cff' : '2px solid transparent',
-                  marginLeft: isSubCode ? '20px' : '0px', // INDENT SUB-CODES!
-                  transition: 'border 0.2s ease, margin-left 0.2s ease'
+                  opacity: draggedId === code.id ? 0.3 : 1,
+                  marginLeft: isSubCode ? '20px' : '0px',
+                  transition: 'all 0.2s ease',
+                  borderTop: isDraggingOver && dragPosition === 'before' ? '2px solid #646cff' : '2px solid transparent',
+                  borderBottom: isDraggingOver && dragPosition === 'after' ? '2px solid #646cff' : '2px solid transparent',
+                  backgroundColor: isDraggingOver && dragPosition === 'inside' ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
+                  borderRadius: '4px'
                 }}
               >
                 {editingCodeId === code.id ? (

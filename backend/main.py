@@ -71,6 +71,14 @@ class CodeUpdate(BaseModel):
     description: Optional[str] = None
     parent_id: Optional[int] = None
 
+class CodeReorderItem(BaseModel):
+    id: int
+    parent_id: Optional[int] = None
+    order_index: int
+
+class CodeReorderRequest(BaseModel):
+    codes: List[CodeReorderItem]
+
 @app.get("/")
 def root():
     return {"message": "SQLAlchemy Backend is running!"}
@@ -236,8 +244,23 @@ def create_code(project_id: int, code: CodeCreate, db: Session = Depends(get_db)
 
 @app.get("/projects/{project_id}/codes")
 def get_project_codes(project_id: int, db: Session = Depends(get_db)):
-    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
+    codes = db.query(models.Code).filter(models.Code.project_id == project_id).order_by(models.Code.order_index).all()
     return codes
+
+@app.put("/projects/{project_id}/codes/reorder")
+def reorder_codes(project_id: int, reorder_request: CodeReorderRequest, db: Session = Depends(get_db)):
+    for item in reorder_request.codes:
+        code = db.query(models.Code).filter(
+            models.Code.id == item.id,
+            models.Code.project_id == project_id
+        ).first()
+        
+        if code:
+            code.parent_id = item.parent_id
+            code.order_index = item.order_index
+
+    db.commit()
+    return {"message": "Codes reordered successfully"}
 
 @app.put("/projects/{project_id}", response_model=ProjectResponse)
 def update_project(project_id: int, project_data: ProjectUpdate, db: Session = Depends(get_db)):
@@ -646,10 +669,23 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
 
         db.commit()
         return new_project
-
     except zipfile.BadZipFile:
         raise HTTPException(status_code=400, detail="Invalid QDPX package (Not a valid ZIP file)")
     except Exception as e:
         db.rollback() # If anything fails, cancel the database transaction
         print(f"Import Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to process QDPX: {str(e)}")
+
+@app.delete("/projects/{project_id}/segments/{segment_id}")
+def delete_segment(project_id: int, segment_id: int, db: Session = Depends(get_db)):
+    segment = db.query(models.Segment).join(models.Document).filter(
+        models.Segment.id == segment_id,
+        models.Document.project_id == project_id
+    ).join(models.Code).first()
+
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    db.delete(segment)
+    db.commit()
+    return {"message": "Segment deleted successfully"}
