@@ -90,7 +90,7 @@ function ProjectPage() {
   const openCodePanel = (code) => {
     setActiveCode(code);
     setCodePanelOpen(true);
-setSelectedQuoteId(null);
+    setSelectedQuoteId(null);
     setPendingQuoteJump(null);
     
     fetch(`${API_BASE}/codes/${code.id}/segments`)
@@ -481,6 +481,7 @@ setSelectedQuoteId(null);
         const code = projectCodes.find(c => c.id === seg.code_id);
         return {
           id: seg.id,
+          code_id: seg.code_id,
           codeName: code ? code.name : 'Unknown',
           color: code ? code.color : '#ccc',
           top: bounds.top,
@@ -489,7 +490,18 @@ setSelectedQuoteId(null);
         };
       }).filter(Boolean);
 
-      rawBars.sort((a, b) => a.top - b.top);
+      rawBars.sort((a, b) => {
+        if (Math.abs(b.height - a.height) > 10) {
+          return b.height - a.height;
+        }
+
+        const idxA = projectCodes.findIndex(c => c.id === a.code_id);
+        const idxB = projectCodes.findIndex(c => c.id === b.code_id);
+        const validA = idxA !== -1 ? idxA : 9999;
+        const validB = idxB !== -1 ? idxB : 9999;
+        
+        return validA - validB;
+      });
       rawBars.forEach(bar => {
         let currentTrack = 0;
         let conflict = true;
@@ -540,7 +552,13 @@ setSelectedQuoteId(null);
       const coveringSegments = segments.filter(seg => seg.start_char <= start && seg.end_char >= end);
 
       if (coveringSegments.length > 0) {
-        coveringSegments.sort((a, b) => b.id - a.id);
+        coveringSegments.sort((a, b) => {
+          const idxA = codes.findIndex(c => c.id === a.code_id);
+          const idxB = codes.findIndex(c => c.id === b.code_id);
+          const validA = idxA !== -1 ? idxA : Number.MAX_SAFE_INTEGER;
+          const validB = idxB !== -1 ? idxB : Number.MAX_SAFE_INTEGER;
+          return validA - validB;
+        });
         const winningSegment = coveringSegments[0];
         const code = codes.find(c => c.id === winningSegment.code_id);
         const solidColor = code ? code.color : 'transparent';
@@ -646,6 +664,21 @@ setSelectedQuoteId(null);
     }
   };
 
+  const orderedDropdownCodes = [];
+  if (projectCodes) {
+    const topLevel = projectCodes.filter(c => !c.parent_id);
+    topLevel.forEach(parent => {
+      orderedDropdownCodes.push(parent);
+      const children = projectCodes.filter(c => c.parent_id === parent.id);
+      orderedDropdownCodes.push(...children);
+    });
+    projectCodes.forEach(c => {
+      if (!orderedDropdownCodes.find(oc => oc.id === c.id)) {
+        orderedDropdownCodes.push(c);
+      }
+    });
+  }
+
 return (
     <div style={{ padding: 0, margin: 0, fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
@@ -741,6 +774,7 @@ return (
                 onDeleteCode={handleDeleteCode} 
                 onRefreshCodes={fetchCodes} 
                 onOpenCodePanel={openCodePanel}
+                onReorderCodes={setProjectCodes}
             />
           )}
         </div>
@@ -824,7 +858,7 @@ return (
                   {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes)}
                 </div>
 
-                <MarginSidebar marginBars={marginBars} />
+                <MarginSidebar marginBars={marginBars} projectCodes={projectCodes} />
 
               </div>
 
@@ -838,7 +872,6 @@ return (
                   
                   <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
                     
-                    {/* The Dropdown Menu */}
                     <select 
                       value={quickCodeMode === "new" ? "new" : selectedExistingCodeId}
                       onChange={(e) => {
@@ -851,15 +884,16 @@ return (
                       }}
                       style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #555', backgroundColor: '#1f1f28', color: 'white', cursor: 'pointer' }}
                     >
-                      {projectCodes.length > 0 && <optgroup label="Existing Codes">
-                        {projectCodes.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
+                      {orderedDropdownCodes.length > 0 && <optgroup label="Existing Codes">
+                        {orderedDropdownCodes.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.parent_id ? `\u00A0\u00A0\u00A0↳ ${c.name}` : c.name}
+                          </option>
                         ))}
                       </optgroup>}
                       <option value="new">✨ Create New Code...</option>
                     </select>
 
-                    {/* Only show name and color inputs if "Create New" is selected */}
                     {quickCodeMode === "new" && (
                         <>
                             <input
