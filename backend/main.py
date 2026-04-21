@@ -128,7 +128,7 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 async def upload_documents(project_id: int, files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
 
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    ALLOWED_EXTENSIONS = {".txt", ".md", ".rtf"}
+    ALLOWED_EXTENSIONS = {".txt", ".md", ".rtf", ".pdf", ".docx", ".odt"}
     successful_uploads = []
     failed_uploads = []
     
@@ -143,18 +143,50 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
         try:
             # 1. Read the file
             content = await file.read()
-            text_content = content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
             file_type = ext.lower().lstrip(".") or "text"
+            text_content = ""
+
+            if ext.lower() in {".txt", ".md", ".rtf"}:
+                text_content = content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+            elif ext.lower() == ".pdf":
+                try:
+                    from PyPDF2 import PdfReader
+                    import io
+                    pdf_reader = PdfReader(io.BytesIO(content))
+                    text_content = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+                except Exception as e:
+                    failed_uploads.append({"filename": file.filename, "reason": f"PDF extraction failed: {str(e)}"})
+                    continue
+            elif ext.lower() == ".docx":
+                try:
+                    import io
+                    from docx import Document as DocxDocument
+                    doc = DocxDocument(io.BytesIO(content))
+                    text_content = "\n".join([p.text for p in doc.paragraphs])
+                except Exception as e:
+                    failed_uploads.append({"filename": file.filename, "reason": f"DOCX extraction failed: {str(e)}"})
+                    continue
+            elif ext.lower() == ".odt":
+                try:
+                    import io
+                    from odf.opendocument import load
+                    from odf.text import P
+                    odt_doc = load(io.BytesIO(content))
+                    paragraphs = odt_doc.getElementsByType(P)
+                    text_content = "\n".join([str(p) for p in paragraphs])
+                except Exception as e:
+                    failed_uploads.append({"filename": file.filename, "reason": f"ODT extraction failed: {str(e)}"})
+                    continue
+            else:
+                failed_uploads.append({"filename": file.filename, "reason": "Unsupported file type"})
+                continue
 
             if project.local_path:
-
                 os.makedirs(project.local_path, exist_ok=True)
-                
                 physical_file_path = os.path.join(project.local_path, file.filename)
-                
                 with open(physical_file_path, "wb") as f:
                     f.write(content)
-            
+
             # 2. Create the Document object
             new_doc = models.Document(
                 project_id=project_id,
@@ -162,16 +194,13 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
                 content=text_content,
                 type=file_type
             )
-            
             db.add(new_doc)
             successful_uploads.append(file.filename)
 
         except UnicodeDecodeError:
             failed_uploads.append({"filename": file.filename, "reason": "Unreadable text encoding"})
         except Exception as e:
-           
             failed_uploads.append({"filename": file.filename, "reason": "Corrupted file"})
-        
     # Commit all files to the database at once!
     db.commit()
     
