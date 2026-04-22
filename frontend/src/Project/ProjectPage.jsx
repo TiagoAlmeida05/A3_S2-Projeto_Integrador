@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import CodeSidebar from './CodeSidebar';
 import DocumentSidebar from './DocumentSidebar';
 import CollisionModal from './CollisionModal';
@@ -21,6 +21,7 @@ const hexToRGBA = (hex, opacity) => {
 function ProjectPage() {
   const { id } = useParams(); 
   const viewerRef = useRef(null);
+  const navigate = useNavigate();
 
   // STATE MANAGEMENT
 
@@ -676,6 +677,20 @@ function ProjectPage() {
     }
   };
 
+  const handleDeleteProject = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/projects/${id}`, { method: 'DELETE' });
+      if(response.ok) {
+        navigate('/');
+      } else {
+        alert("Failed to delete project.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Server error during project deletion.")
+    }
+  };
+
   const handleExportREFI = async () => {
     setUploadStatus("Generating REFI-QDA export...");
     
@@ -1143,6 +1158,7 @@ return (
         currentDescription={projectDetails.description}
         currentLocalPath={projectDetails.localPath}
         onSave={handleSaveSettings}
+        onDelete={handleDeleteProject}
       />
     </div>
   );

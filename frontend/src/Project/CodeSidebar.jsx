@@ -42,6 +42,13 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
 
       if (response.ok) {
         setNewCodeName(""); // Clear the input
+        setAddingSubCodeTo(null);
+        setExpandedCodes(prev => {
+          const newSet = new Set(prev);
+          newSet.add(parentId);
+          return newSet;
+        });
+        
         if(onRefreshCodes) onRefreshCodes();
       }
     } catch (error) {
@@ -105,10 +112,21 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     e.dataTransfer.effectAllowed = "move";
   };
 
+  const isDecendant = (childId, parentId) => {
+    let current = codes.find(c => c.id === childId);
+    while (current && current.parent_id) {
+      if (current.parent_id === parentId) return true;
+      current = codes.find(c => c.id === current.parent_id);
+    }
+    return false;
+  };
+
+
   const handleDragOver = (e, targetCode) => {
     e.preventDefault();
     e.stopPropagation();
-    if (draggedId === targetCode.id) return;
+
+    if (draggedId === targetCode.id || isDecendant(targetCode.id, draggedId)) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
@@ -116,10 +134,6 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     let position = "inside";
     if (y < rect.height * 0.25) position = "before";
     else if (y > rect.height * 0.75) position = "after";
-
-    if (position === "inside" && targetCode.parent_id !== null) {
-      position = "after";
-    }
 
     setDragOverId(targetCode.id);
     setDragPosition(position);
@@ -134,40 +148,51 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     e.preventDefault();
     e.stopPropagation();
     
-    if (!draggedId || draggedId === targetCode.id){
+    if (!draggedId || draggedId === targetCode.id || isDecendant(targetCode.id, draggedId)) {
       setDragOverId(null);
       setDragPosition(null);
       return;
     }
 
     const draggedCode = codes.find(c => c.id === draggedId);
-    const draggedChildren = codes.filter(c => c.parent_id === draggedId);
+
+    const getAllDescendants = (parentId) => {
+      let desc = [];
+      const kids = codes.filter(c => c.parent_id === parentId);
+      for(let k of kids) {
+        desc.push(k);
+        desc = desc.concat(getAllDescendants(k.id));
+      }
+      return desc;
+    };
+
+    const draggedDescendants = getAllDescendants(draggedId);
 
     let newParentId = targetCode.parent_id;
     if (dragPosition === "inside") {
       newParentId = targetCode.id;
+      setExpandedCodes(prev => new Set(prev).add(targetCode.id));
     }
 
     if (newParentId === draggedId) {
       setDraggedId(null);
+      setDragOverId(null);
+      setDragPosition(null);
       return;
     }
 
     draggedCode.parent_id = newParentId;
 
-    let remainingCodes = codes.filter(c => c.id !== draggedId && c.parent_id !== draggedId);
+    let remainingCodes = codes.filter(c => c.id !== draggedId && !draggedDescendants.some(d => d.id === c.id));
     
     const targetIndex = remainingCodes.findIndex(c => c.id === targetCode.id);
     let insertIndex = targetIndex;
 
     if (dragPosition === "after" || dragPosition === "inside") {
-      let lastChildIndex = targetIndex;
-      while(lastChildIndex + 1 < remainingCodes.length && remainingCodes[lastChildIndex + 1].parent_id === targetCode.id) {
-        lastChildIndex++;
-      }
-      insertIndex = lastChildIndex + 1;
+      const targetDescendants = getAllDescendants(targetCode.id);
+      insertIndex = targetIndex + 1 + targetDescendants.length;
     }
-    remainingCodes.splice(insertIndex, 0, draggedCode, ...draggedChildren);
+    remainingCodes.splice(insertIndex, 0, draggedCode, ...draggedDescendants);
 
     const reorderPayload = remainingCodes.map((c, idx) => ({
       id: c.id,
@@ -458,37 +483,22 @@ return (
       </ul>
 
       {contextMenu && (
-        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 9999, backgroundColor: '#23232a', border: '1px solid #444', borderRadius: '6px', boxShadow: '0 8px 16px rgba(0,0,0,0.5)', padding: '4px', minWidth: '180px' }}>
-          
-          {/* Option 1: Create New */}
+        <div 
+          onClick={(e) => e.stopPropagation()} 
+          style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 9999, backgroundColor: '#23232a', border: '1px solid #444', borderRadius: '6px', boxShadow: '0 8px 16px rgba(0,0,0,0.5)', padding: '4px', minWidth: '150px' }}
+        >
           <button 
-            onClick={(e) => { e.stopPropagation(); setAddingSubCodeTo(contextMenu.codeId); setContextMenu(null); }}
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              setAddingSubCodeTo(contextMenu.codeId); 
+              setContextMenu(null); 
+            }}
             style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
             onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
             onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
-            ✨ New Sub-Code here
+            ✨ Create Sub-Code
           </button>
-
-          <div style={{ height: '1px', backgroundColor: '#444', margin: '4px 0' }} />
-          <div style={{ fontSize: '11px', color: '#888', padding: '4px 12px' }}>Move Existing Code Here:</div>
-
-          <div style={{ maxHeight: '200px', overflowY: 'auto', borderTop: '1px solid #444', marginTop: '4px' }}>
-            <div style={{ fontSize: '11px', color: '#888', padding: '8px 12px 4px 12px' }}>Move Existing Code Here:</div>
-            {codes
-              .filter(c => c.id !== contextMenu.codeId) // Can't move a code into itself
-              .map(c => (
-                <button 
-                  key={c.id}
-                  onClick={(e) => { e.stopPropagation(); handleMoveCode(c.id, contextMenu.codeId); setContextMenu(null); }}
-                  style={{ width: '100%', padding: '6px 12px', backgroundColor: 'transparent', color: '#ccc', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '12px' }}
-                  onMouseOver={(e) => e.target.style.backgroundColor = '#333'}
-                  onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-                >
-                  ↳ {c.name}
-                </button>
-              ))}
-          </div>
         </div>
       )}
     </>
