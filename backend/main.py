@@ -245,7 +245,19 @@ def create_code(project_id: int, code: CodeCreate, db: Session = Depends(get_db)
 @app.get("/projects/{project_id}/codes")
 def get_project_codes(project_id: int, db: Session = Depends(get_db)):
     codes = db.query(models.Code).filter(models.Code.project_id == project_id).order_by(models.Code.order_index).all()
-    return codes
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "color": c.color,
+            "description": c.description,
+            "project_id": c.project_id,
+            "parent_id": c.parent_id,
+            "order_index": c.order_index,
+            "frequency": len(c.segments) # SQLAlchemy magically counts them for us!
+        }
+        for c in codes
+    ]
 
 @app.put("/projects/{project_id}/codes/reorder")
 def reorder_codes(project_id: int, reorder_request: CodeReorderRequest, db: Session = Depends(get_db)):
@@ -387,12 +399,22 @@ def get_segments(project_id: int, document_id: Optional[int] = None, db: Session
     ]
 
 @app.get("/codes/{code_id}/segments")
-def get_segments_by_code(code_id: int, db: Session = Depends(get_db)):
+def get_segments_by_code(code_id: int, include_children: bool = False, db: Session = Depends(get_db)):
+
+    target_code_ids = [code_id]
+
+    if include_children:
+        def get_all_children(current_id):
+            children = db.query(models.Code).filter(models.Code.parent_id == current_id).all()
+            for child in children:
+                target_code_ids.append(child.id)
+                get_all_children(child.id)
+        get_all_children(code_id)
 
     segments = (
         db.query(models.Segment)
         .join(models.Document)
-        .filter(models.Segment.code_id == code_id)
+        .filter(models.Segment.code_id.in_(target_code_ids))
         .order_by(models.Segment.document_id, models.Segment.start_char)
         .all()
     )
@@ -401,12 +423,9 @@ def get_segments_by_code(code_id: int, db: Session = Depends(get_db)):
 
     for seg in segments:
         doc_text = seg.document.content
-
         context_radius = 200 
-
         start = max(0, seg.start_char - context_radius)
         end = min(len(doc_text), seg.end_char + context_radius)
-
         context_text = doc_text[start:end]
 
         results.append({
@@ -419,6 +438,8 @@ def get_segments_by_code(code_id: int, db: Session = Depends(get_db)):
             "context": context_text,
             "highlight_start": seg.start_char - start,
             "highlight_end": seg.end_char - start,
+            "code_name": seg.code.name,
+            "code_color": seg.code.color
         })
 
     return results

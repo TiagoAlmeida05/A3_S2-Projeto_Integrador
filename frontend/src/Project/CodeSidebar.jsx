@@ -16,6 +16,8 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [dragPosition, setDragPosition] = useState(null); // "before", "after", "inside"
+  
+  const [expandedCodes, setExpandedCodes] = useState(new Set());
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
@@ -71,7 +73,6 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       console.error("Failed to create subcode:", error);
     }
   };
-
 
   const handleUpdateCode= async (e) => {
     e.preventDefault();
@@ -201,18 +202,69 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     }); 
   }
 
-  const renderCodes = [];
-  if (codes) {
-    const topLevel = codes.filter(c => !c.parent_id);
-    topLevel.forEach(parent => {
-      renderCodes.push(parent);
-      const children = codes.filter(c => c.parent_id === parent.id);
-      renderCodes.push(...children);
-    });
-    codes.forEach(c => { if(!renderCodes.find(rc => rc.id === c.id)) renderCodes.push(c); });
-  }
+  const handleMoveCode = async (codeId, newParentId) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/${codeId}`, {
+        method: 'PUT',
+        headers: {'Content-Type' : 'application/json'},
+        body: JSON.stringify({parent_id: newParentId})
+      });
 
-  return (
+      if (response.ok) {
+        setExpandedCodes(prev => new Set(prev).add(newParentId));
+        if(onRefreshCodes) onRefreshCodes();
+      }
+    } catch (error) {
+      console.error("Failed to move code:", error)
+    }
+  };
+
+  const getAggregatedFrequency = (codeId) => {
+    const baseCode = codes.find(c => c.id === codeId);
+    if (!baseCode) return 0;
+
+    let total = baseCode.frequency || 0;
+    const children = codes.filter(c => c.parent_id === codeId);
+    children.forEach(child => {
+      total += getAggregatedFrequency(child.id);
+    });
+    return total;
+  };
+
+  const toggleExpand = (e, codeId) => {
+    e.stopPropagation();
+    setExpandedCodes(prev => {
+      const next = new Set(prev);
+      if (next.has(codeId)) next.delete(codeId);
+      else next.add(codeId);
+      return next;
+    });
+  };
+
+
+  const renderCodes = [];
+    if (codes) {
+      const buildTree = (parentId, depth) => {
+        const children = codes.filter(c => c.parent_id === parentId);
+        children.forEach(child => {
+          renderCodes.push({ ...child, depth });
+          if (expandedCodes.has(child.id)) {
+            buildTree(child.id, depth + 1);
+          }
+        });
+      };
+
+      buildTree(null, 0);
+
+      codes.forEach(c => {
+        const isActuallyRoot = c.parent_id === null || c.parent_id === undefined || c.parent_id === "";
+        if (!renderCodes.find(rc => rc.id === c.id) && isActuallyRoot) {
+          renderCodes.push({ ...c, depth: 0 });
+        }
+      });
+    }
+
+return (
     <>
       <h3 style={{ marginTop: 0 }}>Code Hierarchy</h3>
       
@@ -241,8 +293,10 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
           <p style={{ color: '#888', fontSize: '14px' }}>No codes created yet.</p>
         ) : (
           renderCodes.map((code, index) => {
-            const isSubCode = code.parent_id != null;
+            const isSubCode = code.depth > 0;
             const isDraggingOver = dragOverId === code.id;
+            const hasChildren = codes.some(c => c.parent_id === code.id);
+            const isExpanded = expandedCodes.has(code.id);
 
             return (
               <li 
@@ -255,7 +309,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
                 style={{ 
                   marginBottom: '5px',
                   opacity: draggedId === code.id ? 0.3 : 1,
-                  marginLeft: isSubCode ? '20px' : '0px',
+                  marginLeft: `${code.depth * 20}px`,                  
                   transition: 'all 0.2s ease',
                   borderTop: isDraggingOver && dragPosition === 'before' ? '2px solid #646cff' : '2px solid transparent',
                   borderBottom: isDraggingOver && dragPosition === 'after' ? '2px solid #646cff' : '2px solid transparent',
@@ -296,39 +350,75 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
                 ) : (
                   <div
                     onDoubleClick={() => onOpenCodePanel?.(code)}
-                    onContextMenu={(e) => handleContextMenu(e, code.id)} // TRIGGERS RIGHT-CLICK
+                    onContextMenu={(e) => handleContextMenu(e, code.id)}
                     title={isSubCode ? "Double-click to open quotes" : "Right-click to add Sub-Code. Double-click to open quotes."}
-                    style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', cursor: 'grab' }}
+                    style={{ 
+                      padding: '8px 12px', 
+                      backgroundColor: '#2a2a2a', 
+                      color: 'white', 
+                      borderRadius: '4px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between', 
+                      gap: '10px', 
+                      cursor: 'grab' 
+                    }}
                   >
+                    {/* LEFT SIDE: Icons & Name */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
                       <div style={{ color: '#666', fontSize: '14px', cursor: 'grab' }}>⋮⋮</div>
                       
-                      {isSubCode && <span style={{ color: '#888', fontSize: '14px' }}>↳</span>}
+                      <div style={{ width: '16px', textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
+                        {hasChildren ? (
+                          <div 
+                            onClick={(e) => toggleExpand(e, code.id)}
+                            style={{ cursor: 'pointer', fontSize: '12px', color: '#aaa', padding: '4px' }}
+                          >
+                            {isExpanded ? '▼' : '▶'}
+                          </div>
+                        ) : (
+                          isSubCode && <span style={{ color: '#888', fontSize: '14px' }}>↳</span>
+                        )}
+                      </div>
                       
                       <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: code.color, flexShrink: 0 }}></div>
-                      <span 
-                        style={{ 
-                          fontSize: isSubCode ? '13px' : '15px', 
-                          whiteSpace: 'nowrap', 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis',
-                          fontWeight: (!isSubCode && index === 0) ? 'bold' : 'normal'
-                        }}
-                      >
+                      
+                      <span style={{ 
+                        fontSize: isSubCode ? '13px' : '15px', 
+                        whiteSpace: 'nowrap', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis',
+                        fontWeight: (!isSubCode) ? 'bold' : 'normal'
+                      }}>
                         {code.name}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: '5px' }}>
+
+                    {/* RIGHT SIDE: Badges & Buttons */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      {getAggregatedFrequency(code.id) > 0 && (
+                        <span style={{ 
+                          backgroundColor: '#111', 
+                          color: '#aaa', 
+                          fontSize: '11px', 
+                          padding: '2px 8px', 
+                          borderRadius: '10px', 
+                          fontWeight: 'bold',
+                        }}>
+                          {getAggregatedFrequency(code.id)}
+                        </span>
+                      )}
+                      
                       <button 
                         onClick={(e) => { e.stopPropagation(); startEditing(code); }}
-                        style={{ backgroundColor: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '16px', padding: '0 5px' }}
+                        style={{ backgroundColor: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
                         title="Edit Code"
                       >
                         ✏️
                       </button>
                       <button 
                         onClick={(e) => { e.stopPropagation(); onDeleteCode(code.id); }}
-                        style={{ backgroundColor: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '16px', padding: '0 5px' }}
+                        style={{ backgroundColor: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
                         title="Delete Code"
                       >
                         🗑️
@@ -361,7 +451,6 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
                     </button>
                   </form>
                 )}
-
               </li>
             );
           })
@@ -369,32 +458,37 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       </ul>
 
       {contextMenu && (
-        <div 
-          style={{ 
-            position: 'fixed', 
-            top: contextMenu.y, 
-            left: contextMenu.x, 
-            zIndex: 9999, 
-            backgroundColor: '#23232a', 
-            border: '1px solid #444', 
-            borderRadius: '6px', 
-            boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
-            padding: '4px',
-            minWidth: '150px'
-          }}
-        >
+        <div style={{ position: 'fixed', top: contextMenu.y, left: contextMenu.x, zIndex: 9999, backgroundColor: '#23232a', border: '1px solid #444', borderRadius: '6px', boxShadow: '0 8px 16px rgba(0,0,0,0.5)', padding: '4px', minWidth: '180px' }}>
+          
+          {/* Option 1: Create New */}
           <button 
-            onClick={(e) => {
-              e.stopPropagation();
-              setAddingSubCodeTo(contextMenu.codeId);
-              setContextMenu(null);
-            }}
+            onClick={(e) => { e.stopPropagation(); setAddingSubCodeTo(contextMenu.codeId); setContextMenu(null); }}
             style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
             onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
             onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
-            ↳ Add Sub-Code
+            ✨ New Sub-Code here
           </button>
+
+          <div style={{ height: '1px', backgroundColor: '#444', margin: '4px 0' }} />
+          <div style={{ fontSize: '11px', color: '#888', padding: '4px 12px' }}>Move Existing Code Here:</div>
+
+          <div style={{ maxHeight: '200px', overflowY: 'auto', borderTop: '1px solid #444', marginTop: '4px' }}>
+            <div style={{ fontSize: '11px', color: '#888', padding: '8px 12px 4px 12px' }}>Move Existing Code Here:</div>
+            {codes
+              .filter(c => c.id !== contextMenu.codeId) // Can't move a code into itself
+              .map(c => (
+                <button 
+                  key={c.id}
+                  onClick={(e) => { e.stopPropagation(); handleMoveCode(c.id, contextMenu.codeId); setContextMenu(null); }}
+                  style={{ width: '100%', padding: '6px 12px', backgroundColor: 'transparent', color: '#ccc', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '12px' }}
+                  onMouseOver={(e) => e.target.style.backgroundColor = '#333'}
+                  onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                >
+                  ↳ {c.name}
+                </button>
+              ))}
+          </div>
         </div>
       )}
     </>
