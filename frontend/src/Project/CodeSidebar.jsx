@@ -62,12 +62,12 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       <h3 style={{ marginTop: 0 }}>Master Codes</h3>
       
       {/* Code Creation Form */}
-      <form onSubmit={handleCreateCode} style={{ marginBottom: '20px', display: 'flex', gap: '8px' }}>
+      <form onSubmit={handleCreateCode} style={{ marginBottom: '20px', display: 'flex', gap: '8px', alignItems: 'center' }}>
         <input 
           type="color" 
           value={newCodeColor}
           onChange={(e) => setNewCodeColor(e.target.value)}
-          style={{ width: '40px', height: '36px', padding: '0', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+          style={{ width: '44px', height: '40px', padding: '0', border: 'none', cursor: 'pointer', borderRadius: '4px', flexShrink: 0 }}
           title="Choose code color"
         />
         <input 
@@ -75,9 +75,9 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
           placeholder="New code name..." 
           value={newCodeName}
           onChange={(e) => setNewCodeName(e.target.value)}
-          style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white' }}
+          style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white', minWidth: '100px', height: '40px', boxSizing: 'border-box' }}
         />
-        <button type="submit" style={{ padding: '8px 12px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+        <button type="submit" style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, fontWeight: '500', height: '40px' }}>
           Add
         </button>
       </form>

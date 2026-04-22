@@ -21,6 +21,7 @@ const hexToRGBA = (hex, opacity) => {
 function ProjectPage() {
   const { id } = useParams(); 
   const viewerRef = useRef(null);
+  const dragStateRef = useRef({ active: false, panel: null, initialX: 0, initialLeftWidth: 0});
 
   // STATE MANAGEMENT
 
@@ -40,6 +41,7 @@ function ProjectPage() {
   // UI & Navigation State
   const [activeTab, setActiveTab] = useState('documents');
   const [uploadStatus, setUploadStatus] = useState("");
+  const [leftPanelWidth, setLeftPanelWidth] = useState(300);
   
   // Quick-Code & Text Selection State
   const [selectionText, setSelectionText] = useState("");
@@ -309,6 +311,47 @@ setSelectedQuoteId(null);
     document.addEventListener('keyup', handleKeyUp);
     return () => document.removeEventListener('keyup', handleKeyUp);
   }, [quickMenuOpen, selectionText, quickCodeName, quickCodeColor, selectionOffsets, activeDocument]);
+
+  // Panel Resizing Handlers
+  const startDrag = (panel, e) => {
+    dragStateRef.current = {
+      active: true,
+      panel,
+      initialX: e.clientX,
+      initialLeftWidth: leftPanelWidth,
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  };
+
+  const handleMouseMove = (e) => {
+    if (!dragStateRef.current.active) return;
+
+    const { panel, initialX, initialLeftWidth, initialMarginWidth } = dragStateRef.current;
+    const delta = e.clientX - initialX;
+
+    if (panel === 'left') {
+      const newWidth = Math.max(200, Math.min(600, initialLeftWidth + delta));
+      setLeftPanelWidth(newWidth);
+    }
+  };
+
+  const handleMouseUp = () => {
+    dragStateRef.current.active = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
+
+  useEffect(() => {
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
 
 
   // FILE MANAGEMENT LOGIC
@@ -650,7 +693,7 @@ return (
         </div>
 
         {/* LEFT COLUMN: ACTIVE SIDEBAR */}
-        <div style={{ width: '300px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', padding: '20px', backgroundColor: '#1a1a1a' }}>
+        <div style={{ width: `${leftPanelWidth}px`, display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', padding: '20px', backgroundColor: '#1a1a1a' }}>
           {activeTab === 'documents' && (
             <DocumentSidebar 
               documents={documents}
@@ -670,6 +713,31 @@ return (
                 onOpenCodePanel={openCodePanel}
             />
           )}
+        </div>
+
+        {/* DRAG HANDLE BETWEEN LEFT AND CENTER */}
+        <div
+          onMouseDown={(e) => startDrag('left', e)}
+          style={{
+            width: '6px',
+            backgroundColor: '#333',
+            cursor: 'col-resize',
+            flexShrink: 0,
+            position: 'relative'
+          }}
+          onMouseEnter={(e) => !dragStateRef.current.active && (e.currentTarget.style.backgroundColor = '#555')}
+          onMouseLeave={(e) => !dragStateRef.current.active && (e.currentTarget.style.backgroundColor = '#333')}
+        >
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '2px',
+            height: '30px',
+            backgroundColor: '#888',
+            borderRadius: '1px'
+          }} />
         </div>
 
         {codePanelOpen && (
