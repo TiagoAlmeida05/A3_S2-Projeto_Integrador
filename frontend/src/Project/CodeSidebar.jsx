@@ -157,7 +157,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
                 /* THE NORMAL DISPLAY ROW */
                 <div
                   onDoubleClick={() => onOpenCodePanel?.(code)}
-                  title="Double-click to open compiled quotes\nRight-click for memo"
+                  title={"Double-click to open compiled quotes\nRight-click for memos"}
                   style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', cursor: 'pointer' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
