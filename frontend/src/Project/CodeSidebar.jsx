@@ -1,6 +1,11 @@
 import { useState } from 'react';
+import CodeMemoModal from './CodeMemoModal';
+import axios from 'axios';
 
 function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel }) {
+  const [memoModalOpen, setMemoModalOpen] = useState(false);
+  const [memoTargetCode, setMemoTargetCode] = useState(null);
+  const [memoError, setMemoError] = useState(null);
   const [newCodeName, setNewCodeName] = useState("");
   const [newCodeColor, setNewCodeColor] = useState("#646cff");
 
@@ -57,6 +62,29 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     setEditColor(code.color)
   };
 
+  // Context menu handler
+  const handleContextMenu = (e, code) => {
+    e.preventDefault();
+    setMemoTargetCode(code);
+    setMemoModalOpen(true);
+  };
+
+  const handleSaveMemo = async (text) => {
+    if (!memoTargetCode) return;
+    setMemoError(null);
+    try {
+      await axios.post(`http://127.0.0.1:8000/memos`, {
+        text,
+        target_type: 'code',
+        target_id: memoTargetCode.id
+      });
+      setMemoModalOpen(false);
+      setMemoTargetCode(null);
+    } catch (err) {
+      setMemoError('Failed to save memo');
+    }
+  };
+
   return (
     <>
       <h3 style={{ marginTop: 0 }}>Master Codes</h3>
@@ -88,7 +116,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
           <p style={{ color: '#888', fontSize: '14px' }}>No codes created yet.</p>
         ) : (
           codes.map(code => (
-            <li key={code.id} style={{ marginBottom: '5px' }}>
+            <li key={code.id} style={{ marginBottom: '5px' }} onContextMenu={e => handleContextMenu(e, code)}>
               
               {/* Check if this specific row is being edited */}
               {editingCodeId === code.id ? (
@@ -129,7 +157,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
                 /* THE NORMAL DISPLAY ROW */
                 <div
                   onDoubleClick={() => onOpenCodePanel?.(code)}
-                  title="Double-click to open compiled quotes"
+                  title="Double-click to open compiled quotes\nRight-click for memo"
                   style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', cursor: 'pointer' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
@@ -169,6 +197,15 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
           ))
         )}
       </ul>
+      {memoModalOpen && (
+        <CodeMemoModal
+          open={memoModalOpen}
+          onClose={() => { setMemoModalOpen(false); setMemoTargetCode(null); setMemoError(null); }}
+          onSave={handleSaveMemo}
+          codeName={memoTargetCode?.name || ''}
+        />
+      )}
+      {memoError && <div style={{ color: 'red', marginTop: 8 }}>{memoError}</div>}
     </>
   );
 }
