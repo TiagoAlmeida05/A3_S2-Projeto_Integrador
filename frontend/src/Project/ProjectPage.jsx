@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import CodeSidebar from './CodeSidebar';
 import DocumentSidebar from './DocumentSidebar';
 import CollisionModal from './CollisionModal';
@@ -21,6 +21,7 @@ const hexToRGBA = (hex, opacity) => {
 function ProjectPage() {
   const { id } = useParams(); 
   const viewerRef = useRef(null);
+  const navigate = useNavigate();
 
   // STATE MANAGEMENT
 
@@ -52,6 +53,10 @@ function ProjectPage() {
 
   const [quickCodeName, setQuickCodeName] = useState("");
   const [quickCodeColor, setQuickCodeColor] = useState("#646cff");
+
+  const [autoUpcode, setAutoUpcode] = useState(false);
+  const [includeSubCodes, setIncludeSubCodes] = useState(false);
+  const [showParentInMargin, setShowParentInMargin] = useState(false);
 
   //  File Upload Conflict State
   const [conflictDialog, setConflictDialog] = useState({
@@ -90,10 +95,10 @@ function ProjectPage() {
   const openCodePanel = (code) => {
     setActiveCode(code);
     setCodePanelOpen(true);
-setSelectedQuoteId(null);
+    setSelectedQuoteId(null);
     setPendingQuoteJump(null);
     
-    fetch(`${API_BASE}/codes/${code.id}/segments`)
+    fetch(`${API_BASE}/codes/${code.id}/segments?include_children=${includeSubCodes}`)
       .then(res => res.json())
       .then(data => setCodeSegments(data))
       .catch(err => console.error("Failed to load code segments:", err));
@@ -248,29 +253,51 @@ setSelectedQuoteId(null);
         finalCodeID = parseInt(selectedExistingCodeId);
       }
 
+      let codesToApply = [finalCodeID];
+
+      if (autoUpcode && quickCodeMode === "existing") {
+        const parentIds = getParentIds(finalCodeID, projectCodes);
+        codesToApply = [...codesToApply, ...parentIds];
+      }
+
       //Create the segment
-      const segmentResponse = await fetch(`${API_BASE}/projects/${id}/segments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          document_id: activeDocument.id,
-          code_id: finalCodeID,
-          start_char: offsets.start,
-          end_char: offsets.end,
-          content: selectionText
+      const segmentPromises = codesToApply.map(codeId => 
+        fetch(`${API_BASE}/projects/${id}/segments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            document_id: activeDocument.id,
+            code_id: codeId,
+            start_char: offsets.start,
+            end_char: offsets.end,
+            content: selectionText
+          })
+        }).then(async res => {
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.detail || 'Failed to save segment');
+          }
+          return data;
         })
-      });
+      );
 
-      const createdSegment = await segmentResponse.json();
-      if (!segmentResponse.ok) throw new Error(createdSegment.detail || 'Failed to save segment');
+      const createdSegments = await Promise.all(segmentPromises);
 
-      setUploadStatus('Code applied!');
+      setUploadStatus(`Applied ${createdSegments.length} code(s)!`);
       setTimeout(() => setUploadStatus(''), 3000);
       clearTextSelection();
       window.getSelection()?.removeAllRanges();
       
       // Add the new segment to the state
-      setDocumentSegments(prev => [...prev, createdSegment]);
+      setDocumentSegments(prev => [...prev, ...createdSegments]);
+      fetchCodes();
+
+      if (codePanelOpen && activeCode && codesToApply.includes(activeCode.id)) {
+        fetch(`${API_BASE}/codes/${activeCode.id}/segments?include_children=${includeSubCodes}`)
+          .then(res => res.json())
+          .then(data => setCodeSegments(data))
+          .catch(err => console.error("Failed to refresh code segments:", err));
+      }
       
     } catch (error) {
       console.error(error);
@@ -292,6 +319,26 @@ setSelectedQuoteId(null);
       }
     } catch (error){
       console.error("Error deleting code:", error);
+    }
+  };
+
+  const handleDeleteSegment = async (e, segmentId) => {
+    e.stopPropagation();
+    const confirmDelete = window.confirm("Are you sure you want to delete this highlighted quote?");
+    if(!confirmDelete) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/projects/${id}/segments/${segmentId}`, {method: 'DELETE'});
+      if(response.ok){
+        fetchCodes();
+        setCodeSegments(prev => prev.filter(s => s.id !== segmentId));
+        setDocumentSegments(prev => prev.filter(s => s.id !== segmentId));
+        if(selectedQuoteId === segmentId) setSelectedQuoteId(null);
+      } else {
+        console.error("Failed to delete segment");
+      }
+    } catch (error){
+      console.error("Error deleting segment:", error);
     }
   };
 
@@ -479,17 +526,51 @@ setSelectedQuoteId(null);
         if (!bounds) return null;
 
         const code = projectCodes.find(c => c.id === seg.code_id);
+
+        let displayColor = code ? code.color : '#ccc';
+        let displayName = code ? code.name : 'Unknown';
+
+        if (showParentInMargin && code && code.parent_id) {
+          let currentIter = code;
+          let pathArray = [currentIter.name];
+          
+          while (currentIter.parent_id) {
+            const parent = projectCodes.find(c => Number(c.id) === Number(currentIter.parent_id));
+            if (parent) {
+              pathArray.unshift(parent.name);
+              currentIter = parent;
+            } else {
+              break; 
+            }
+          }
+          
+          displayColor = currentIter.color; 
+          displayName = pathArray.join(" > ");
+        }
+
         return {
           id: seg.id,
-          codeName: code ? code.name : 'Unknown',
-          color: code ? code.color : '#ccc',
+          code_id: seg.code_id,
+          codeName: displayName,
+          color: displayColor,
           top: bounds.top,
           height: bounds.bottom - bounds.top,
           track: 0 
         };
       }).filter(Boolean);
 
-      rawBars.sort((a, b) => a.top - b.top);
+      rawBars.sort((a, b) => {
+        if (Math.abs(b.height - a.height) > 10) {
+          return b.height - a.height;
+        }
+
+        const idxA = projectCodes.findIndex(c => c.id === a.code_id);
+        const idxB = projectCodes.findIndex(c => c.id === b.code_id);
+        const validA = idxA !== -1 ? idxA : 9999;
+        const validB = idxB !== -1 ? idxB : 9999;
+        
+        return validA - validB;
+      });
       rawBars.forEach(bar => {
         let currentTrack = 0;
         let conflict = true;
@@ -513,7 +594,7 @@ setSelectedQuoteId(null);
     }, 50);
 
     return () => clearTimeout(measureTimer);
-  }, [activeDocument, documentSegments, projectCodes]);
+  }, [activeDocument, documentSegments, projectCodes, showParentInMargin]);
 
   // RENDER
 
@@ -540,7 +621,13 @@ setSelectedQuoteId(null);
       const coveringSegments = segments.filter(seg => seg.start_char <= start && seg.end_char >= end);
 
       if (coveringSegments.length > 0) {
-        coveringSegments.sort((a, b) => b.id - a.id);
+        coveringSegments.sort((a, b) => {
+          const idxA = codes.findIndex(c => c.id === a.code_id);
+          const idxB = codes.findIndex(c => c.id === b.code_id);
+          const validA = idxA !== -1 ? idxA : Number.MAX_SAFE_INTEGER;
+          const validB = idxB !== -1 ? idxB : Number.MAX_SAFE_INTEGER;
+          return validA - validB;
+        });
         const winningSegment = coveringSegments[0];
         const code = codes.find(c => c.id === winningSegment.code_id);
         const solidColor = code ? code.color : 'transparent';
@@ -587,6 +674,20 @@ setSelectedQuoteId(null);
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeleteProject = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/projects/${id}`, { method: 'DELETE' });
+      if(response.ok) {
+        navigate('/');
+      } else {
+        alert("Failed to delete project.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Server error during project deletion.")
     }
   };
 
@@ -646,6 +747,43 @@ setSelectedQuoteId(null);
     }
   };
 
+  const orderedDropdownCodes = [];
+  if (projectCodes) {
+    const builDdropdownTree = (parentId) => {
+      const children = projectCodes.filter(c => c.parent_id === parentId);
+      children.forEach(child => {
+        orderedDropdownCodes.push(child);
+        builDdropdownTree(child.id);
+      });
+    };
+    builDdropdownTree(null);
+
+    projectCodes.forEach(c => {
+      if(!orderedDropdownCodes.find(oc => oc.id === c.id) && c.parent_id == null) {
+        orderedDropdownCodes.push(c);
+      }
+    });
+  }
+
+  const getFullPath = (code, allCodes) => {
+    if(!code.parent_id) return code.name;
+    const parent = allCodes.find(c => c.id === code.parent_id);
+    if (parent) {
+      return `${getFullPath(parent, allCodes)} > ${code.name}`;
+    }
+    return code.name;
+  };
+
+  const getParentIds = (codeId, allCodes) => {
+    const ids = [];
+    let currentCode = allCodes.find(c => c.id === parseInt(codeId));
+    while (currentCode && currentCode.parent_id) {
+      ids.push(currentCode.parent_id);
+      currentCode = allCodes.find(c => c.id === currentCode.parent_id);
+    }
+    return ids;
+  };
+
 return (
     <div style={{ padding: 0, margin: 0, fontFamily: 'sans-serif', textAlign: 'left', display: 'flex', flexDirection: 'column', height: '100vh', boxSizing: 'border-box' }}>
       
@@ -696,7 +834,7 @@ return (
             title="Documents"
           >
              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path d="M3 8.2C3 7.07989 3 6.51984 3.21799 6.09202C3.40973 5.71569 3.71569 5.40973 4.09202 5.21799C4.51984 5 5.0799 5 6.2 5H9.67452C10.1637 5 10.4083 5 10.6385 5.05526C10.8425 5.10425 11.0376 5.18506 11.2166 5.29472C11.4184 5.4184 11.5914 5.59135 11.9373 5.93726L12.0627 6.06274C12.4086 6.40865 12.5816 6.5816 12.7834 6.70528C12.9624 6.81494 13.1575 6.89575 13.3615 6.94474C13.5917 7 13.8363 7 14.3255 7H17.8C18.9201 7 19.4802 7 19.908 7.21799C20.2843 7.40973 20.5903 7.71569 20.782 8.09202C21 8.51984 21 9.0799 21 10.2V15.8C21 16.9201 21 17.4802 20.782 17.908C20.5903 18.2843 20.2843 18.5903 19.908 18.782C19.4802 19 18.9201 19 17.8 19H6.2C5.07989 19 4.51984 19 4.09202 18.782C3.71569 18.5903 3.40973 18.2843 3.21799 17.908C3 17.4802 3 16.9201 3 15.8V8.2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 8.2C3 7.07989 3 6.51984 3.21799 6.09202C3.40973 5.71569 3.71569 5.40973 4.09202 5.21799C4.51984 5 5.0799 5 6.2 5H9.67452C10.1637 5 10.4083 5 10.6385 5.05526C10.8425 5.10425 11.0376 5.18506 11.2166 5.29472C11.4184 5.4184 11.5914 5.59135 11.9373 5.93726L12.0627 6.06274C12.4086 6.40865 12.5816 6.5816 12.7834 6.70528C12.9624 6.81494 13.1575 6.89575 13.3615 6.94474C13.5917 7 13.8363 7 14.3255 7H17.8C18.9201 7 19.4802 7 19.908 7.21799C20.2843 7.40973 20.5903 7.71569 20.782 8.09202C21 8.51984 21 9.0799 21 10.2V15.8C21 16.9201 21 17.4802 20.782 17.908C20.5903 18.2843 20.2843 18.5903 19.908 18.782C19.4802 19 18.9201 19 17.8 19H6.2C5.07989 19 4.51984 19 4.09202 18.782C3.71569 18.5903 3.40973 18.2843 3.21799 17.908C3 17.4802 3 16.9201 3 15.8V8.2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
 
               </svg>
           </button>
@@ -717,7 +855,7 @@ return (
             title="Codes"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" viewBox="0 0 24 24" fill="none">
-              <path d="M7.0498 7.0498H7.0598M10.5118 3H7.8C6.11984 3 5.27976 3 4.63803 3.32698C4.07354 3.6146 3.6146 4.07354 3.32698 4.63803C3 5.27976 3 6.11984 3 7.8V10.5118C3 11.2455 3 11.6124 3.08289 11.9577C3.15638 12.2638 3.27759 12.5564 3.44208 12.8249C3.6276 13.1276 3.88703 13.387 4.40589 13.9059L9.10589 18.6059C10.2939 19.7939 10.888 20.388 11.5729 20.6105C12.1755 20.8063 12.8245 20.8063 13.4271 20.6105C14.112 20.388 14.7061 19.7939 15.8941 18.6059L18.6059 15.8941C19.7939 14.7061 20.388 14.112 20.6105 13.4271C20.8063 12.8245 20.8063 12.1755 20.6105 11.5729C20.388 10.888 19.7939 10.2939 18.6059 9.10589L13.9059 4.40589C13.387 3.88703 13.1276 3.6276 12.8249 3.44208C12.5564 3.27759 12.2638 3.15638 11.9577 3.08289C11.6124 3 11.2455 3 10.5118 3ZM7.5498 7.0498C7.5498 7.32595 7.32595 7.5498 7.0498 7.5498C6.77366 7.5498 6.5498 7.32595 6.5498 7.0498C6.5498 6.77366 6.77366 6.5498 7.0498 6.5498C7.32595 6.5498 7.5498 6.77366 7.5498 7.0498Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M7.0498 7.0498H7.0598M10.5118 3H7.8C6.11984 3 5.27976 3 4.63803 3.32698C4.07354 3.6146 3.6146 4.07354 3.32698 4.63803C3 5.27976 3 6.11984 3 7.8V10.5118C3 11.2455 3 11.6124 3.08289 11.9577C3.15638 12.2638 3.27759 12.5564 3.44208 12.8249C3.6276 13.1276 3.88703 13.387 4.40589 13.9059L9.10589 18.6059C10.2939 19.7939 10.888 20.388 11.5729 20.6105C12.1755 20.8063 12.8245 20.8063 13.4271 20.6105C14.112 20.388 14.7061 19.7939 15.8941 18.6059L18.6059 15.8941C19.7939 14.7061 20.388 14.112 20.6105 13.4271C20.8063 12.8245 20.8063 12.1755 20.6105 11.5729C20.388 10.888 19.7939 10.2939 18.6059 9.10589L13.9059 4.40589C13.387 3.88703 13.1276 3.6276 12.8249 3.44208C12.5564 3.27759 12.2638 3.15638 11.9577 3.08289C11.6124 3 11.2455 3 10.5118 3ZM7.5498 7.0498C7.5498 7.32595 7.32595 7.5498 7.0498 7.5498C6.77366 7.5498 6.5498 7.32595 6.5498 7.0498C6.5498 6.77366 6.77366 6.5498 7.0498 6.5498C7.32595 6.5498 7.5498 6.77366 7.5498 7.0498Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
         </div>
@@ -741,17 +879,43 @@ return (
                 onDeleteCode={handleDeleteCode} 
                 onRefreshCodes={fetchCodes} 
                 onOpenCodePanel={openCodePanel}
+                onReorderCodes={setProjectCodes}
             />
           )}
         </div>
 
         {codePanelOpen && (
-          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', padding: '20px', backgroundColor: '#111', color: '#fff', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+          <div style={{ width: '360px', display: 'flex', flexDirection: 'column', border: '1px solid #ccc', borderRadius: '8px', backgroundColor: '#111', color: '#fff', overflow: 'hidden' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px', backgroundColor: '#1a1a1a', borderBottom: '1px solid #333' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px' }}>Compiled Quotes</h3>
-                <div style={{ color: '#aaa', fontSize: '13px', marginTop: '6px' }}>{activeCode?.name || 'Selected code'}</div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginTop: '6px' }}>
+                  <div style={{ color: '#aaa', fontSize: '13px' }}>{activeCode?.name || 'Selected code'}</div>
+                  
+                  {activeCode && projectCodes.some(c => c.parent_id === activeCode.id) && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#b0b0c3', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={includeSubCodes} 
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setIncludeSubCodes(isChecked); // Update state
+                          // Fetch immediately so they don't have to reopen the panel
+                          fetch(`${API_BASE}/codes/${activeCode.id}/segments?include_children=${isChecked}`)
+                            .then(res => res.json())
+                            .then(data => setCodeSegments(data))
+                            .catch(err => console.error(err));
+                        }} 
+                        style={{ cursor: 'pointer', accentColor: '#646cff' }}
+                      />
+                      Include Sub-Codes
+                    </label>
+                  )}
+                </div>
               </div>
+
               <button
                 onClick={() => { setCodePanelOpen(false); setActiveCode(null); setCodeSegments([]); setSelectedQuoteId(null); }}
                 style={{ backgroundColor: 'transparent', border: '1px solid #444', color: '#ccc', borderRadius: '6px', padding: '8px 12px', cursor: 'pointer' }}
@@ -760,59 +924,127 @@ return (
               </button>
             </div>
 
-            {codeSegments.length === 0 ? (
-              <p style={{ color: '#888' }}>No quotes found for this code yet.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {codeSegments.map(quote => {
-                  const before = quote.context.slice(0, quote.highlight_start);
-                  const highlight = quote.context.slice(quote.highlight_start, quote.highlight_end);
-                  const after = quote.context.slice(quote.highlight_end);
-                  const isSelected = quote.id === selectedQuoteId;
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+              {codeSegments.length === 0 ? (
+                <p style={{ color: '#888', margin: 0 }}>No quotes found for this code yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {(() => {
+                    const groupedQuotes = [];
+                    codeSegments.forEach(quote => {
+                      const existing = groupedQuotes.find(g => 
+                        g.document_id === quote.document_id && 
+                        g.start_char === quote.start_char && 
+                        g.end_char === quote.end_char
+                      );
+                      
+                      const badgeData = { segment_id: quote.id, name: quote.code_name, color: quote.code_color };
+                      
+                      if (existing) {
+                        existing.badges.push(badgeData);
+                      } else {
+                        groupedQuotes.push({ ...quote, badges: [badgeData] });
+                      }
+                    });
 
-                  return (
-                    <button
-                      key={quote.id}
-                      onClick={() => handleQuoteClick(quote)}
-                      style={{
-                        textAlign: 'left',
-                        backgroundColor: isSelected ? '#1f1f2a' : '#17171d',
-                        border: '1px solid #333',
-                        borderRadius: '8px',
-                        padding: '14px',
-                        color: 'white',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.2s ease',
-                        width: '100%',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '8px' }}>
-                        <span style={{ fontWeight: '600', fontSize: '14px' }}>{quote.document_filename}</span>
-                        <span style={{ color: '#9aa0b8', fontSize: '12px' }}>{quote.position_label}</span>
-                      </div>
-                      <div style={{ fontSize: '14px', lineHeight: '1.5', color: '#ddd' }}>
-                        {before}
-                        <span style={{ backgroundColor: '#646cff', color: '#fff', borderRadius: '4px', padding: '0 3px' }}>
-                          {highlight}
-                        </span>
-                        {after}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                    groupedQuotes.forEach(quote => {
+                      quote.badges.sort((a, b) => {
+                        const idxA = projectCodes.findIndex(c => c.name === a.name);
+                        const idxB = projectCodes.findIndex(c => c.name === b.name);
+                        return (idxA !== -1 ? idxA : 9999) - (idxB !== -1 ? idxB : 9999);
+                      });
+                    });
+
+                    return groupedQuotes.map((quote, idx) => {
+                      const before = quote.context.slice(0, quote.highlight_start);
+                      const highlight = quote.context.slice(quote.highlight_start, quote.highlight_end);
+                      const after = quote.context.slice(quote.highlight_end);
+                      
+                      const isSelected = quote.badges.some(b => b.segment_id === selectedQuoteId);
+                      const primarySegmentId = quote.badges[0].segment_id;
+
+                      return (
+                        <button
+                          key={`grouped-${primarySegmentId}-${idx}`}
+                          onClick={() => handleQuoteClick({ id: primarySegmentId, document_id: quote.document_id })}
+                          style={{
+                            textAlign: 'left',
+                            backgroundColor: isSelected ? '#1f1f2a' : '#17171d',
+                            border: '1px solid #333',
+                            borderRadius: '8px',
+                            padding: '14px',
+                            color: 'white',
+                            cursor: 'pointer',
+                            transition: 'background-color 0.2s ease',
+                            width: '100%',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '10px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <span style={{ fontWeight: '600', fontSize: '14px' }}>{quote.document_filename}</span>
+                                
+                                {quote.badges.map(badge => (
+                                  <div key={badge.segment_id} style={{ display: 'flex', alignItems: 'center', backgroundColor: badge.color, borderRadius: '4px', overflow: 'hidden' }}>
+                                    <span style={{ color: '#fff', fontSize: '10px', padding: '2px 6px', fontWeight: 'bold' }}>
+                                      {badge.name}
+                                    </span>
+                                    
+                                    <span 
+                                      onClick={(e) => handleDeleteSegment(e, badge.segment_id)}
+                                      style={{ backgroundColor: 'rgba(0,0,0,0.2)', color: '#fff', padding: '2px 6px', fontSize: '10px', cursor: 'pointer' }}
+                                      title={`Remove ${badge.name}`}
+                                      onMouseOver={(e) => e.target.style.backgroundColor = 'rgba(255,0,0,0.5)'}
+                                      onMouseOut={(e) => e.target.style.backgroundColor = 'rgba(0,0,0,0.2)'}
+                                    >
+                                      ×
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <span style={{ color: '#9aa0b8', fontSize: '12px' }}>{quote.position_label}</span>
+                            </div>
+                          </div>
+                          
+                          <div style={{ fontSize: '14px', lineHeight: '1.5', color: '#ddd' }}>
+                            {before}
+                            <span style={{ backgroundColor: '#646cff', color: '#fff', borderRadius: '4px', padding: '0 3px' }}>
+                              {highlight}
+                            </span>
+                            {after}
+                          </div>
+                        </button>
+                      );
+                    });
+                  })()}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* RIGHT COLUMN: TEXT VIEWER */}
-        <div style={{ flex: 1, border: '1px solid #ccc', borderRadius: '8px', padding: '30px', backgroundColor: '#fff', color: '#333', overflowY: 'auto', position: 'relative' }}>
-          {activeDocument ? (
+          <div style={{ flex: 1, border: '1px solid #ccc', borderRadius: '8px', padding: '30px', backgroundColor: '#fff', color: '#333', overflowY: 'auto', overflowX: 'auto', position: 'relative' }}>          {activeDocument ? (
             <div>
-              <h2 style={{ borderBottom: '2px solid #aaa', paddingBottom: '10px', marginTop: 0, color: '#000', fontWeight: '500' }}>
-                {activeDocument.filename}
-              </h2>
-              <div style={{ display: 'flex', position: 'relative', marginTop: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #aaa', paddingBottom: '10px', marginBottom: '20px' }}>
+                <h2 style={{ margin: 0, color: '#000', fontWeight: '500' }}>
+                  {activeDocument.filename}
+                </h2>
+                
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#555', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={showParentInMargin} 
+                    onChange={(e) => setShowParentInMargin(e.target.checked)} 
+                    style={{ cursor: 'pointer', accentColor: '#646cff' }}
+                  />
+                  Group Margins by Parent Theme
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', position: 'relative' }}>
                 
                 <div
                   ref={viewerRef}
@@ -824,7 +1056,7 @@ return (
                   {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes)}
                 </div>
 
-                <MarginSidebar marginBars={marginBars} />
+                <MarginSidebar marginBars={marginBars} projectCodes={projectCodes} />
 
               </div>
 
@@ -838,7 +1070,6 @@ return (
                   
                   <div style={{ display: 'grid', gap: '8px', marginBottom: '10px' }}>
                     
-                    {/* The Dropdown Menu */}
                     <select 
                       value={quickCodeMode === "new" ? "new" : selectedExistingCodeId}
                       onChange={(e) => {
@@ -851,15 +1082,28 @@ return (
                       }}
                       style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid #555', backgroundColor: '#1f1f28', color: 'white', cursor: 'pointer' }}
                     >
-                      {projectCodes.length > 0 && <optgroup label="Existing Codes">
-                        {projectCodes.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
+                      {orderedDropdownCodes.length > 0 && <optgroup label="Existing Codes">
+                        {orderedDropdownCodes.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {getFullPath(c, projectCodes)}
+                          </option>
                         ))}
                       </optgroup>}
                       <option value="new">✨ Create New Code...</option>
                     </select>
 
-                    {/* Only show name and color inputs if "Create New" is selected */}
+                    {quickCodeMode === "existing" && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#b0b0c3', cursor: 'pointer', padding: '2px 0' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={autoUpcode} 
+                          onChange={(e) => setAutoUpcode(e.target.checked)} 
+                          style={{ cursor: 'pointer', accentColor: '#646cff' }}
+                        />
+                        Auto-apply to parent themes
+                      </label>
+                    )}
+
                     {quickCodeMode === "new" && (
                         <>
                             <input
@@ -914,6 +1158,7 @@ return (
         currentDescription={projectDetails.description}
         currentLocalPath={projectDetails.localPath}
         onSave={handleSaveSettings}
+        onDelete={handleDeleteProject}
       />
     </div>
   );

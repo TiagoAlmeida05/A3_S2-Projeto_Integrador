@@ -1,8 +1,3 @@
-# from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
-# from sqlalchemy.orm import relationship
-# from datetime import datetime
-# from database import Base
-
 # === USER FUNCTIONALITY DISABLED FOR NOW ===
 # class User(Base):
 #     __tablename__ = "users"
@@ -51,6 +46,8 @@ class Code(Base):
     description = Column(Text, nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     parent_id = Column(Integer, ForeignKey("codes.id", ondelete="CASCADE"), nullable=True)
+
+    order_index = Column(Integer, default=0)
 
     project = relationship("Project", back_populates="codes")
     segments = relationship("Segment", back_populates="code", cascade="all, delete-orphan")
