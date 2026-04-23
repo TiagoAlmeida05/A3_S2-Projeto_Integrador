@@ -19,7 +19,7 @@ function DocumentSidebar({
           type="file"
           multiple
           id="file-upload"
-          accept=".txt,.md,.rtf"
+          accept=".txt,.md,.rtf,.pdf,.docx,.odt"
           style={{ display: 'none' }}
           onChange={onFileUpload}
         />
