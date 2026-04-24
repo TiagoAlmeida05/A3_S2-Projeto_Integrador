@@ -5,6 +5,8 @@ import DocumentSidebar from './DocumentSidebar';
 import CollisionModal from './CollisionModal';
 import ProjectSettingsModal from './ProjectSettingsModal';
 import MarginSidebar from './MarginSidebar';
+import SearchBar from './SearchBar';
+import SearchResults from './SearchResults';
 
 const API_BASE = 'http://127.0.0.1:8000';
 
@@ -37,6 +39,11 @@ function ProjectPage() {
   const [codeSegments, setCodeSegments] = useState([]);
   const [selectedQuoteId, setSelectedQuoteId] = useState(null);
   const [pendingQuoteJump, setPendingQuoteJump] = useState(null);
+  
+  // Search State
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [temporaryHighlight, setTemporaryHighlight] = useState(null);
   
   // UI & Navigation State
   const [activeTab, setActiveTab] = useState('documents');
@@ -144,6 +151,56 @@ function ProjectPage() {
       }
     } else {
       setPendingQuoteJump({ quoteId: quote.id, document_id: quote.document_id });
+    }
+  };
+
+  const handleSearchResultClick = async (result) => {
+    // Load the document if not already active
+    if (!activeDocument || activeDocument.id !== result.document_id) {
+      try {
+        const docRes = await fetch(`${API_BASE}/projects/${id}/documents/${result.document_id}`);
+        const docData = await docRes.json();
+        setActiveDocument(docData);
+
+        const segRes = await fetch(`${API_BASE}/projects/${id}/segments?document_id=${result.document_id}`);
+        const segData = await segRes.json();
+        setDocumentSegments(segData);
+      } catch (err) {
+        console.error("Failed to load document:", err);
+        return;
+      }
+    }
+
+    // Set temporary highlight for the search term
+    setTemporaryHighlight({
+      start: result.query_start_char,
+      end: result.query_end_char,
+      query: result.query
+    });
+
+    // Close search results modal
+    setShowSearchResults(false);
+
+    // Scroll to the search result after a brief delay to ensure DOM is updated
+    setTimeout(() => {
+      if (viewerRef.current) {
+        const highlightElement = viewerRef.current.querySelector('[data-temporary-highlight="true"]');
+        if (highlightElement) {
+          highlightElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+    }, 100);
+
+    // Clear temporary highlight after 3 seconds
+    setTimeout(() => {
+      setTemporaryHighlight(null);
+    }, 3000);
+  };
+
+  const handleShowSearchResults = (results) => {
+    setSearchResults(results);
+    if (results.length > 0) {
+      setShowSearchResults(true);
     }
   };
 
@@ -608,6 +665,12 @@ function ProjectPage() {
       boundaries.add(seg.end_char);
     })
 
+    // Add temporary highlight boundaries if they exist
+    if (temporaryHighlight) {
+      boundaries.add(temporaryHighlight.start);
+      boundaries.add(temporaryHighlight.end);
+    }
+
     const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
 
     const parts = [];
@@ -620,7 +683,28 @@ function ProjectPage() {
       const chunkText = content.slice(start, end);
       const coveringSegments = segments.filter(seg => seg.start_char <= start && seg.end_char >= end);
 
-      if (coveringSegments.length > 0) {
+      // Check if this chunk is part of the temporary highlight
+      const isTemporaryHighlight = temporaryHighlight && 
+        temporaryHighlight.start <= start && 
+        temporaryHighlight.end >= end;
+
+      if (isTemporaryHighlight) {
+        // Render with temporary search highlight (bright yellow)
+        parts.push(
+          <span
+            key={`${start}-${end}`}
+            data-temporary-highlight="true"
+            style={{
+              backgroundColor: '#FFD700',
+              color: '#000',
+              padding: 0,
+              borderRadius: '3px',
+            }}
+          >
+            {chunkText}
+          </span>
+        );
+      } else if (coveringSegments.length > 0) {
         coveringSegments.sort((a, b) => {
           const idxA = codes.findIndex(c => c.id === a.code_id);
           const idxB = codes.findIndex(c => c.id === b.code_id);
@@ -639,12 +723,12 @@ function ProjectPage() {
             key={`${start}-${end}`}
             className="highlight-chunk"
             data-segment-ids={allSegmentIds}
-            style={{ 
-              backgroundColor: transparentColor, 
+            style={{
+              backgroundColor: transparentColor,
               borderBottom: `2px solid ${solidColor}`,
-              padding: '2px 0px', 
-              borderRadius: '3px', 
-              cursor: 'pointer' 
+              padding: '2px 0px',
+              borderRadius: '3px',
+              cursor: 'pointer'
             }}
             title={code ? code.name : 'Code'}
           >
@@ -790,7 +874,12 @@ return (
       {/* HEADER */}
       <div style={{ padding: '15px 20px', backgroundColor: '#111', borderBottom: '1px solid #333' }}>
         <Link to="/" style={{ color: '#646cff', textDecoration: 'none' }}>← Back to Dashboard</Link>
-        <h2 style={{ marginTop: '20px' }}>Project: {projectDetails.name}</h2>
+        <h2 style={{ marginTop: '20px', marginBottom: '15px' }}>Project: {projectDetails.name}</h2>
+        
+        {/* Search Bar */}
+        <div style={{ marginBottom: '10px', maxWidth: '400px' }}>
+          <SearchBar projectId={id} onShowResults={handleShowSearchResults} />
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: '10px' }}>
@@ -1160,6 +1249,15 @@ return (
         onSave={handleSaveSettings}
         onDelete={handleDeleteProject}
       />
+
+      {/* Search Results Modal */}
+      {showSearchResults && (
+        <SearchResults
+          results={searchResults}
+          onResultClick={handleSearchResultClick}
+          onClose={() => setShowSearchResults(false)}
+        />
+      )}
     </div>
   );
 }

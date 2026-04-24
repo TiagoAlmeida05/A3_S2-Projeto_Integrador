@@ -491,6 +491,85 @@ def get_segments_by_code(code_id: int, include_children: bool = False, db: Sessi
 
     return results
 
+@app.get("/projects/{project_id}/search")
+def search_documents(project_id: int, query: str, db: Session = Depends(get_db)):
+    """
+    Search across all documents in a project for a keyword/phrase.
+    Returns all matching sentences with context.
+    """
+    if not query or len(query.strip()) == 0:
+        return []
+    
+    # Get all documents in the project
+    documents = db.query(models.Document).filter(
+        models.Document.project_id == project_id
+    ).all()
+    
+    if not documents:
+        return []
+    
+    results = []
+    query_lower = query.lower()
+    
+    for doc in documents:
+        content = doc.content
+        # Find all occurrences of the query (case-insensitive)
+        start_pos = 0
+        while True:
+            pos = content.lower().find(query_lower, start_pos)
+            if pos == -1:
+                break
+            
+            # Find the sentence boundaries
+            # Look backwards for the start of sentence (period, newline, or beginning)
+            sentence_start = pos
+            for i in range(pos - 1, -1, -1):
+                if content[i] in '.!?\n':
+                    sentence_start = i + 1
+                    # Skip whitespace after punctuation
+                    while sentence_start < len(content) and content[sentence_start] in ' \t\n':
+                        sentence_start += 1
+                    break
+            if pos == 0:
+                sentence_start = 0
+            
+            # Look forwards for the end of sentence
+            sentence_end = pos + len(query)
+            for i in range(sentence_end, len(content)):
+                if content[i] in '.!?\n':
+                    sentence_end = i + 1
+                    break
+            if sentence_end == pos + len(query):
+                sentence_end = len(content)
+            
+            # Extract context
+            context_radius = 150
+            context_start = max(0, sentence_start - context_radius)
+            context_end = min(len(content), sentence_end + context_radius)
+            context_text = content[context_start:context_end]
+            
+            # Calculate highlight positions within context
+            highlight_start = pos - context_start
+            highlight_end = pos + len(query) - context_start
+            
+            results.append({
+                "document_id": doc.id,
+                "document_filename": doc.filename,
+                "query": query,
+                "query_start_char": pos,
+                "query_end_char": pos + len(query),
+                "sentence_start_char": sentence_start,
+                "sentence_end_char": sentence_end,
+                "context": context_text,
+                "highlight_start": highlight_start,
+                "highlight_end": highlight_end,
+                "position_label": f"{doc.filename}, pos: {pos}-{pos + len(query)}"
+            })
+            
+            start_pos = pos + 1
+    
+    return results
+
 #Required by REFI-QDA
 def generate_guid(prefix: str, item_id: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"jupiter.qda.{prefix}.{item_id}"))
