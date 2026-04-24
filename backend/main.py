@@ -403,6 +403,11 @@ def delete_code(project_id: int, code_id: int, db: Session = Depends(get_db)):
         models.Code.project_id == project_id
     ).first()
 
+    db.query(models.Memo).filter(
+        models.Memo.target_type == "code", 
+        models.Memo.target_id == code_id
+    ).delete()
+
     if not code:
         raise HTTPException(status_code=404, detail="Code not found")
     
@@ -551,13 +556,33 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
         "name": "jUPiter User"
     })
 
+    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
+    docs = db.query(models.Document).filter(models.Document.project_id == project_id).all()
+    doc_segments = db.query(models.Segment).join(models.Document).filter(models.Document.project_id == project_id).all()
+    
+    code_ids = [c.id for c in codes]
+    segment_ids = [s.id for s in doc_segments]
+
+    # Fetch Memos by target type
+    project_memos = db.query(models.Memo).filter(models.Memo.target_type == "project", models.Memo.target_id == project_id).all()
+    code_memos = db.query(models.Memo).filter(models.Memo.target_type == "code", models.Memo.target_id.in_(code_ids)).all() if code_ids else []
+    segment_memos = db.query(models.Memo).filter(models.Memo.target_type == "segment", models.Memo.target_id.in_(segment_ids)).all() if segment_ids else []
+
+    memos_by_code = {}
+    for m in code_memos:
+        memos_by_code.setdefault(m.target_id, []).append(m)
+
+    memos_by_segment = {}
+    for m in segment_memos:
+        memos_by_segment.setdefault(m.target_id, []).append(m)
+
+    all_memos = project_memos + code_memos + segment_memos
+
     # CodeBook 
     codebook = ET.SubElement(root, "{urn:QDA-XML:project:1.0}CodeBook")
     codes_elem = ET.SubElement(codebook, "{urn:QDA-XML:project:1.0}Codes")
 
     code_guid_map = {}
-    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
-    
     for c in codes:
         cg = generate_guid("code", c.id)
         code_guid_map[c.id] = cg
@@ -569,6 +594,12 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
         if c.description:
             cd_desc = ET.SubElement(code_elem, "{urn:QDA-XML:project:1.0}Description")
             cd_desc.text = c.description
+
+        if c.id in memos_by_code:
+            for m in memos_by_code[c.id]:
+                ET.SubElement(code_elem, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
+                    "targetGUID": generate_guid("memo", m.id)
+                })
 
     zip_files_to_write = {}
 
@@ -609,6 +640,25 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
             ET.SubElement(coding_elem, "{urn:QDA-XML:project:1.0}CodeRef", attrib={
                 "targetGUID": code_guid_map[seg.code_id]
             })
+
+    if all_memos:
+        notes_elem = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Notes")
+        for m in all_memos:
+            memo_guid = generate_guid("memo", m.id)
+            
+            # REFI-QDA expects a name, so we use a preview of the text
+            preview_text = (m.text[:47] + '...') if len(m.text) > 50 else m.text
+            preview_text = preview_text.replace('\n', ' ')
+
+            note_elem = ET.SubElement(notes_elem, "{urn:QDA-XML:project:1.0}Note", attrib={
+                "guid": memo_guid,
+                "name": preview_text,
+                "creatingUser": master_user_guid
+            })
+            
+            # We embed the actual memo text inside the PlainTextContent tag
+            content_elem = ET.SubElement(note_elem, "{urn:QDA-XML:project:1.0}PlainTextContent")
+            content_elem.text = m.text
 
     # Description
     if project.description:
