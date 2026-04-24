@@ -15,6 +15,7 @@ import models
 from database import engine, get_db
 import tkinter as tk
 from tkinter import filedialog
+import shutil
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -70,6 +71,14 @@ class CodeUpdate(BaseModel):
     color: Optional[str] = None
     description: Optional[str] = None
     parent_id: Optional[int] = None
+
+class CodeReorderItem(BaseModel):
+    id: int
+    parent_id: Optional[int] = None
+    order_index: int
+
+class CodeReorderRequest(BaseModel):
+    codes: List[CodeReorderItem]
 
 @app.get("/")
 def root():
@@ -128,7 +137,7 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
 async def upload_documents(project_id: int, files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
 
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
-    ALLOWED_EXTENSIONS = {".txt", ".md", ".rtf"}
+    ALLOWED_EXTENSIONS = {".txt", ".md", ".rtf", ".pdf", ".docx", ".odt"}
     successful_uploads = []
     failed_uploads = []
     
@@ -143,18 +152,50 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
         try:
             # 1. Read the file
             content = await file.read()
-            text_content = content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
             file_type = ext.lower().lstrip(".") or "text"
+            text_content = ""
+
+            if ext.lower() in {".txt", ".md", ".rtf"}:
+                text_content = content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+            elif ext.lower() == ".pdf":
+                try:
+                    from PyPDF2 import PdfReader
+                    import io
+                    pdf_reader = PdfReader(io.BytesIO(content))
+                    text_content = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+                except Exception as e:
+                    failed_uploads.append({"filename": file.filename, "reason": f"PDF extraction failed: {str(e)}"})
+                    continue
+            elif ext.lower() == ".docx":
+                try:
+                    import io
+                    from docx import Document as DocxDocument
+                    doc = DocxDocument(io.BytesIO(content))
+                    text_content = "\n".join([p.text for p in doc.paragraphs])
+                except Exception as e:
+                    failed_uploads.append({"filename": file.filename, "reason": f"DOCX extraction failed: {str(e)}"})
+                    continue
+            elif ext.lower() == ".odt":
+                try:
+                    import io
+                    from odf.opendocument import load
+                    from odf.text import P
+                    odt_doc = load(io.BytesIO(content))
+                    paragraphs = odt_doc.getElementsByType(P)
+                    text_content = "\n".join([str(p) for p in paragraphs])
+                except Exception as e:
+                    failed_uploads.append({"filename": file.filename, "reason": f"ODT extraction failed: {str(e)}"})
+                    continue
+            else:
+                failed_uploads.append({"filename": file.filename, "reason": "Unsupported file type"})
+                continue
 
             if project.local_path:
-
                 os.makedirs(project.local_path, exist_ok=True)
-                
                 physical_file_path = os.path.join(project.local_path, file.filename)
-                
                 with open(physical_file_path, "wb") as f:
                     f.write(content)
-            
+
             # 2. Create the Document object
             new_doc = models.Document(
                 project_id=project_id,
@@ -162,16 +203,13 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
                 content=text_content,
                 type=file_type
             )
-            
             db.add(new_doc)
             successful_uploads.append(file.filename)
 
         except UnicodeDecodeError:
             failed_uploads.append({"filename": file.filename, "reason": "Unreadable text encoding"})
         except Exception as e:
-           
             failed_uploads.append({"filename": file.filename, "reason": "Corrupted file"})
-        
     # Commit all files to the database at once!
     db.commit()
     
@@ -236,8 +274,35 @@ def create_code(project_id: int, code: CodeCreate, db: Session = Depends(get_db)
 
 @app.get("/projects/{project_id}/codes")
 def get_project_codes(project_id: int, db: Session = Depends(get_db)):
-    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
-    return codes
+    codes = db.query(models.Code).filter(models.Code.project_id == project_id).order_by(models.Code.order_index).all()
+    return [
+        {
+            "id": c.id,
+            "name": c.name,
+            "color": c.color,
+            "description": c.description,
+            "project_id": c.project_id,
+            "parent_id": c.parent_id,
+            "order_index": c.order_index,
+            "frequency": len(c.segments) # SQLAlchemy magically counts them for us!
+        }
+        for c in codes
+    ]
+
+@app.put("/projects/{project_id}/codes/reorder")
+def reorder_codes(project_id: int, reorder_request: CodeReorderRequest, db: Session = Depends(get_db)):
+    for item in reorder_request.codes:
+        code = db.query(models.Code).filter(
+            models.Code.id == item.id,
+            models.Code.project_id == project_id
+        ).first()
+        
+        if code:
+            code.parent_id = item.parent_id
+            code.order_index = item.order_index
+
+    db.commit()
+    return {"message": "Codes reordered successfully"}
 
 @app.put("/projects/{project_id}", response_model=ProjectResponse)
 def update_project(project_id: int, project_data: ProjectUpdate, db: Session = Depends(get_db)):
@@ -254,6 +319,23 @@ def update_project(project_id: int, project_data: ProjectUpdate, db: Session = D
     db.refresh(project)
     
     return project
+
+@app.delete("/projects/{project_id}")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if project.local_path and os.path.exists(project.local_path):
+        try:
+            shutil.rmtree(project.local_path)
+        except Exception as e:
+            print(f"Warning: Could not delete physical folder: {e}")
+
+    db.delete(project)
+    db.commit()
+    return {"message": "Project deleted successfully"}
 
 @app.get("/system/choose-folder")
 def choose_folder():
@@ -364,12 +446,22 @@ def get_segments(project_id: int, document_id: Optional[int] = None, db: Session
     ]
 
 @app.get("/codes/{code_id}/segments")
-def get_segments_by_code(code_id: int, db: Session = Depends(get_db)):
+def get_segments_by_code(code_id: int, include_children: bool = False, db: Session = Depends(get_db)):
+
+    target_code_ids = [code_id]
+
+    if include_children:
+        def get_all_children(current_id):
+            children = db.query(models.Code).filter(models.Code.parent_id == current_id).all()
+            for child in children:
+                target_code_ids.append(child.id)
+                get_all_children(child.id)
+        get_all_children(code_id)
 
     segments = (
         db.query(models.Segment)
         .join(models.Document)
-        .filter(models.Segment.code_id == code_id)
+        .filter(models.Segment.code_id.in_(target_code_ids))
         .order_by(models.Segment.document_id, models.Segment.start_char)
         .all()
     )
@@ -378,12 +470,9 @@ def get_segments_by_code(code_id: int, db: Session = Depends(get_db)):
 
     for seg in segments:
         doc_text = seg.document.content
-
         context_radius = 200 
-
         start = max(0, seg.start_char - context_radius)
         end = min(len(doc_text), seg.end_char + context_radius)
-
         context_text = doc_text[start:end]
 
         results.append({
@@ -396,6 +485,8 @@ def get_segments_by_code(code_id: int, db: Session = Depends(get_db)):
             "context": context_text,
             "highlight_start": seg.start_char - start,
             "highlight_end": seg.end_char - start,
+            "code_name": seg.code.name,
+            "code_color": seg.code.color
         })
 
     return results
@@ -646,10 +737,23 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
 
         db.commit()
         return new_project
-
     except zipfile.BadZipFile:
         raise HTTPException(status_code=400, detail="Invalid QDPX package (Not a valid ZIP file)")
     except Exception as e:
         db.rollback() # If anything fails, cancel the database transaction
         print(f"Import Error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to process QDPX: {str(e)}")
+
+@app.delete("/projects/{project_id}/segments/{segment_id}")
+def delete_segment(project_id: int, segment_id: int, db: Session = Depends(get_db)):
+    segment = db.query(models.Segment).join(models.Document).filter(
+        models.Segment.id == segment_id,
+        models.Document.project_id == project_id
+    ).join(models.Code).first()
+
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    db.delete(segment)
+    db.commit()
+    return {"message": "Segment deleted successfully"}

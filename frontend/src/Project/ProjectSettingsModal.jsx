@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription, currentLocalPath, onSave }) {
+function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription, currentLocalPath, onSave, onDelete }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -51,7 +51,6 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
         <div style={{ marginBottom: '25px', padding: '15px', backgroundColor: '#1a1a1a', borderRadius: '4px', border: '1px dashed #444' }}>
           <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '5px' }}>Permanent Local Path</label>
           <div style={{ fontSize: '13px', color: '#aaa', wordBreak: 'break-all' }}>
-            {/* You will need to pass the localPath as a prop to this modal! */}
             📂 {currentLocalPath || "Stored in database only"}
           </div>
           <p style={{ fontSize: '11px', color: '#666', marginTop: '5px', marginBottom: 0 }}>
@@ -59,19 +58,36 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
           </p>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+        {/* BOTTOM BUTTON ROW */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          
           <button 
-            onClick={onClose} 
-            style={{ padding: '10px 15px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer' }}
+            onClick={() => {
+              const confirm = window.confirm(`Are you sure you want to permanently delete "${currentName}"? This will delete all documents and codes.`);
+              if (confirm) onDelete();
+            }}
+            style={{ padding: '8px 12px', backgroundColor: 'transparent', border: '1px solid #ff6b6b', color: '#ff6b6b', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}
+            onMouseOver={(e) => e.target.style.backgroundColor = 'rgba(255, 107, 107, 0.1)'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
-            Cancel
+            🗑️ Delete Project
           </button>
-          <button 
-            onClick={handleSave} 
-            style={{ padding: '10px 15px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-          >
-            Save Changes
-          </button>
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button 
+              onClick={onClose} 
+              style={{ padding: '10px 15px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSave} 
+              style={{ padding: '10px 15px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              Save Changes
+            </button>
+          </div>
+
         </div>
 
       </div>
