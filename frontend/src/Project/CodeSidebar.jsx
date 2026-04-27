@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
+import CodeMemoModal from './CodeMemoModal';
+import axios from 'axios';
 
 function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes }) {
+  const [memoModalOpen, setMemoModalOpen] = useState(false);
+  const [memoTargetCode, setMemoTargetCode] = useState(null);
+  const [memoError, setMemoError] = useState(null);
   const [newCodeName, setNewCodeName] = useState("");
   const [newCodeColor, setNewCodeColor] = useState("#646cff");
 
@@ -43,11 +48,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       if (response.ok) {
         setNewCodeName(""); // Clear the input
         setAddingSubCodeTo(null);
-        setExpandedCodes(prev => {
-          const newSet = new Set(prev);
-          newSet.add(parentId);
-          return newSet;
-        });
+        setNewCodeColor("#646cff"); // Reset color to default
         
         if(onRefreshCodes) onRefreshCodes();
       }
@@ -106,6 +107,31 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     setEditName(code.name);
     setEditColor(code.color)
   };
+
+  // Context menu handler
+  const handleContextMenuMemo = (e, code) => {
+    e.preventDefault();
+    setMemoTargetCode(code);
+    setMemoModalOpen(true);
+  };
+
+  const handleSaveMemo = async (text) => {
+    if (!memoTargetCode) return;
+    setMemoError(null);
+    try {
+      await axios.post(`http://127.0.0.1:8000/memos`, {
+        text,
+        target_type: 'code',
+        target_id: memoTargetCode
+      });
+      setMemoModalOpen(false);
+      setMemoTargetCode(null);
+    } catch (err) {
+      setMemoError('Failed to save memo');
+    }
+  };
+
+
 
   const handleDragStart = (e, codeId) => {
     setDraggedId(codeId);
@@ -225,6 +251,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       y: e.pageY,
       codeId: codeId
     }); 
+    setMemoTargetCode(codeId);
   }
 
   const handleMoveCode = async (codeId, newParentId) => {
@@ -481,6 +508,15 @@ return (
           })
         )}
       </ul>
+      {memoModalOpen && (
+        <CodeMemoModal
+          open={memoModalOpen}
+          onClose={() => { setMemoModalOpen(false); setMemoTargetCode(null); setMemoError(null); }}
+          onSave={handleSaveMemo}
+          codeName={memoTargetCode?.name || ''}
+        />
+      )}
+      {memoError && <div style={{ color: 'red', marginTop: 8 }}>{memoError}</div>}
 
       {contextMenu && (
         <div 
@@ -498,6 +534,19 @@ return (
             onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
             ✨ Create Sub-Code
+          </button>
+          <button 
+            onClick={(e) => { 
+              e.stopPropagation(); 
+              setMemoTargetCode(contextMenu.codeId); 
+              setContextMenu(null); 
+              setMemoModalOpen(true);
+            }}
+            style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+            onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            ✨ Create Code Memo
           </button>
         </div>
       )}

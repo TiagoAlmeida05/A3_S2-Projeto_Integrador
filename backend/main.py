@@ -3,6 +3,7 @@ from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from datetime import datetime
 
 import xml.etree.ElementTree as ET
 import uuid
@@ -46,7 +47,7 @@ class ProjectResponse(BaseModel):
     local_path: Optional[str] = None
 
     class Config:
-        from_attributes = True # Allows Pydantic to read SQLAlchemy objects
+        from_attributes = True
 
 class CodeCreate(BaseModel):
     name: str
@@ -71,6 +72,98 @@ class CodeUpdate(BaseModel):
     color: Optional[str] = None
     description: Optional[str] = None
     parent_id: Optional[int] = None
+
+class MemoBase(BaseModel):
+    text: str
+    target_type: str
+    target_id: int
+
+class MemoCreate(MemoBase):
+    pass
+
+class MemoUpdate(BaseModel):
+    text: Optional[str] = None
+
+class MemoResponse(MemoBase):
+    id: int
+    created_at: datetime
+    target_name: Optional[str] = None  
+
+    class Config:
+        from_attributes = True
+
+# --- ENDPOINTS ---
+
+@app.get("/projects/{project_id}/memos", response_model=List[MemoResponse])
+def list_memos(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    project_name = project.name if project else f"Project {project_id}"
+
+    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
+    code_dict = {c.id: c.name for c in codes}
+
+    segments = db.query(models.Segment).join(models.Document).filter(models.Document.project_id == project_id).all()
+    segment_dict = {
+        s.id: f'"{s.content[:30]}..."' if len(s.content) > 30 else f'"{s.content}"' 
+        for s in segments
+    }
+
+    memos = []
+
+    # Get Project memos
+    proj_memos = db.query(models.Memo).filter(models.Memo.target_type == "project", models.Memo.target_id == project_id).all()
+    for m in proj_memos:
+        setattr(m, "target_name", project_name)
+        memos.append(m)
+
+    # Get Code memos
+    if code_dict:
+        code_memos = db.query(models.Memo).filter(models.Memo.target_type == "code", models.Memo.target_id.in_(code_dict.keys())).all()
+        for m in code_memos:
+            setattr(m, "target_name", code_dict.get(m.target_id, "Unknown Code"))
+            memos.append(m)
+
+    # Get Segment memos
+    if segment_dict:
+        seg_memos = db.query(models.Memo).filter(models.Memo.target_type == "segment", models.Memo.target_id.in_(segment_dict.keys())).all()
+        for m in seg_memos:
+            setattr(m, "target_name", segment_dict.get(m.target_id, "Unknown Segment"))
+            memos.append(m)
+
+    return memos
+
+@app.post("/memos", response_model=MemoResponse)
+def create_memo(memo: MemoCreate, db: Session = Depends(get_db)):
+    new_memo = models.Memo(
+        text=memo.text,
+        target_type=memo.target_type,
+        target_id=memo.target_id,
+        created_at=datetime.now()
+    )
+    db.add(new_memo)
+    db.commit()
+    db.refresh(new_memo)
+    return new_memo
+
+@app.put("/memos/{memo_id}", response_model=MemoResponse)
+def update_memo(memo_id: int, memo: MemoUpdate, db: Session = Depends(get_db)):
+    db_memo = db.query(models.Memo).filter(models.Memo.id == memo_id).first()
+    if not db_memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    if memo.text is not None:
+        db_memo.text = memo.text
+    db.commit()
+    db.refresh(db_memo)
+    return db_memo
+
+@app.delete("/memos/{memo_id}")
+def delete_memo(memo_id: int, db: Session = Depends(get_db)):
+    db_memo = db.query(models.Memo).filter(models.Memo.id == memo_id).first()
+    if not db_memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    db.delete(db_memo)
+    db.commit()
+    return {"message": "Memo deleted successfully"}
 
 class CodeReorderItem(BaseModel):
     id: int
