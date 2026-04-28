@@ -92,6 +92,9 @@ class MemoResponse(MemoBase):
     class Config:
         from_attributes = True
 
+class FolderCreate(BaseModel):
+    name: str
+
 # --- ENDPOINTS ---
 
 @app.get("/projects/{project_id}/memos", response_model=List[MemoResponse])
@@ -313,7 +316,7 @@ def get_project_documents(project_id: int, db: Session = Depends(get_db)):
    
     documents = db.query(models.Document).filter(models.Document.project_id == project_id).all()
     
-    return [{"id": doc.id, "filename": doc.filename, "type": doc.type, "created_at": doc.created_at} for doc in documents]
+    return [{"id": doc.id, "filename": doc.filename, "type": doc.type, "created_at": doc.created_at, "folder_id": doc.folder_id} for doc in documents]
 
 
 @app.get("/projects/{project_id}/documents/{document_id}")
@@ -986,3 +989,26 @@ def delete_segment(project_id: int, segment_id: int, db: Session = Depends(get_d
     db.delete(segment)
     db.commit()
     return {"message": "Segment deleted successfully"}
+
+
+@app.post("/projects/{project_id}/folders")
+def create_folder(project_id: int, folder: FolderCreate, db: Session = Depends(get_db)):
+    new_folder = models.DocumentFolder(name=folder.name, project_id=project_id)
+    db.add(new_folder)
+    db.commit()
+    db.refresh(new_folder)
+    return new_folder
+
+@app.get("/projects/{project_id}/folders")
+def get_folders(project_id: int, db: Session = Depends(get_db)):
+    folders = db.query(models.DocumentFolder).filter(models.DocumentFolder.project_id == project_id).all()
+    return [{"id": f.id, "name": f.name} for f in folders]
+
+@app.put("/projects/{project_id}/documents/{document_id}/move")
+def move_document(project_id: int, document_id: int, folder_id: Optional[int] = None, db: Session = Depends(get_db)):
+    doc = db.query(models.Document).filter(models.Document.id == document_id, models.Document.project_id == project_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    doc.folder_id = folder_id
+    db.commit()
+    return {"message": "Moved successfully"}

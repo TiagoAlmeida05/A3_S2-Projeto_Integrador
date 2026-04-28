@@ -23,6 +23,7 @@ class Project(Base):
     # owner = relationship("User", back_populates="projects")  # Disabled for now
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     codes = relationship("Code", back_populates="project", cascade="all, delete-orphan")
+    document_folders = relationship("DocumentFolder", back_populates="project", cascade="all, delete-orphan")
 
 class Document(Base):
     __tablename__ = "documents"
@@ -33,9 +34,11 @@ class Document(Base):
     content = Column(Text, nullable=False)
     type = Column(String, nullable=True, default="text")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    folder_id = Column(Integer, ForeignKey("document_folders.id", ondelete="SET NULL"), nullable=True)
 
     project = relationship("Project", back_populates="documents")
     segments = relationship("Segment", back_populates="document", cascade="all, delete-orphan")
+    folder = relationship("DocumentFolder", back_populates="documents")
 
 class Code(Base):
     __tablename__ = "codes"
@@ -75,4 +78,12 @@ class Memo(Base):
     target_id = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    
+class DocumentFolder(Base):
+    __tablename__ = "document_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+
+    project = relationship("Project", back_populates="document_folders")
+    documents = relationship("Document", back_populates="folder")
