@@ -95,6 +95,13 @@ class MemoResponse(MemoBase):
 class FolderCreate(BaseModel):
     name: str
 
+class FolderReorderItem(BaseModel):
+    id: int
+    order_index: int
+
+class FolderReorderRequest(BaseModel):
+    folders: List[FolderReorderItem]
+
 # --- ENDPOINTS ---
 
 @app.get("/projects/{project_id}/memos", response_model=List[MemoResponse])
@@ -743,6 +750,20 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
             content_elem = ET.SubElement(note_elem, "{urn:QDA-XML:project:1.0}PlainTextContent")
             content_elem.text = m.text
 
+    # Sets
+    folders = db.query(models.DocumentFolder).filter(models.DocumentFolder.project_id == project_id).all()
+    if folders:
+        sets_elem = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Sets")
+        for folder in folders:
+            set_elem = ET.SubElement(sets_elem, "{urn:QDA-XML:project:1.0}Set", attrib={
+                "guid": generate_guid("folder", folder.id),
+                "name": folder.name
+            })
+            for doc in folder.documents:
+                ET.SubElement(set_elem, "{urn:QDA-XML:project:1.0}MemberSource", attrib={
+                    "targetGUID": generate_guid("doc", doc.id)
+                })
+
     # Description
     if project.description:
         desc = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Description")
@@ -933,6 +954,12 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
             db.commit()
             db.refresh(new_doc)
 
+            doc_guid = next((v for k, v in source_elem.attrib.items() if k.lower() == "guid"), None)
+            if doc_guid:
+                if 'guid_to_doc_id' not in locals():
+                    guid_to_doc_id = {}
+                guid_to_doc_id[doc_guid.lower()] = new_doc.id
+
             # Extract the coded segments for this document
             for sel_elem in source_elem.findall(".//PlainTextSelection"):
                 start_pos = int(sel_elem.attrib.get("startPosition", 0))
@@ -966,6 +993,23 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                                     db.add(models.Memo(text=notes_dict[t_guid.lower()], target_type="segment", target_id=new_segment.id))
 
 
+        if 'guid_to_doc_id' in locals():
+            for set_elem in root.findall(".//Set"):
+                set_name = set_elem.attrib.get("name", "Imported Set")
+                folder_id = None
+                
+                for ms in set_elem.findall("./MemberSource"):
+                    t_guid = next((v for k, v in ms.attrib.items() if k.lower() == "targetguid"), None)
+                    if t_guid and t_guid.lower() in guid_to_doc_id:
+                        if not folder_id:
+                            new_folder = models.DocumentFolder(name=set_name, project_id=new_project.id)
+                            db.add(new_folder)
+                            db.flush()
+                            folder_id = new_folder.id
+                        
+                        doc_id = guid_to_doc_id[t_guid.lower()]
+                        db.query(models.Document).filter(models.Document.id == doc_id).update({"folder_id": folder_id})
+                        
         db.commit()
         return new_project
     
@@ -999,11 +1043,6 @@ def create_folder(project_id: int, folder: FolderCreate, db: Session = Depends(g
     db.refresh(new_folder)
     return new_folder
 
-@app.get("/projects/{project_id}/folders")
-def get_folders(project_id: int, db: Session = Depends(get_db)):
-    folders = db.query(models.DocumentFolder).filter(models.DocumentFolder.project_id == project_id).all()
-    return [{"id": f.id, "name": f.name} for f in folders]
-
 @app.put("/projects/{project_id}/documents/{document_id}/move")
 def move_document(project_id: int, document_id: int, folder_id: Optional[int] = None, db: Session = Depends(get_db)):
     doc = db.query(models.Document).filter(models.Document.id == document_id, models.Document.project_id == project_id).first()
@@ -1012,3 +1051,34 @@ def move_document(project_id: int, document_id: int, folder_id: Optional[int] = 
     doc.folder_id = folder_id
     db.commit()
     return {"message": "Moved successfully"}
+
+
+@app.get("/projects/{project_id}/folders")
+def get_folders(project_id: int, db: Session = Depends(get_db)):
+    folders = db.query(models.DocumentFolder).filter(
+        models.DocumentFolder.project_id == project_id
+    ).order_by(models.DocumentFolder.order_index).all() # Sorted!
+    return [{"id": f.id, "name": f.name} for f in folders]
+
+@app.put("/projects/{project_id}/folders/reorder")
+def reorder_folders(project_id: int, request: FolderReorderRequest, db: Session = Depends(get_db)):
+    for item in request.folders:
+        folder = db.query(models.DocumentFolder).filter(
+            models.DocumentFolder.id == item.id,
+            models.DocumentFolder.project_id == project_id
+        ).first()
+        if folder:
+            folder.order_index = item.order_index
+    db.commit()
+    return {"message": "Folders reordered"}
+
+@app.delete("/projects/{project_id}/folders/{folder_id}")
+def delete_folder(project_id: int, folder_id: int, db: Session = Depends(get_db)):
+    folder = db.query(models.DocumentFolder).filter(
+        models.DocumentFolder.id == folder_id,
+        models.DocumentFolder.project_id == project_id
+    ).first()
+    if folder:
+        db.delete(folder)
+        db.commit()
+    return {"message": "Folder deleted"}
