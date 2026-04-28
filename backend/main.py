@@ -629,7 +629,9 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
     project_memos = db.query(models.Memo).filter(models.Memo.target_type == "project", models.Memo.target_id == project_id).all()
     code_memos = db.query(models.Memo).filter(models.Memo.target_type == "code", models.Memo.target_id.in_(code_ids)).all() if code_ids else []
     segment_memos = db.query(models.Memo).filter(models.Memo.target_type == "segment", models.Memo.target_id.in_(segment_ids)).all() if segment_ids else []
-
+    
+    all_memos = project_memos + code_memos + segment_memos
+    
     memos_by_code = {}
     for m in code_memos:
         memos_by_code.setdefault(m.target_id, []).append(m)
@@ -637,22 +639,26 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
     memos_by_segment = {}
     for m in segment_memos:
         memos_by_segment.setdefault(m.target_id, []).append(m)
-
-    all_memos = project_memos + code_memos + segment_memos
+        
+    codes_by_parent = {}
+    for c in codes:
+        codes_by_parent.setdefault(c.parent_id, []).append(c)
 
     # CodeBook 
     codebook = ET.SubElement(root, "{urn:QDA-XML:project:1.0}CodeBook")
     codes_elem = ET.SubElement(codebook, "{urn:QDA-XML:project:1.0}Codes")
 
     code_guid_map = {}
-    for c in codes:
+
+    def build_code_xml(c, parent_xml_element):
         cg = generate_guid("code", c.id)
         code_guid_map[c.id] = cg
         code_attribs = {"guid": cg, "name": c.name, "isCodable": "true"}
         if c.color: 
             code_attribs["color"] = c.color
             
-        code_elem = ET.SubElement(codes_elem, "{urn:QDA-XML:project:1.0}Code", attrib=code_attribs)
+        code_elem = ET.SubElement(parent_xml_element, "{urn:QDA-XML:project:1.0}Code", attrib=code_attribs)
+
         if c.description:
             cd_desc = ET.SubElement(code_elem, "{urn:QDA-XML:project:1.0}Description")
             cd_desc.text = c.description
@@ -662,13 +668,21 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
                 ET.SubElement(code_elem, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
                     "targetGUID": generate_guid("memo", m.id)
                 })
+            
+        child_codes = codes_by_parent.get(c.id, [])
+        for child in child_codes:
+            build_code_xml(child, code_elem)
+
+    #start with recursion from parent codes
+    top_level_codes = codes_by_parent.get(None, [])
+    for tlc in top_level_codes:
+        build_code_xml(tlc, codes_elem)
 
     zip_files_to_write = {}
 
     # Sources
     sources = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Sources")
-    docs = db.query(models.Document).filter(models.Document.project_id == project_id).all()
-    
+   
     for d in docs:
         doc_guid = generate_guid("doc", d.id)
         internal_filename = f"{doc_guid}.txt"
@@ -682,8 +696,8 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
 
         zip_files_to_write[f"Sources/{internal_filename}"] = d.content
 
-        doc_segments = db.query(models.Segment).filter(models.Segment.document_id == d.id).all()
-        for seg in doc_segments:
+        d_segments = [s for s in doc_segments if s.document_id == d.id]
+        for seg in d_segments:
             sel_guid = generate_guid("selection", seg.id)
             
             sel_elem = ET.SubElement(source_elem, "{urn:QDA-XML:project:1.0}PlainTextSelection", attrib={
@@ -703,12 +717,17 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
                 "targetGUID": code_guid_map[seg.code_id]
             })
 
+            if seg.id in memos_by_segment:
+                for m in memos_by_segment[seg.id]:
+                    ET.SubElement(sel_elem, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
+                        "targetGUID": generate_guid("memo", m.id)
+                    })
+
     if all_memos:
         notes_elem = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Notes")
         for m in all_memos:
             memo_guid = generate_guid("memo", m.id)
             
-            # REFI-QDA expects a name, so we use a preview of the text
             preview_text = (m.text[:47] + '...') if len(m.text) > 50 else m.text
             preview_text = preview_text.replace('\n', ' ')
 
@@ -718,7 +737,6 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
                 "creatingUser": master_user_guid
             })
             
-            # We embed the actual memo text inside the PlainTextContent tag
             content_elem = ET.SubElement(note_elem, "{urn:QDA-XML:project:1.0}PlainTextContent")
             content_elem.text = m.text
 
@@ -726,6 +744,11 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
     if project.description:
         desc = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Description")
         desc.text = project.description
+
+    for m in project_memos:
+        ET.SubElement(root, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
+            "targetGUID": generate_guid("memo", m.id)
+        })
 
     # === Compile to ZIP (QDPX) ===
     xml_str = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -785,10 +808,48 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
         db.commit()
         db.refresh(new_project)
 
-        # Extract Codes 
-        guid_to_code_id = {} # Maps XML GUID to SQLite ID
+        #get segment and code memos
+        notes_dict = {}
+        for note_elem in root.findall(".//Note"): 
+            guid = next((v for k, v in note_elem.attrib.items() if k.lower() == "guid"), None)
+            text_content = ""
+
+            target_path = next((v for k, v in note_elem.attrib.items() if k.lower() in ["plaintextpath", "richtextpath"]), None)
+
+            if target_path and "internal://" in target_path.lower():
+                raw_filename = target_path.split("/")[-1]
+                zip_path = next((name for name in zip_ref.namelist() if name.endswith(raw_filename)), None)
+                
+                if zip_path:
+                    raw_bytes = zip_ref.read(zip_path)
+                    if zip_path.lower().endswith(".docx"):
+                        from docx import Document as DocxDocument
+                        doc_obj = DocxDocument(io.BytesIO(raw_bytes))
+                        text_content = "\n".join([p.text for p in doc_obj.paragraphs]).strip()
+                    else:
+                        try:
+                            text_content = raw_bytes.decode('utf-8-sig').strip()
+                        except UnicodeDecodeError:
+                            text_content = raw_bytes.decode('utf-8', errors='ignore').strip()
+            if not text_content:
+                pt_elem = note_elem.find(".//PlainTextContent")
+                if pt_elem is not None and pt_elem.text:
+                    text_content = pt_elem.text.strip()
+                else: 
+                    text_content = "".join(note_elem.itertext()).strip()
+                    
+            if text_content and guid:
+                notes_dict[guid.lower()] = text_content
         
-        for code_elem in root.findall(".//Code"):
+        # Extract Project-Level Memos
+        for note_ref in root.findall("./NoteRef"): 
+            target_guid = next((v for k, v in note_ref.attrib.items() if k.lower() == "targetguid"), None)
+            if target_guid in notes_dict:
+                db.add(models.Memo(text=notes_dict[target_guid], target_type="project", target_id=new_project.id))
+
+        # Extract Codes 
+        guid_to_code_id = {} # Maps XML GUID to SQLite ID 
+        def process_code_elem(code_elem, parent_db_id=None):
             guid = code_elem.attrib.get("guid")
             name = code_elem.attrib.get("name")
             color = code_elem.attrib.get("color", "#646cff")
@@ -796,17 +857,35 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
             c_desc_elem = code_elem.find("Description")
             description = c_desc_elem.text if c_desc_elem is not None else None
 
+            # Create the Code, attaching it to its parent if one exists
             new_code = models.Code(
                 project_id=new_project.id,
                 name=name,
                 color=color,
-                description=description
+                description=description,
+                parent_id=parent_db_id
             )
             db.add(new_code)
-            db.commit()
-            db.refresh(new_code)
+            db.flush() # doesn't commit the whole transaction
             
             guid_to_code_id[guid] = new_code.id
+
+            # Extract Code-Level Memos
+            for note_ref in code_elem.findall("./NoteRef"):
+                t_guid = next((v for k, v in note_ref.attrib.items() if k.lower() == "targetguid"), None)
+                if t_guid and t_guid.lower() in notes_dict:
+                    db.add(models.Memo(text=notes_dict[t_guid.lower()], target_type="code", target_id=new_code.id))
+
+            #child nodes
+            for child_elem in code_elem.findall("./Code"):
+                process_code_elem(child_elem, new_code.id)
+
+        codes_container = root.find(".//Codes")
+        if codes_container is not None:
+            for top_level_code in codes_container.findall("./Code"):
+                process_code_elem(top_level_code, None)
+
+        db.commit()
 
         # Extract Documents and Segments
         for source_elem in root.findall(".//TextSource"):
@@ -877,9 +956,17 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                                 content=segment_text
                             )
                             db.add(new_segment)
+                            db.flush()
+
+                            for note_ref in sel_elem.findall(".//NoteRef"):
+                                t_guid = next((v for k, v in note_ref.attrib.items() if k.lower() == "targetguid"), None)
+                                if t_guid and t_guid.lower() in notes_dict:
+                                    db.add(models.Memo(text=notes_dict[t_guid.lower()], target_type="segment", target_id=new_segment.id))
+
 
         db.commit()
         return new_project
+    
     except zipfile.BadZipFile:
         raise HTTPException(status_code=400, detail="Invalid QDPX package (Not a valid ZIP file)")
     except Exception as e:
