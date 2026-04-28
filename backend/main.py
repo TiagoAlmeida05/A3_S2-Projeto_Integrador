@@ -857,7 +857,6 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
             c_desc_elem = code_elem.find("Description")
             description = c_desc_elem.text if c_desc_elem is not None else None
 
-            # Create the Code, attaching it to its parent if one exists
             new_code = models.Code(
                 project_id=new_project.id,
                 name=name,
