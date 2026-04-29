@@ -10,7 +10,7 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
       setName(currentName || "");
       setDescription(currentDescription || "");
     }
-  }, [isOpen, currentName, currentDescription]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -34,6 +34,7 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
             type="text" 
             value={name} 
             onChange={(e) => setName(e.target.value)} 
+            autoFocus
             style={{ width: '100%', padding: '10px', boxSizing: 'border-box', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white' }} 
           />
         </div>
