@@ -40,6 +40,8 @@ class ProjectResponse(BaseModel):
     name: str
     description: Optional[str] = None
     local_path: Optional[str] = None
+    document_count: Optional[int] = 0 
+    code_count: Optional[int] = 0
 
     class Config:
         from_attributes = True
@@ -229,7 +231,21 @@ def create_project_route(project: ProjectCreate, db: Session = Depends(get_db)):
 @app.get("/projects", response_model=List[ProjectResponse])
 def get_projects_route(db: Session = Depends(get_db)):
     projects = db.query(models.Project).order_by(models.Project.id.desc()).all()
-    return projects
+    result= []
+    for p in projects:
+        doc_count = db.query(models.Document).filter(models.Document.project_id == p.id).count()
+        code_count = db.query(models.Code).filter(models.Code.project_id == p.id).count()
+        
+        result.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "local_path": p.local_path,
+            "document_count": doc_count,
+            "code_count": code_count
+        })
+
+    return result
 
 @app.get("/projects/{project_id}")
 def get_project(project_id: int, db: Session = Depends(get_db)):

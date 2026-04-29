@@ -1,122 +1,204 @@
-import { useState, useEffect } from 'react'
-import { Link, useNavigate} from 'react-router-dom';
-import CreateProjectModal from './CreateProjectModal';
-import ImportProjectModal from './ImportProjectModal';
-import '/src/App.css'
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import CreateProjectModal from "./CreateProjectModal";
+import ImportProjectModal from "./ImportProjectModal";
 
-function DashboardPage() {
-  const [projectStatus, setProjectStatus] = useState("")
-  const [showForm, setShowForm] = useState(false)
-  const [projects, setProjects] = useState([])
+const API_BASE = "http://127.0.0.1:8000";
+
+function Dashboard() {
+  const [projects, setProjects] = useState([]);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-
-  const navigate = useNavigate()
-
-  const fetchProjects = () => {
-    fetch('http://127.0.0.1:8000/projects')
-      .then(response => response.json())
-      .then(data => setProjects(data))
-      .catch(error => console.error("Failed to fetch projects:", error))
-  }
+  const navigate = useNavigate();
 
   useEffect(() => {
-      fetchProjects()
-    }, [])
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/projects`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch projects:", err);
+    }
+  };
 
   const handleCreateProject = async (projectData) => {
-    setProjectStatus("Creating project...")
-    
-    try {
-      const response = await fetch('http://127.0.0.1:8000/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(projectData),
-      })
-      
-      if (!response.ok) {
-        const errData = await response.json();
-        setProjectStatus(""); 
-        throw new Error(errData.detail || "Failed to create project");
-      }
-    
-      const data = await response.json();
-      navigate(`/project/${data.id}`);
+    const res = await fetch(`${API_BASE}/projects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(projectData),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json();
+      throw new Error(errorData.detail || "Failed to create project");
     }
-    catch(error) {
-        setProjectStatus("Failed to create project.")
-        throw error
-      }
-  }
+
+    const newProject = await res.json();
+    setIsCreateModalOpen(false);
+    navigate(`/project/${newProject.id}`);
+  };
+
+  const handleDeleteProject = async (e, id) => {
+    e.stopPropagation();
+    const confirm = window.confirm("Are you sure you want to permanently delete this project? All documents and codes will be lost.");
+    if (!confirm) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/projects/${id}`, { method: "DELETE" });
+      if (res.ok) fetchProjects();
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+    }
+  };
+
+  const pageStyle = {
+    minHeight: "100vh",
+    backgroundColor: "#111",
+    color: "#fff",
+    fontFamily: "system-ui, sans-serif",
+    padding: "30px 40px",
+    display: "flex",
+    justifyContent: "center",
+    boxSizing: "border-box" 
+  };
+
+  const containerStyle = {
+    width: "100%",
+  };
+
+  const horizontalCardStyle = {
+    backgroundColor: "#1a1a1a",
+    border: "1px solid #333",
+    borderRadius: "8px",
+    padding: "20px 24px",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    display: "flex",
+    flexDirection: "row", 
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "20px"
+  };
 
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif' }}>
-      <h1>jUPiter-QDA Dashboard</h1>
-      <p>Your free, open-source qualitative data analysis tool.</p>
-
-      {/* Clean Header Area with the Button */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2>My Projects</h2>
-        <div style={{ display: 'flex', gap: '15px' }}>
+    <div style={pageStyle}>
+      <div style={containerStyle}>
+        
+        {/* HEADER SECTION */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #333", paddingBottom: "20px", marginBottom: "30px" }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "28px", fontWeight: "600" }}>jUPiter QDA</h1>
+            <p style={{ margin: "5px 0 0 0", color: "#888", fontSize: "15px" }}>Qualitative Data Analysis Workspace</p>
+          </div>
+          
+          <div style={{ display: "flex", gap: "10px" }}>
             <button 
               onClick={() => setIsImportModalOpen(true)}
-              style={{ padding: '10px 20px', fontSize: '15px', cursor: 'pointer', backgroundColor: 'transparent', color: '#646cff', border: '1px solid #646cff', borderRadius: '6px', fontWeight: 'bold' }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(100, 108, 255, 0.1)'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              style={{ padding: "10px 16px", backgroundColor: "transparent", color: "#ccc", border: "1px solid #444", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", transition: "all 0.2s" }}
+              onMouseOver={(e) => e.target.style.backgroundColor = "#222"}
+              onMouseOut={(e) => e.target.style.backgroundColor = "transparent"}
             >
               Import Project
             </button>
-            
             <button 
-              onClick={() => setShowForm(true)} 
-              style={{ padding: '10px 20px', fontSize: '15px', cursor: 'pointer', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 'bold' }}
+              onClick={() => setIsCreateModalOpen(true)}
+              style={{ padding: "10px 20px", backgroundColor: "transparent", color: "#ccc", border: "1px solid #444", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", transition: "background 0.2s" }}
+              onMouseOver={(e) => e.target.style.backgroundColor = "#222"}
+              onMouseOut={(e) => e.target.style.backgroundColor = "transparent"}
             >
-              Create New Project
+              Create Project
             </button>
           </div>
-      </div>
+        </div>
 
-      {/* The Pop-Up Modal Overlay */}
-      <CreateProjectModal 
-        isOpen={showForm}
-        onClose={() => setShowForm(false)}
-        onCreate={handleCreateProject}
-      />
+        {/* PROJECTS LIST */}
+        <div>
+          <h2 style={{ fontSize: "20px", marginBottom: "20px", color: "#ccc" }}>Recent Projects</h2>
+          
+          {projects.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px", backgroundColor: "#1a1a1a", borderRadius: "8px", border: "1px dashed #444", color: "#666" }}>
+              <p>No projects found. Create or import one to get started!</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {projects.map((project) => (
+                <div 
+                  key={project.id} 
+                  onClick={() => navigate(`/project/${project.id}`)}
+                  style={horizontalCardStyle}
+                  onMouseOver={(e) => e.currentTarget.style.borderColor = "#646cff"}
+                  onMouseOut={(e) => e.currentTarget.style.borderColor = "#333"}
+                >
+                  
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: "20px",textAlign: "left" }}>
+                    <h3 style={{ margin: "0 0 6px 0", fontSize: "18px", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {project.name}
+                    </h3>
+                    <p style={{ margin: 0, fontSize: "14px", color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {project.description || "No description provided."}
+                    </p>
+                  </div>
+                  
+                  <div style={{ display: "flex", alignItems: "center", gap: "30px", flexShrink: 0 }}>
+                    <div style={{ display: "flex", gap: "20px" }}>
+                      <span style={{ fontSize: "14px", color: "#888", display: "flex", alignItems: "center", gap: "6px" }}>
+                        📄 {project.document_count || 0} Docs
+                      </span>
+                      <span style={{ fontSize: "14px", color: "#888", display: "flex", alignItems: "center", gap: "6px" }}>
+                        🟣 {project.code_count || 0} Codes
+                      </span>
+                    </div>
 
-      
-      <ImportProjectModal 
-        isOpen={isImportModalOpen} 
-        onClose={() => setIsImportModalOpen(false)} 
-        onImportSuccess={(newProjectId) => {
-          setIsImportModalOpen(false);
-          // Redirect them to the newly imported project page!
-          window.location.href = `/project/${newProjectId}`; 
-        }}
-      />
-
-      {/* Project List */}
-      <div style={{ padding: '15px', border: '1px solid #ccc', borderRadius: '8px' }}>
-        {projects.length === 0 ? (
-          <p style={{ color: '#888' }}>No projects yet. Create one above!</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            {projects.map((proj) => (
-              <div key={proj.id} style={{ padding: '15px', backgroundColor: '#2a2a2a', borderRadius: '6px', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 5px 0', color: '#646cff' }}>{proj.name}</h3>
-                  <p style={{ margin: '0', fontSize: '14px', color: '#ccc' }}>{proj.description}</p>
+                    <button 
+                      onClick={(e) => handleDeleteProject(e, project.id)}
+                      style={{ 
+                        backgroundColor: "transparent", border: "none", color: "#666", 
+                        cursor: "pointer", padding: "8px", borderRadius: "4px", 
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        transition: "all 0.2s ease"
+                      }}
+                      onMouseOver={(e) => { e.currentTarget.style.color = "#ff6b6b"; e.currentTarget.style.backgroundColor = "rgba(255,107,107,0.1)"; }}
+                      onMouseOut={(e) => { e.currentTarget.style.color = "#666"; e.currentTarget.style.backgroundColor = "transparent"; }}
+                      title="Delete Project"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-                <Link to={`/project/${proj.id}`}>
-                  <button style={{ padding: '8px 16px', backgroundColor: '#aa3bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                    Open Project ➔
-                  </button>
-                </Link>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+
+        <CreateProjectModal 
+          isOpen={isCreateModalOpen} 
+          onClose={() => setIsCreateModalOpen(false)} 
+          onCreate={handleCreateProject} 
+        />
+
+        <ImportProjectModal 
+          isOpen={isImportModalOpen} 
+          onClose={() => setIsImportModalOpen(false)} 
+          onImportSuccess={(newProjectId) => {
+            setIsImportModalOpen(false);
+            navigate(`/project/${newProjectId}`);
+          }}
+        />
+
       </div>
     </div>
   );
 }
 
-export default DashboardPage;
+export default Dashboard;
