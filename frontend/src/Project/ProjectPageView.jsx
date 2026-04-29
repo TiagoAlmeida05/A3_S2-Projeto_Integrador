@@ -26,6 +26,7 @@ const ProjectPageView = ({ page }) => {
     pendingQuoteJump,
     activeTab,
     uploadStatus,
+    uploadProgress,
     segmentContextMenu,
     setActiveTab,
     setActiveDocument,
@@ -73,6 +74,7 @@ const ProjectPageView = ({ page }) => {
           documents={documents}
           activeDocument={activeDocument}
           uploadStatus={uploadStatus}
+          uploadProgress={uploadProgress}
           handleFileUpload={handleFileUpload}
           handleDocumentClick={handleDocumentClick}
           handleDeleteDocument={handleDeleteDocument}

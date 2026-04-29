@@ -4,6 +4,7 @@ function DocumentSidebar({
   documents, 
   activeDocumentId, 
   uploadStatus, 
+  uploadProgress,
   onFileUpload, 
   onDocumentClick, 
   onDeleteDocument,
@@ -226,6 +227,23 @@ function DocumentSidebar({
         <label htmlFor="file-upload" style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', display: 'block', textAlign: 'center' }}>
           ➕ Import Documents
         </label>
+        {uploadProgress?.isActive && uploadProgress.total > 0 && (
+          <div style={{ marginTop: '12px' }}>
+            <div style={{ color: '#9bb0ff', fontSize: '13px', textAlign: 'center', marginBottom: '6px' }}>
+              Importing {uploadProgress.current} of {uploadProgress.total} files
+            </div>
+            <div style={{ height: '8px', backgroundColor: '#111', border: '1px solid #333', borderRadius: '999px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: `${Math.round((uploadProgress.current / uploadProgress.total) * 100)}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #4CAF50 0%, #7ad67e 100%)',
+                  transition: 'width 0.25s ease',
+                }}
+              />
+            </div>
+          </div>
+        )}
         <div style={{ marginTop: '10px', color: '#646cff', fontSize: '14px', textAlign: 'center' }}>{uploadStatus}</div>
       </div>
 

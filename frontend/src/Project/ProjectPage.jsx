@@ -42,6 +42,11 @@ function ProjectPage() {
   // UI & Navigation State
   const [activeTab, setActiveTab] = useState("documents");
   const [uploadStatus, setUploadStatus] = useState("");
+  const [uploadProgress, setUploadProgress] = useState({
+    current: 0,
+    total: 0,
+    isActive: false,
+  });
   const [segmentContextMenu, setSegmentContextMenu] = useState(null);
 
 
@@ -164,10 +169,10 @@ function ProjectPage() {
     if (files.length === 0) return;
 
     setUploadStatus("Checking files...");
-    const formData = new FormData();
+    setUploadProgress({ current: 0, total: 0, isActive: false });
 
     let existingNames = documents.map((doc) => doc.filename);
-    let filesToUploadCount = 0;
+    const filesToUpload = [];
 
     for (let i = 0; i < files.length; i++) {
       let cur = files[i];
@@ -233,47 +238,81 @@ function ProjectPage() {
         if (finalName !== cur.name) {
           cur = new File([cur], finalName, { type: cur.type });
         }
-        formData.append("files", cur);
-        filesToUploadCount++;
+        filesToUpload.push(cur);
         existingNames.push(finalName);
       }
     }
 
     setConflictDialog((prev) => ({ ...prev, isOpen: false }));
 
-    if (filesToUploadCount === 0) {
+    if (filesToUpload.length === 0) {
       setUploadStatus("Upload cancelled. No files were added.");
       event.target.value = null;
       return;
     }
 
-    fetch(`${API_BASE}/projects/${id}/documents/`, {
-      method: "POST",
-      body: formData,
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.failed && data.failed.length > 0) {
-          const errorList = data.failed
-            .map((f) => `${f.filename} (${f.reason})`)
-            .join(", ");
-          if (data.successful.length > 0) {
-            setUploadStatus(
-              `Uploaded ${data.successful.length} files. Failed: ${errorList}`,
-            );
-          } else {
-            setUploadStatus(`All uploads failed: ${errorList}`);
-          }
-        } else {
-          setUploadStatus("Upload complete!");
-          setTimeout(() => setUploadStatus(""), 3000);
+    const total = filesToUpload.length;
+    const successfulUploads = [];
+    const failedUploads = [];
+
+    setUploadProgress({ current: 0, total, isActive: true });
+
+    for (let i = 0; i < total; i++) {
+      const currentIndex = i + 1;
+      const file = filesToUpload[i];
+
+      setUploadStatus(`Importing ${currentIndex} of ${total} files...`);
+      setUploadProgress({ current: currentIndex, total, isActive: true });
+
+      const formData = new FormData();
+      formData.append("files", file);
+
+      try {
+        const res = await fetch(`${API_BASE}/projects/${id}/documents/`, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          failedUploads.push({
+            filename: file.name,
+            reason: `HTTP ${res.status}`,
+          });
+          continue;
         }
-        fetchDocuments();
-      })
-      .catch((err) => {
-        setUploadStatus("Upload failed.");
+
+        const data = await res.json();
+        if (data.failed && data.failed.length > 0) {
+          failedUploads.push(...data.failed);
+        }
+        if (data.successful && data.successful.length > 0) {
+          successfulUploads.push(...data.successful);
+        }
+      } catch (err) {
+        failedUploads.push({ filename: file.name, reason: "Network error" });
         console.error(err);
-      });
+      }
+    }
+
+    setUploadProgress({ current: total, total, isActive: false });
+
+    if (failedUploads.length > 0) {
+      const errorList = failedUploads
+        .map((f) => `${f.filename} (${f.reason})`)
+        .join(", ");
+      if (successfulUploads.length > 0) {
+        setUploadStatus(
+          `Uploaded ${successfulUploads.length} files. Failed: ${errorList}`,
+        );
+      } else {
+        setUploadStatus(`All uploads failed: ${errorList}`);
+      }
+    } else {
+      setUploadStatus(`Upload complete! ${successfulUploads.length} files imported.`);
+      setTimeout(() => setUploadStatus(""), 3000);
+    }
+
+    fetchDocuments();
 
     event.target.value = null;
   };
@@ -417,6 +456,7 @@ function ProjectPage() {
     pendingQuoteJump,
     activeTab,
     uploadStatus,
+    uploadProgress,
     segmentContextMenu,
     conflictDialog,
     isSettingsOpen,
