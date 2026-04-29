@@ -115,6 +115,7 @@ const ProjectPageSidebar = ({
             onFileUpload={handleFileUpload}
             onDocumentClick={handleDocumentClick}
             onDeleteDocument={handleDeleteDocument}
+            projectId={id}
           />
         )}
         {activeTab === "codes" && (
