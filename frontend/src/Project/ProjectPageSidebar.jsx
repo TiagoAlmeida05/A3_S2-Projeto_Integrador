@@ -9,6 +9,7 @@ const ProjectPageSidebar = ({
   documents,
   activeDocument,
   uploadStatus,
+  uploadProgress,
   handleFileUpload,
   handleDocumentClick,
   handleDeleteDocument,
@@ -112,6 +113,7 @@ const ProjectPageSidebar = ({
             documents={documents}
             activeDocumentId={activeDocument?.id}
             uploadStatus={uploadStatus}
+            uploadProgress={uploadProgress}
             onFileUpload={handleFileUpload}
             onDocumentClick={handleDocumentClick}
             onDeleteDocument={handleDeleteDocument}
