@@ -97,6 +97,14 @@ class FolderReorderItem(BaseModel):
 class FolderReorderRequest(BaseModel):
     folders: List[FolderReorderItem]
 
+class DocumentUpdateContent(BaseModel):
+    content: str
+
+class SegmentUpdate(BaseModel):
+    start_char: int
+    end_char: int
+    content: str
+
 # --- ENDPOINTS ---
 
 @app.get("/projects/{project_id}/memos", response_model=List[MemoResponse])
@@ -665,3 +673,33 @@ def delete_folder(project_id: int, folder_id: int, db: Session = Depends(get_db)
         db.delete(folder)
         db.commit()
     return {"message": "Folder deleted"}
+
+@app.put("/projects/{project_id}/documents/{document_id}/content")
+def update_document_content(project_id: int, document_id: int, doc_update: DocumentUpdateContent, db: Session = Depends(get_db)):
+    doc = db.query(models.Document).filter(
+        models.Document.id == document_id, 
+        models.Document.project_id == project_id
+    ).first()
+    
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    doc.content = doc_update.content
+    db.commit()
+    return {"message": "Document updated successfully"}
+
+@app.put("/projects/{project_id}/segments/{segment_id}")
+def update_segment(project_id: int, segment_id: int, seg_update: SegmentUpdate, db: Session = Depends(get_db)):
+    segment = db.query(models.Segment).join(models.Document).filter(
+        models.Segment.id == segment_id,
+        models.Document.project_id == project_id
+    ).first()
+
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    segment.start_char = seg_update.start_char
+    segment.end_char = seg_update.end_char
+    segment.content = seg_update.content
+    db.commit()
+    return {"message": "Segment updated"}

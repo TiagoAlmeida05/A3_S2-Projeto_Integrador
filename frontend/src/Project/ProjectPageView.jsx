@@ -104,6 +104,7 @@ const ProjectPageView = ({ page }) => {
           documentSegments={documentSegments}
           setUploadStatus={setUploadStatus}
           setDocumentSegments={setDocumentSegments}
+          setActiveDocument={setActiveDocument}
           fetchCodes={fetchCodes}
           API_BASE={API_BASE}
           projectId={id}
