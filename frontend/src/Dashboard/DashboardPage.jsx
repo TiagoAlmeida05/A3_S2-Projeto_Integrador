@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import CreateProjectModal from "./CreateProjectModal";
 import ImportProjectModal from "./ImportProjectModal";
+import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -9,6 +10,7 @@ function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState({ isOpen: false, project: null });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,13 +46,16 @@ function Dashboard() {
     navigate(`/project/${newProject.id}`);
   };
 
-  const handleDeleteProject = async (e, id) => {
-    e.stopPropagation();
-    const confirm = window.confirm("Are you sure you want to permanently delete this project? All documents and codes will be lost.");
-    if (!confirm) return;
+  const triggerDelete = (e, projectObj) => {
+    e.stopPropagation(); // Prevents clicking the card and routing to the project
+    setDeleteTarget({ isOpen: true, project: projectObj });
+  };
 
+  
+  const executeDelete = async () => {
+    if (!deleteTarget.project) return;
     try {
-      const res = await fetch(`${API_BASE}/projects/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/projects/${deleteTarget.project.id}`, { method: "DELETE" });
       if (res.ok) fetchProjects();
     } catch (err) {
       console.error("Failed to delete project:", err);
@@ -156,7 +161,7 @@ function Dashboard() {
                     </div>
 
                     <button 
-                      onClick={(e) => handleDeleteProject(e, project.id)}
+                      onClick={(e) => triggerDelete(e, project)}
                       style={{ 
                         backgroundColor: "transparent", border: "none", color: "#666", 
                         cursor: "pointer", padding: "8px", borderRadius: "4px", 
@@ -195,6 +200,14 @@ function Dashboard() {
             navigate(`/project/${newProjectId}`);
           }}
         />
+
+        <ConfirmDeleteModal 
+        isOpen={deleteTarget.isOpen}
+        onClose={() => setDeleteTarget({ isOpen: false, project: null })}
+        onConfirm={executeDelete}
+        title={deleteTarget.project ? `Delete "${deleteTarget.project.name}"?` : "Delete Project?"}
+        warningText="Are you sure you want to delete this project? All associated documents, transcripts, and highlighted codes will be permanently destroyed."
+      />
 
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import CodeMemoModal from './CodeMemoModal';
+import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
 import axios from 'axios';
 
 function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes }) {
@@ -23,6 +24,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   const [dragPosition, setDragPosition] = useState(null); // "before", "after", "inside"
   
   const [expandedCodes, setExpandedCodes] = useState(new Set());
+  const [codeToDelete, setCodeToDelete] = useState(null);
 
   useEffect(() => {
     const handleClick = () => setContextMenu(null);
@@ -467,14 +469,14 @@ return (
                         title="Edit Code"
                       >
                         ✏️
-                      </button>
+                      </button>  
                       <button 
-                        onClick={(e) => { e.stopPropagation(); onDeleteCode(code.id); }}
+                        onClick={(e) => { e.stopPropagation(); setCodeToDelete(code); }}
                         style={{ backgroundColor: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
                         title="Delete Code"
                       >
                         🗑️
-                      </button>
+                      </button>    
                     </div>
                   </div>
                 )}
@@ -508,6 +510,17 @@ return (
           })
         )}
       </ul>
+
+      <ConfirmDeleteModal 
+        isOpen={!!codeToDelete}
+        onClose={() => setCodeToDelete(null)}
+        onConfirm={() => {
+          onDeleteCode(codeToDelete.id);
+          setCodeToDelete(null);
+        }}
+        title={codeToDelete ? `Delete "${codeToDelete.name}"?` : "Delete Code?"}
+        warningText="Are you sure you want to delete this code? All highlights associated with it will be permanently removed from your documents."
+      />
       {memoModalOpen && (
         <CodeMemoModal
           open={memoModalOpen}

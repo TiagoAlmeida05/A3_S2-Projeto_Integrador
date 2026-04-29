@@ -143,9 +143,6 @@ function ProjectPage() {
   }, [id]);
 
   const handleDeleteCode = async (codeId) => {
-    const confirmDelete = window.confirm("Are you sure you want to delete this code? This will remove all highlights associated with it.")
-    if(!confirmDelete) return;
-
       try {
       const response = await fetch(
         `${API_BASE}/projects/${id}/codes/${codeId}`,
