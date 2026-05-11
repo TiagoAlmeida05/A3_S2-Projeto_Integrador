@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { use, useState, useEffect } from "react";
 
 const ProjectPageCodePanel = ({
   API_BASE,
@@ -18,6 +18,21 @@ const ProjectPageCodePanel = ({
   const [selectedQuoteId, setSelectedQuoteId] = useState(null);
   const [includeSubCodes, setIncludeSubCodes] = useState(false);
   const safeCodeSegments = Array.isArray(codeSegments) ? codeSegments : [];
+
+  useEffect(() => {
+    if(codePanelOpen && activeCode) {
+      fetch(`${API_BASE}/codes/${activeCode.id}/segments?include_children=${includeSubCodes}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to fetch code segments");
+          return res.json();
+        })
+        .then((data) => setCodeSegments(Array.isArray(data) ? data : []))
+        .catch((err) => {
+          console.error("Error fetching code segments:", err);
+          setCodeSegments([]);
+        });
+    }
+  }, [activeCode, codePanelOpen, API_BASE, includeSubCodes, setCodeSegments]);
 
   const handleQuoteClick = async (quote) => {
     setSelectedQuoteId(quote.id);
