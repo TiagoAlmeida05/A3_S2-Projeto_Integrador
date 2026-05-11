@@ -27,6 +27,7 @@ const ProjectPageDocumentPanel = ({
   const [selectedExistingCodeId, setSelectedExistingCodeId] = useState("");
   const [autoUpcode, setAutoUpcode] = useState(false);
   const [quickCodeName, setQuickCodeName] = useState("");
+  const [quickCodeParentId, setQuickCodeParentId] = useState("");
   const [quickCodeColor, setQuickCodeColor] = useState("#646cff");
   
   // Edit Mode & Real-Time Segment State
@@ -88,6 +89,7 @@ const ProjectPageDocumentPanel = ({
     setQuickMenuOpen(false);
     setQuickCodeName("");
     setQuickCodeColor("#646cff");
+    setQuickCodeParentId("");
   };
 
   const handleTextSelection = () => {
@@ -144,7 +146,12 @@ const ProjectPageDocumentPanel = ({
         const codeResponse = await fetch(`${API_BASE}/projects/${projectId}/codes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: codeName, color: quickCodeColor, description: "Created from selected text", parent_id: null }),
+          body: JSON.stringify({ 
+            name: codeName, 
+            color: quickCodeColor, 
+            description: "Created from selected text", 
+            parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null // 🔥 Fixed
+          }),
         });
         const createdCode = await codeResponse.json();
         if (!codeResponse.ok) throw new Error(createdCode.detail || "Failed to create quick code");
@@ -589,6 +596,46 @@ const ProjectPageDocumentPanel = ({
               </optgroup>
               <option value="new">✨ Create New Code...</option>
             </select>
+
+            {/* Auto-upcode checkbox for existing codes */}
+            {quickCodeMode === "existing" && (
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#b0b0c3", cursor: "pointer" }}>
+                <input type="checkbox" checked={autoUpcode} onChange={(e) => setAutoUpcode(e.target.checked)} style={{ cursor: "pointer", accentColor: "#646cff" }} />
+                Auto-apply to parent themes
+              </label>
+            )}
+
+            {/* Inputs for NEW codes (No Description!) */}
+            {quickCodeMode === "new" && (
+              <>
+                <input
+                  type="text"
+                  value={quickCodeName}
+                  onChange={(e) => setQuickCodeName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleQuickCodeAction(); } }}
+                  placeholder="Code name"
+                  style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", boxSizing: "border-box" }}
+                />
+                
+                <select
+                  value={quickCodeParentId}
+                  onChange={(e) => setQuickCodeParentId(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", cursor: "pointer" }}
+                >
+                  <option value="">No Parent (Root Code)</option>
+                  {orderedDropdownCodes.map((code) => (
+                    <option key={code.id} value={code.id}>
+                      Assign to: {getFullPath(code, projectCodes)}
+                    </option>
+                  ))}
+                </select>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <label htmlFor="quick-color" style={{ color: "#b0b0c3", fontSize: "13px", minWidth: "70px" }}>Color</label>
+                  <input id="quick-color" type="color" value={quickCodeColor} onChange={(e) => setQuickCodeColor(e.target.value)} style={{ width: "40px", height: "40px", padding: 0, border: "none", background: "transparent", cursor: "pointer" }} />
+                </div>
+              </>
+            )}
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={handleQuickCodeAction} style={{ flex: 1, padding: "8px 10px", backgroundColor: "#646cff", border: "none", borderRadius: "8px", color: "white", cursor: "pointer" }}>Apply</button>
