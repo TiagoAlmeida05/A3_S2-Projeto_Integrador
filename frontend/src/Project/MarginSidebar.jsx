@@ -183,10 +183,8 @@ function MarginSidebar({ marginBars, projectCodes }) {
                   display: 'flex',
                   alignItems: 'center',
                   height: `${BOX_HEIGHT}px`,
-                  maxWidth: '150px',
+                  width: 'max-content',
                   whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
                   boxShadow: '0 1px 2px rgba(0,0,0,0.15)'
                 }}
                 title={bar.codeName} 
