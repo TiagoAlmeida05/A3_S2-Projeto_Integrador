@@ -88,20 +88,27 @@ function ProjectPage() {
       .catch((err) => console.error(err));
   };
 
-  const openCodePanel = (code) => {
+  const openCodePanel = async (code) => {
     setActiveCode(code);
     setCodePanelOpen(true);
     setPendingQuoteJump(null);
-    
-    fetch(`${API_BASE}/codes/${code.id}/segments?include_children=false`)
-      .then(res => res.json())
-      .then(data => setCodeSegments(Array.isArray(data) ? data : []))
-      .catch(err => {
-        setCodeSegments([]);
-        console.error("Failed to load code segments:", err);
-      });
-  };
 
+    try {
+      // Bulletproof: Fetch segments for every document we know exists
+      const segmentPromises = documents.map((doc) =>
+        fetch(`${API_BASE}/projects/${id}/segments?document_id=${doc.id}`).then((res) => res.json())
+      );
+      
+      const segmentsArrays = await Promise.all(segmentPromises);
+      
+      // Flatten into one giant array and filter by the selected code using Number() casting
+      const allSegments = segmentsArrays.flat().filter(s => s && !s.detail);
+      setCodeSegments(allSegments.filter((s) => Number(s.code_id) === Number(code.id)));
+    } catch (err) {
+      console.error("Failed to load code segments:", err);
+      setCodeSegments([]);
+    }
+  };
   const handleDocumentClick = (docId) => {
     fetch(`${API_BASE}/projects/${id}/documents/${docId}`)
       .then((res) => res.json())
@@ -143,9 +150,6 @@ function ProjectPage() {
   }, [id]);
 
   const handleDeleteCode = async (codeId) => {
-    const confirmDelete = window.confirm("Are you sure you want to delete this code? This will remove all highlights associated with it.")
-    if(!confirmDelete) return;
-
       try {
       const response = await fetch(
         `${API_BASE}/projects/${id}/codes/${codeId}`,

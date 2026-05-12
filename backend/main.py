@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 
 import os
 import models
@@ -40,6 +40,9 @@ class ProjectResponse(BaseModel):
     name: str
     description: Optional[str] = None
     local_path: Optional[str] = None
+    document_count: Optional[int] = 0 
+    code_count: Optional[int] = 0
+    last_accessed: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -218,7 +221,8 @@ def create_project_route(project: ProjectCreate, db: Session = Depends(get_db)):
     new_project = models.Project(
         name=project.name, 
         description=project.description,
-        local_path=final_path
+        local_path=final_path,
+        last_accessed=None
     )
     db.add(new_project)
     db.commit()
@@ -229,13 +233,32 @@ def create_project_route(project: ProjectCreate, db: Session = Depends(get_db)):
 @app.get("/projects", response_model=List[ProjectResponse])
 def get_projects_route(db: Session = Depends(get_db)):
     projects = db.query(models.Project).order_by(models.Project.id.desc()).all()
-    return projects
+    result= []
+    for p in projects:
+        doc_count = db.query(models.Document).filter(models.Document.project_id == p.id).count()
+        code_count = db.query(models.Code).filter(models.Code.project_id == p.id).count()
+        
+        result.append({
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "local_path": p.local_path,
+            "document_count": doc_count,
+            "code_count": code_count,
+            "last_accessed": p.last_accessed.isoformat() if p.last_accessed else None
+        })
+
+    return result
 
 @app.get("/projects/{project_id}")
 def get_project(project_id: int, db: Session = Depends(get_db)):
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         return {"error": "Project not found"}
+    
+    project.last_accessed = datetime.now(timezone.utc)
+    db.commit()
+
     return {"name": project.name, "description": project.description}
 
 

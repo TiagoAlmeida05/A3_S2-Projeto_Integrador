@@ -88,6 +88,7 @@ const ProjectPageView = ({ page }) => {
           API_BASE={API_BASE}
           projectId={id}
           projectCodes={projectCodes}
+          documents={documents}
           codePanelOpen={codePanelOpen}
           activeCode={activeCode}
           codeSegments={codeSegments}

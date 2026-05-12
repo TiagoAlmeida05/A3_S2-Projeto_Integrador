@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
+import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
 
 function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription, currentLocalPath, onSave, onDelete }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   // Whenever the modal opens, pre-fill the text boxes with the current data
   useEffect(() => {
     if (isOpen) {
       setName(currentName || "");
       setDescription(currentDescription || "");
+      setShowConfirmDelete(false);
     }
-  }, [isOpen]);
+  }, [isOpen, currentName, currentDescription]);
 
   if (!isOpen) return null;
 
@@ -63,11 +66,8 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           
           <button 
-            onClick={() => {
-              const confirm = window.confirm(`Are you sure you want to permanently delete "${currentName}"? This will delete all documents and codes.`);
-              if (confirm) onDelete();
-            }}
-            style={{ padding: '8px 12px', backgroundColor: 'transparent', border: '1px solid #ff6b6b', color: '#ff6b6b', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}
+            onClick={() => setShowConfirmDelete(true)}
+            style={{ padding: '8px 12px', backgroundColor: 'transparent', border: '1px solid #ff6b6b', color: '#ff6b6b', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s' }}
             onMouseOver={(e) => e.target.style.backgroundColor = 'rgba(255, 107, 107, 0.1)'}
             onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
@@ -90,7 +90,16 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
           </div>
 
         </div>
-
+        <ConfirmDeleteModal 
+            isOpen={showConfirmDelete}
+            onClose={() => setShowConfirmDelete(false)}
+            onConfirm={() => {
+              setShowConfirmDelete(false);
+              onDelete();
+            }}
+            title={currentName ? `Delete "${currentName}"?` : "Delete Project?"}
+            warningText="Are you sure you want to delete this project? All associated documents, transcripts, and highlighted codes will be permanently destroyed."
+          />
       </div>
     </div>
   );
