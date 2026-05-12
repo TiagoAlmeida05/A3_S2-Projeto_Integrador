@@ -42,7 +42,7 @@ class ProjectResponse(BaseModel):
     local_path: Optional[str] = None
     document_count: Optional[int] = 0 
     code_count: Optional[int] = 0
-    last_accessed: Optional[str] = None
+    last_accessed: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -221,7 +221,8 @@ def create_project_route(project: ProjectCreate, db: Session = Depends(get_db)):
     new_project = models.Project(
         name=project.name, 
         description=project.description,
-        local_path=final_path
+        local_path=final_path,
+        last_accessed=None
     )
     db.add(new_project)
     db.commit()
