@@ -22,7 +22,15 @@ function Dashboard() {
       const res = await fetch(`${API_BASE}/projects`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        setProjects(data);
+ 
+        const sortedData = data.sort((a, b) => {
+          if (a.last_accessed && b.last_accessed) {
+            return new Date(b.last_accessed) - new Date(a.last_accessed);
+          }
+          return b.id - a.id; // Fallback if no date exists
+        });
+        
+        setProjects(sortedData);
       }
     } catch (err) {
       console.error("Failed to fetch projects:", err);
@@ -47,11 +55,10 @@ function Dashboard() {
   };
 
   const triggerDelete = (e, projectObj) => {
-    e.stopPropagation(); // Prevents clicking the card and routing to the project
+    e.stopPropagation(); 
     setDeleteTarget({ isOpen: true, project: projectObj });
   };
 
-  
   const executeDelete = async () => {
     if (!deleteTarget.project) return;
     try {
@@ -152,6 +159,11 @@ function Dashboard() {
                   
                   <div style={{ display: "flex", alignItems: "center", gap: "30px", flexShrink: 0 }}>
                     <div style={{ display: "flex", gap: "20px" }}>
+                      
+                      <span style={{ fontSize: "14px", color: "#888", display: "flex", alignItems: "center", gap: "6px" }}>
+                        🕒 {project.last_accessed ? new Date(project.last_accessed).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "New"}
+                      </span>
+
                       <span style={{ fontSize: "14px", color: "#888", display: "flex", alignItems: "center", gap: "6px" }}>
                         📄 {project.document_count || 0} Docs
                       </span>
@@ -202,12 +214,12 @@ function Dashboard() {
         />
 
         <ConfirmDeleteModal 
-        isOpen={deleteTarget.isOpen}
-        onClose={() => setDeleteTarget({ isOpen: false, project: null })}
-        onConfirm={executeDelete}
-        title={deleteTarget.project ? `Delete "${deleteTarget.project.name}"?` : "Delete Project?"}
-        warningText="Are you sure you want to delete this project? All associated documents, transcripts, and highlighted codes will be permanently destroyed."
-      />
+          isOpen={deleteTarget.isOpen}
+          onClose={() => setDeleteTarget({ isOpen: false, project: null })}
+          onConfirm={executeDelete}
+          title={deleteTarget.project ? `Delete "${deleteTarget.project.name}"?` : "Delete Project?"}
+          warningText="Are you sure you want to delete this project? All associated documents, transcripts, and highlighted codes will be permanently destroyed."
+        />
 
       </div>
     </div>

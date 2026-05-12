@@ -24,6 +24,7 @@ class Project(Base):
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     codes = relationship("Code", back_populates="project", cascade="all, delete-orphan")
     document_folders = relationship("DocumentFolder", back_populates="project", cascade="all, delete-orphan")
+    last_accessed = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Document(Base):
     __tablename__ = "documents"
