@@ -457,6 +457,7 @@ function ProjectPage() {
     projectCodes,
     codePanelOpen,
     activeCode,
+    codeSegments,
     pendingQuoteJump,
     activeTab,
     uploadStatus,
