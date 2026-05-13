@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, use } from "react";
 import MarginSidebar from "./MarginSidebar";
 
 const ProjectPageDocumentPanel = ({
@@ -10,6 +10,7 @@ const ProjectPageDocumentPanel = ({
   setDocumentSegments,
   setActiveDocument, 
   fetchCodes,
+  fetchDocuments,
   API_BASE,
   projectId,
 }) => {
@@ -45,6 +46,16 @@ const ProjectPageDocumentPanel = ({
     const b = parseInt(hex.substring(4, 6), 16);
     return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   };
+
+  useEffect(() => {
+    if (activeDocument && activeDocument.id === "NEW_DOC_PENDING") {
+      setIsEditing(true);
+      setEditContent("");
+      setLocalSegments([]);
+    }else {
+      setIsEditing(false);
+    }
+  }, [activeDocument]);
 
   const handleRightClickSegment = (e, segmentId) => {
     e.preventDefault();
@@ -268,7 +279,11 @@ const ProjectPageDocumentPanel = ({
       setLocalSegments([...documentSegments]); 
       setIsEditing(true);
     } else {
+      if (activeDocument.id === "NEW_DOC_PENDING") {
+        setActiveDocument(null);
+      } else {
       setIsEditing(false);
+      }
     }
   };
 
@@ -276,46 +291,70 @@ const ProjectPageDocumentPanel = ({
   const handleSaveEdit = async () => {
     setUploadStatus("Saving document and shifting codes...");
     try {
-      // Save raw text
-      const docRes = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/content`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: editContent })
-      });
-      if (!docRes.ok) throw new Error("Failed to save text");
+      if (activeDocument.id === "NEW_DOC_PENDING") {
+        const title = activeDocument.filename.trim() || "Untitled Document";
+        const docRes = await fetch(`${API_BASE}/projects/${projectId}/documents/create`, {
+          method: "POST", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: title, content: editContent }),
+        });
 
-      // 2. Save shifted coordinates
-      const segmentPromises = localSegments.map(seg => 
+        if (!docRes.ok) throw new Error("Failed to create document");
+
+        const savedDoc = await docRes.json();
+
+        setIsEditing(false);
+        setActiveDocument({ ...savedDoc, content: editContent });
+        if (fetchDocuments) fetchDocuments();
+
+        setUploadStatus("Document created successfully!");
+        setTimeout(() => setUploadStatus(""), 3000);
+        return;
+      }
+
+      setUploadStatus("Saving document and shifting codes...");
+      const docRes = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/content`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent }),
+      });
+
+      if (!docRes.ok) throw new Error("Failed to save document");
+
+      const segmentPromises = localSegments.map((seg) =>
         fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content }),
         })
       );
+
       await Promise.all(segmentPromises);
 
-      // Delete wiped out segments
       const deletedSegments = documentSegments.filter(oldSeg => !localSegments.find(ls => ls.id === oldSeg.id));
-      const deletePromises = deletedSegments.map(seg => 
-        fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, { method: 'DELETE' })
+      const deletePromises = deletedSegments.map(seg =>
+        fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
+          method: "DELETE",
+        })
       );
       await Promise.all(deletePromises);
 
-      // Soft Refresh
       const updatedDocRes = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}`);
       const updatedDoc = await updatedDocRes.json();
       setActiveDocument(updatedDoc);
 
       const updatedSegRes = await fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${activeDocument.id}`);
-      const updatedSegs = await updatedSegRes.json();
-      setDocumentSegments(updatedSegs);
+      const updatedSeg = await updatedSegRes.json();
+      setDocumentSegments(updatedSeg);
 
       setIsEditing(false);
       setUploadStatus("Edits saved successfully!");
       setTimeout(() => setUploadStatus(""), 3000);
-    } catch (err) {
-      console.error(err);
-      setUploadStatus("Error saving edits!");
+    } catch (error) {
+      console.error(error);
+      setUploadStatus("Failed to save edits.");
     }
-  };
+    };
 
   const orderedDropdownCodes = [];
   if (projectCodes) {
@@ -418,6 +457,8 @@ const ProjectPageDocumentPanel = ({
   }, [activeDocument, documentSegments, localSegments, projectCodes, showParentInMargin, isEditing]);
 
   const renderHighlightedContent = (content, segments, codes) => {
+    if(!content) return "";
+    
     if (!segments || segments.length === 0) return content;
     let boundaries = new Set([0, content.length]);
     segments.forEach((seg) => {
@@ -485,12 +526,23 @@ const ProjectPageDocumentPanel = ({
     );
   }
 
-  const isPDF = activeDocument.filename.toLowerCase().endsWith('.pdf');
+  const isPDF = activeDocument?.filename?.toLowerCase().endsWith('.pdf');
 
   return (
     <div style={documentShellStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "2px solid #aaa", paddingBottom: "10px", marginBottom: "20px" }}>
-        <h2 style={{ margin: 0, color: "#000", fontWeight: "500" }}>{activeDocument.filename}</h2>
+        {activeDocument.id === "NEW_DOC_PENDING" ? (
+          <input 
+            type="text" 
+            placeholder="Document Title..."
+            value={activeDocument.filename === "Untitled Document" ? "" : activeDocument.filename}
+            onChange={(e) => setActiveDocument({ ...activeDocument, filename: e.target.value })}
+            style={{ margin: 0, fontSize: "24px", color: "#000", fontWeight: "500", border: "none", borderBottom: "2px dashed #646cff", outline: "none", background: "transparent", width: "40%" }}
+            autoFocus
+          />
+        ) : (
+          <h2 style={{ margin: 0, color: "#000", fontWeight: "500" }}>{activeDocument.filename}</h2>
+        )}
         
         <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
           {isEditing ? (
@@ -537,6 +589,7 @@ const ProjectPageDocumentPanel = ({
               onChange={handleEditChange}
               onScroll={handleScroll}
               spellCheck="false"
+              placeholder={activeDocument.id === "NEW_DOC_PENDING" ? "Start typing your document here..." : ""}
               style={{ 
                 position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
                 backgroundColor: "transparent", 
