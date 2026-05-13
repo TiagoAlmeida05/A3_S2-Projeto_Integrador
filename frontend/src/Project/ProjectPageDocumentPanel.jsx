@@ -50,12 +50,12 @@ const ProjectPageDocumentPanel = ({
   useEffect(() => {
     if (activeDocument && activeDocument.id === "NEW_DOC_PENDING") {
       setIsEditing(true);
-      setEditContent("");
+      setEditContent(prev => prev ? prev : "");
       setLocalSegments([]);
     }else {
       setIsEditing(false);
     }
-  }, [activeDocument]);
+  }, [activeDocument?.id]);
 
   const handleRightClickSegment = (e, segmentId) => {
     e.preventDefault();
