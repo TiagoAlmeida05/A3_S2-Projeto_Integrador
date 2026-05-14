@@ -321,6 +321,18 @@ function ProjectPage() {
     event.target.value = null;
   };
 
+  const handleCreateTextDocument = async (docdata) => {
+    const newDoc = {
+      id: "NEW_DOC_PENDING",
+      filename: "Untitled Document",
+      content: "",
+      type: "text",
+      folder_id: null
+    };
+    setDocumentSegments([]);
+    setActiveDocument(newDoc);
+  };
+
   const handleDeleteDocument = async (docId, docName) => {
     const confirmDelete = window.confirm(
       `Are you sure you want to delete "${docName}"? This cannot be undone.`,
@@ -480,14 +492,15 @@ function ProjectPage() {
     handleDeleteDocument,
     handleDeleteCode,
     fetchCodes,
+    fetchDocuments,
     openCodePanel,
     handleSaveSettings,
     handleDeleteProject,
     handleExportREFI,
+    handleCreateTextDocument,
   };
 
   return <ProjectPageView page={page} />;
 }
 
 export default ProjectPage;
-  

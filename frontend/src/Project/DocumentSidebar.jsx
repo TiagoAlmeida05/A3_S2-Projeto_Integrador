@@ -6,9 +6,10 @@ function DocumentSidebar({
   uploadStatus, 
   uploadProgress,
   onFileUpload, 
+  onWriteDocument,
   onDocumentClick, 
   onDeleteDocument,
-  projectId 
+  projectId
 }) {
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState("");
@@ -223,10 +224,50 @@ function DocumentSidebar({
       </div>
 
       <div style={{ marginBottom: '20px' }}>
-        <input type="file" multiple id="file-upload" accept=".txt,.md,.rtf,.pdf,.docx,.odt" style={{ display: 'none' }} onChange={onFileUpload}/>
-        <label htmlFor="file-upload" style={{ padding: '8px 16px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', display: 'block', textAlign: 'center' }}>
-          ➕ Import Documents
-        </label>
+        <input 
+          type="file" 
+          multiple 
+          id="file-upload" 
+          accept=".txt,.md,.rtf,.pdf,.docx,.odt" 
+          style={{ display: 'none' }} 
+          onChange={onFileUpload}
+        />
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <label 
+            htmlFor="file-upload" 
+            style={{ 
+              flex: 1,
+              padding: '10px', 
+              backgroundColor: '#4CAF50', 
+              color: 'white', 
+              borderRadius: '4px', 
+              cursor: 'pointer', 
+              textAlign: 'center',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            ➕ Import
+          </label>
+
+          <button 
+            onClick={onWriteDocument}
+            style={{ 
+              flex: 1,
+              padding: '10px', 
+              backgroundColor: '#646cff', 
+              color: 'white', 
+              border: 'none',
+              borderRadius: '4px', 
+              cursor: 'pointer', 
+              textAlign: 'center',
+              fontSize: '14px',
+              fontWeight: 'bold'
+            }}
+          >
+            📝 Write
+          </button>
+        </div>
         {uploadProgress?.isActive && uploadProgress.total > 0 && (
           <div style={{ marginTop: '12px' }}>
             <div style={{ color: '#9bb0ff', fontSize: '13px', textAlign: 'center', marginBottom: '6px' }}>
