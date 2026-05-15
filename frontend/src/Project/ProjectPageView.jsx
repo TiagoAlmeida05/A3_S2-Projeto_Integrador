@@ -38,6 +38,7 @@ const ProjectPageView = ({ page }) => {
     setUploadStatus,
     setDocumentSegments,
     fetchCodes,
+    fetchDocuments,
     handleFileUpload,
     handleDocumentClick,
     handleDeleteDocument,
@@ -45,6 +46,7 @@ const ProjectPageView = ({ page }) => {
     openCodePanel,
     handleExportREFI,
     setSegmentContextMenu,
+    handleCreateTextDocument,
   } = page;
 
   return (
@@ -83,6 +85,7 @@ const ProjectPageView = ({ page }) => {
           fetchCodes={fetchCodes}
           openCodePanel={openCodePanel}
           setProjectCodes={setProjectCodes}
+          handleCreateTextDocument={handleCreateTextDocument}
         />
         <ProjectPageCodePanel
           API_BASE={API_BASE}
@@ -109,6 +112,7 @@ const ProjectPageView = ({ page }) => {
           setDocumentSegments={setDocumentSegments}
           setActiveDocument={setActiveDocument}
           fetchCodes={fetchCodes}
+          fetchDocuments={fetchDocuments}
           API_BASE={API_BASE}
           projectId={id}
         />

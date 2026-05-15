@@ -108,6 +108,10 @@ class SegmentUpdate(BaseModel):
     end_char: int
     content: str
 
+class DocumentCreateText(BaseModel):
+    name: str
+    content: str
+
 # --- ENDPOINTS ---
 
 @app.get("/projects/{project_id}/memos", response_model=List[MemoResponse])
@@ -343,6 +347,36 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
     db.commit()
     
     return {"message": f"Successfully uploaded {len(files)} files!", "successful": successful_uploads, "failed": failed_uploads}
+
+@app.post("/projects/{project_id}/documents/create")
+def create_text_document(project_id: int, doc_data: DocumentCreateText, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    filename = doc_data.name.strip()
+    if not filename.lower().endswith(".txt"):
+        filename += ".txt"
+    new_doc = models.Document(
+        project_id=project_id,
+        filename=filename,
+        content=doc_data.content,
+        type="text"
+    )
+    db.add(new_doc)
+    db.commit()
+    db.refresh(new_doc)
+
+    if project.local_path:
+        os.makedirs(project.local_path, exist_ok=True)
+        physical_file_path = os.path.join(project.local_path, filename)
+        try:
+            with open(physical_file_path, "w", encoding="utf-8") as f:
+                f.write(doc_data.content)
+        except Exception as e:
+            print(f"Warning: Could not save physical file: {e}")
+    
+    return {"id": new_doc.id, "filename": new_doc.filename, "type": new_doc.type, "created_at": new_doc.created_at}
 
 @app.get("/projects/{project_id}/documents/")
 def get_project_documents(project_id: int, db: Session = Depends(get_db)):
