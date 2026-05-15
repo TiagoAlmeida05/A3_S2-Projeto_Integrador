@@ -1,6 +1,27 @@
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { releaseLock } from '../Utils/driveAPI';
 
-const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen }) => {
+const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen, autoSyncToCloud }) => {
+  const navigate = useNavigate();
+
+  const handleBackToDashboard = async () => {
+
+    if(typeof autoSyncToCloud === 'function') {
+      await autoSyncToCloud();
+    }
+
+    const lockFileId = localStorage.getItem('current_project_lock_id');
+    if (lockFileId) {
+      console.log("Leaving project! Releasing cloud lock...");
+      try {
+        await releaseLock(lockFileId);
+      } catch (err) {
+        console.error("Lock release failed:", err);
+      }
+      localStorage.removeItem('current_project_lock_id');    
+    }
+    navigate("/");
+  };
 
   return (
     <>
@@ -11,10 +32,14 @@ const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen
           borderBottom: "1px solid #333",
         }}
       >
-        <Link to="/" style={{ color: "#646cff", textDecoration: "none" }}>
+        <span 
+          onClick={handleBackToDashboard} 
+          style={{ color: "#646cff", textDecoration: "none", cursor: "pointer" }}
+        >
           ← Back to Dashboard
-        </Link>
-        <h2 style={{ marginTop: "20px" }}>Project: {projectDetails.name}</h2>
+        </span>
+        
+        <h2 style={{ marginTop: "20px" }}>Project: {projectDetails?.name}</h2>
       </div>
 
       <div style={{ display: "flex", gap: "10px" }}>

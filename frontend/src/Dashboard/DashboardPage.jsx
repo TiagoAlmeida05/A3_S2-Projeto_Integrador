@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import CreateProjectModal from "./CreateProjectModal";
 import ImportProjectModal from "./ImportProjectModal";
 import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
+import { checkLockStatus, acquireLock, getProjectFolderIfExists, initializeDriveFolder } from '../Utils/driveAPI';
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -11,6 +12,10 @@ function Dashboard() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState({ isOpen: false, project: null });
+  const [openingProjectName, setOpeningProjectName] = useState(null);
+  const [isConnected, setIsConnected] = useState(!!localStorage.getItem('google_drive_tokens'));
+  const [authStatus, setAuthStatus] = useState("");
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -69,6 +74,92 @@ function Dashboard() {
     }
   };
 
+  const handleOpenProject = async (project) => {
+    const token = localStorage.getItem('google_drive_tokens');
+    const masterFolderId = localStorage.getItem('google_drive_folder_id');
+
+    const storedNickname = localStorage.getItem(`nickname_${project.name}`) || "Anonymous";
+
+    if(!token || !masterFolderId){
+      navigate(`/project/${project.id}`);
+      return;
+    }
+
+    setOpeningProjectName(project.name);
+
+    try {
+      const projectDriveId = await getProjectFolderIfExists(project.name, masterFolderId);
+      
+      if(!projectDriveId) {
+        navigate(`/project/${project.id}`);
+        setOpeningProjectName(null);
+        return;
+      }
+      
+      const lockStatus = await checkLockStatus(projectDriveId);
+
+      if(lockStatus.isLocked) {
+        alert(`🔒 Cannot open project!\n\n"${project.name}" is currently being edited by: ${lockStatus.lockedBy}.\n\nPlease wait for them to finish and close the project.`);
+        setOpeningProjectName(null);
+        return;
+      }
+
+      const lockFileId = await acquireLock(projectDriveId, storedNickname);
+      localStorage.setItem(`current_project_lock_id`, lockFileId);
+      localStorage.setItem(`current_project_folder_id`, projectDriveId);
+
+      navigate(`/project/${project.id}`);
+      
+    } catch (error) {
+      console.error("Cloud check failed:", error);
+      alert(`⚠️ Could not connect to Google Drive to check lock status. Opening in local mode.`);
+      navigate(`/project/${project.id}`);
+    }
+
+    setOpeningProjectName(null);
+  };
+
+  const handleGoogleConnect = async () => {
+    try {
+      setAuthStatus("Opening Google Login...");
+      const tokens = await window.electronAPI.loginToGoogle();
+
+      if (tokens.access_token && tokens) {
+        console.log("SUCCESS! Full tokens received:", tokens);
+        localStorage.setItem('google_drive_tokens', tokens.access_token);
+
+        if (tokens.refresh_token) {
+          localStorage.setItem('google_drive_refresh_token', tokens.refresh_token);
+        }
+        setIsConnected(true);
+        setAuthStatus("Setting up Drive folder...");
+
+        try {
+          const folderId = await initializeDriveFolder();
+          localStorage.setItem('google_drive_folder_id', folderId);
+          setAuthStatus("");
+        } catch (folderError) {
+          console.error("Folder creation failed:", folderError);
+          setAuthStatus("Connected, but couldn't create the Drive folder.");
+        }
+      } else {
+        console.error("Token exchange failed:", tokens);
+        setAuthStatus("Failed to get access tokens. Check console.");
+      }
+    } catch (error) {
+      console.error(error);
+      setAuthStatus("Google Login failed or was cancelled.");
+    }
+  };
+
+  const handleDisconnect = () => {
+    localStorage.removeItem('google_drive_tokens');
+    localStorage.removeItem('google_drive_refresh_token');
+    localStorage.removeItem('google_drive_folder_id');
+    setIsConnected(false);
+    setAuthStatus("Disconnected from Google Drive.");
+  };
+
   const pageStyle = {
     minHeight: "100vh",
     backgroundColor: "#111",
@@ -109,18 +200,42 @@ function Dashboard() {
             <p style={{ margin: "5px 0 0 0", color: "#888", fontSize: "15px" }}>Qualitative Data Analysis Workspace</p>
           </div>
           
-          <div style={{ display: "flex", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            
+            {authStatus && <span style={{ color: '#aaa', fontSize: '12px', marginRight: '10px' }}>{authStatus}</span>}
+            
+            {!isConnected ? (
+              <button 
+                onClick={handleGoogleConnect}
+                style={{ height: "42px", boxSizing: "border-box", display: "flex", alignItems: "center", padding: "0 16px", backgroundColor: "transparent", color: "#ccc", border: "1px solid #444", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", transition: "all 0.2s" }}
+                onMouseOver={(e) => { e.target.style.backgroundColor = "#222"; e.target.style.borderColor = "#666"; }}
+                onMouseOut={(e) => { e.target.style.backgroundColor = "transparent"; e.target.style.borderColor = "#444"; }}
+              >
+                ☁️ Connect Google Drive
+              </button>
+            ) : (
+              <button 
+                onClick={handleDisconnect}
+                style={{ height: "42px", boxSizing: "border-box", display: "flex", alignItems: "center", padding: "0 16px", backgroundColor: "transparent", color: "#ff6b6b", border: "1px solid #444", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", transition: "all 0.2s" }}
+                onMouseOver={(e) => { e.target.style.backgroundColor = "rgba(255,107,107,0.1)"; e.target.style.borderColor = "#ff6b6b"; }}
+                onMouseOut={(e) => { e.target.style.backgroundColor = "transparent"; e.target.style.borderColor = "#444"; }}
+              >
+                Disconnect Drive
+              </button>
+            )}
+
             <button 
               onClick={() => setIsImportModalOpen(true)}
-              style={{ padding: "10px 16px", backgroundColor: "transparent", color: "#ccc", border: "1px solid #444", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", transition: "all 0.2s" }}
+              style={{ height: "42px", boxSizing: "border-box", display: "flex", alignItems: "center", padding: "0 16px", backgroundColor: "transparent", color: "#ccc", border: "1px solid #444", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", transition: "all 0.2s" }}
               onMouseOver={(e) => e.target.style.backgroundColor = "#222"}
               onMouseOut={(e) => e.target.style.backgroundColor = "transparent"}
             >
               Import Project
             </button>
+            
             <button 
               onClick={() => setIsCreateModalOpen(true)}
-              style={{ padding: "10px 20px", backgroundColor: "transparent", color: "#ccc", border: "1px solid #444", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", transition: "background 0.2s" }}
+              style={{ height: "42px", boxSizing: "border-box", display: "flex", alignItems: "center", padding: "0 20px", backgroundColor: "transparent", color: "#ccc", border: "1px solid #444", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", transition: "background 0.2s" }}
               onMouseOver={(e) => e.target.style.backgroundColor = "#222"}
               onMouseOut={(e) => e.target.style.backgroundColor = "transparent"}
             >
@@ -142,7 +257,7 @@ function Dashboard() {
               {projects.map((project) => (
                 <div 
                   key={project.id} 
-                  onClick={() => navigate(`/project/${project.id}`)}
+                  onClick={() => handleOpenProject(project)}
                   style={horizontalCardStyle}
                   onMouseOver={(e) => e.currentTarget.style.borderColor = "#646cff"}
                   onMouseOut={(e) => e.currentTarget.style.borderColor = "#333"}
@@ -153,7 +268,7 @@ function Dashboard() {
                       {project.name}
                     </h3>
                     <p style={{ margin: 0, fontSize: "14px", color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {project.description || "No description provided."}
+                      {openingProjectName === project.name ? "⏳ Checking Cloud Lock..." : (project.description || "No description provided.")}
                     </p>
                   </div>
                   

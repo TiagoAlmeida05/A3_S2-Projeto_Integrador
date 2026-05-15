@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
+import { uploadProjectDataToDrive } from '../Utils/driveAPI';
 
 import axios from "axios";
 
@@ -148,6 +149,55 @@ function ProjectPage() {
     fetchProjectDetails();
     fetchCodes();
   }, [id]);
+
+  useEffect(() => {
+    const lockFileId = localStorage.getItem('current_project_lock_id');
+    const token = localStorage.getItem('google_drive_tokens');
+
+    if (lockFileId && token && window.electronAPI?.registerEmergencyLock) {
+      window.electronAPI.registerEmergencyLock(lockFileId, token);
+    }
+
+    return () => {
+      if(window.electronAPI?.clearEmergencyLock) {
+        window.electronAPI.clearEmergencyLock();
+      }
+    };
+  }, []);
+
+  const autoSyncToCloud = async () => {
+    const folderId = localStorage.getItem('current_project_folder_id');
+    const isConnected = localStorage.getItem('google_drive_tokens');
+
+    if(!isConnected || !folderId) return;
+
+    setUploadStatus("Saving to cloud... ☁️");
+
+    try {
+      const [docsRes, codesRes, segmentsRes] = await Promise.all([
+        fetch(`${API_BASE}/projects/${id}/documents/`).then(res => res.json()),
+        fetch(`${API_BASE}/projects/${id}/codes`).then(res => res.json()),
+        fetch(`${API_BASE}/projects/${id}/segments`).then(res => res.json()),
+      ]); 
+
+      const fullProjectData = {
+        details: projectDetails,
+        documents: docsRes,
+        codes: codesRes,
+        segments: segmentsRes,
+        last_synced: new Date().toISOString()
+      };
+
+      await uploadProjectDataToDrive(folderId, fullProjectData);
+      console.log("Auto-sync successful!");
+      setUploadStatus("Cloud sync complete! ✅");
+      setTimeout(() => setUploadStatus(""), 3000);
+    } catch (err) {
+      console.error("Auto-sync failed:", err);
+      setUploadStatus("❌ Failed to sync to cloud.");
+      setTimeout(() => setUploadStatus(""), 4000);
+    }
+  };
 
   const handleDeleteCode = async (codeId) => {
       try {
@@ -498,6 +548,7 @@ function ProjectPage() {
     handleDeleteProject,
     handleExportREFI,
     handleCreateTextDocument,
+    autoSyncToCloud,
   };
 
   return <ProjectPageView page={page} />;
