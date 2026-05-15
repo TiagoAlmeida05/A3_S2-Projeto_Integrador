@@ -11,6 +11,7 @@ const ProjectPageDocumentPanel = ({
   setActiveDocument, 
   fetchCodes,
   fetchDocuments,
+  pushUndoAction,
   API_BASE,
   projectId,
 }) => {
@@ -152,6 +153,7 @@ const ProjectPageDocumentPanel = ({
 
     try {
       let finalCodeID;
+      let createdCode = null;
       if (quickCodeMode === "new") {
         const codeName = quickCodeName.trim() || (selectionText.length > 30 ? `${selectionText.slice(0, 27)}...` : selectionText);
         const codeResponse = await fetch(`${API_BASE}/projects/${projectId}/codes`, {
@@ -164,8 +166,9 @@ const ProjectPageDocumentPanel = ({
             parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null // 🔥 Fixed
           }),
         });
-        const createdCode = await codeResponse.json();
-        if (!codeResponse.ok) throw new Error(createdCode.detail || "Failed to create quick code");
+        const createdCodeData = await codeResponse.json();
+        if (!codeResponse.ok) throw new Error(createdCodeData.detail || "Failed to create quick code");
+        createdCode = createdCodeData;
         finalCodeID = createdCode.id;
         fetchCodes();
       } else {
@@ -191,6 +194,13 @@ const ProjectPageDocumentPanel = ({
       );
 
       const createdSegments = await Promise.all(segmentPromises);
+      if (pushUndoAction) {
+        pushUndoAction({
+          type: createdCode ? "create-quick-code" : "create-segment",
+          code: createdCode,
+          segments: createdSegments,
+        });
+      }
       setUploadStatus(`Applied ${createdSegments.length} code(s)!`);
       setTimeout(() => setUploadStatus(""), 3000);
       clearTextSelection();
