@@ -31,6 +31,7 @@ const ProjectPageDocumentPanel = ({
   const [quickCodeName, setQuickCodeName] = useState("");
   const [quickCodeParentId, setQuickCodeParentId] = useState("");
   const [quickCodeColor, setQuickCodeColor] = useState("#646cff");
+  const [isPdfPreviewCollapsed, setIsPdfPreviewCollapsed] = useState(false);
   
   // Edit Mode & Real-Time Segment State
   const [isEditing, setIsEditing] = useState(false);
@@ -61,6 +62,7 @@ const ProjectPageDocumentPanel = ({
     }else {
       setIsEditing(false);
     }
+    setIsPdfPreviewCollapsed(false);
   }, [activeDocument?.id]);
 
   const handleRightClickSegment = (e, segmentId) => {
@@ -605,7 +607,9 @@ const ProjectPageDocumentPanel = ({
     );
   }
 
-  const isPDF = activeDocument?.filename?.toLowerCase().endsWith('.pdf');
+  const isPDF = activeDocument?.filename?.toLowerCase().endsWith('.pdf') || activeDocument?.type === "pdf";
+  const showPdfPreview = isPDF && !isPdfPreviewCollapsed;
+  const pdfPreviewUrl = `${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/file`;
 
   return (
     <div style={documentShellStyle}>
@@ -623,7 +627,7 @@ const ProjectPageDocumentPanel = ({
           <h2 style={{ margin: 0, color: "#000", fontWeight: "500" }}>{activeDocument.filename}</h2>
         )}
         
-        <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "15px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
           {isEditing ? (
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
              {autoSaveStatus && (
@@ -688,6 +692,16 @@ const ProjectPageDocumentPanel = ({
             </button>
           )}
 
+          {isPDF && (
+            <button
+              onClick={() => setIsPdfPreviewCollapsed((prev) => !prev)}
+              style={{ padding: '6px 12px', background: '#1f1f28', color: '#fff', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer' }}
+              title={isPdfPreviewCollapsed ? 'Show the PDF preview' : 'Hide the PDF preview'}
+            >
+              {isPdfPreviewCollapsed ? 'Show PDF Preview' : 'Hide PDF Preview'}
+            </button>
+          )}
+
           <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#555", cursor: "pointer", borderLeft: '1px solid #ccc', paddingLeft: '15px' }}>
             <input type="checkbox" checked={showParentInMargin} onChange={(e) => setShowParentInMargin(e.target.checked)} style={{ cursor: "pointer", accentColor: "#646cff" }} />
             Group Margins by Parent
@@ -695,9 +709,10 @@ const ProjectPageDocumentPanel = ({
         </div>
       </div>
 
-      <div style={{ display: "flex", position: "relative" }}>
-        {isEditing ? (
-          <div style={{ position: "relative", width: "75%", minHeight: "600px", border: "2px solid #646cff", borderRadius: "6px", backgroundColor: "#fafafa", overflow: "hidden" }}>
+      <div style={{ display: "flex", position: "relative", gap: "16px", alignItems: "stretch" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {isEditing ? (
+            <div style={{ position: "relative", width: "100%", minHeight: "600px", border: "2px solid #646cff", borderRadius: "6px", backgroundColor: "#fafafa", overflow: "hidden" }}>
             
             <div
               ref={bgRef}
@@ -736,12 +751,39 @@ const ProjectPageDocumentPanel = ({
             tabIndex={0}
             onMouseUp={handleTextSelection}
             onKeyUp={handleTextSelection}
-            style={{ width: "75%", paddingRight: "30px", whiteSpace: "pre-wrap", fontSize: "16px", lineHeight: "1.6", fontFamily: "system-ui, sans-serif", outline: "none", position: "relative" }}
+            style={{ width: "100%", paddingRight: isPDF && showPdfPreview ? "0" : "30px", whiteSpace: "pre-wrap", fontSize: "16px", lineHeight: "1.6", fontFamily: "system-ui, sans-serif", outline: "none", position: "relative" }}
           >
             {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes)}
           </div>
+          )}
+        </div>
+
+        {isPDF && showPdfPreview && (
+          <div style={{ flex: "0 0 38%", minWidth: "320px", minHeight: "600px", display: "flex", flexDirection: "column", backgroundColor: "#0f1115", border: "1px solid #2d2f36", borderRadius: "8px", overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #2d2f36", color: "#e5e7eb", backgroundColor: "#151922" }}>
+              <div style={{ fontSize: "13px", fontWeight: "bold" }}>Original PDF</div>
+            </div>
+            <embed
+              title={`${activeDocument.filename} preview`}
+              src={`${pdfPreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+              type="application/pdf"
+              style={{ width: "100%", flex: 1, border: "none", backgroundColor: "#fff" }}
+            />
+          </div>
         )}
-        
+
+        {isPDF && isPdfPreviewCollapsed && (
+          <div style={{ flex: "0 0 52px", minHeight: "600px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <button
+              onClick={() => setIsPdfPreviewCollapsed(false)}
+              style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", backgroundColor: "#1f1f28", color: "#fff", border: "1px solid #555", borderRadius: "8px", padding: "12px 8px", cursor: "pointer", fontSize: "12px", letterSpacing: "0.4px" }}
+              title="Show the PDF preview"
+            >
+              Show PDF Preview
+            </button>
+          </div>
+        )}
+
         <MarginSidebar marginBars={marginBars} projectCodes={projectCodes} />
       </div>
 
