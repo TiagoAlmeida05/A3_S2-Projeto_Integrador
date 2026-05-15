@@ -261,9 +261,9 @@ const ProjectPageDocumentPanel = ({
   };
 
   // Auto-save function
-  const performAutoSave = async (contentToSave) => {
+  const performAutoSave = async (contentToSave, currentLocalSegments) => {
     if (!activeDocument || !activeDocument.id || contentToSave === lastSavedContent) {
-      return; // Don't save if no changes
+      return; 
     }
 
     try {
@@ -275,6 +275,20 @@ const ProjectPageDocumentPanel = ({
       });
 
       if (res.ok) {
+        const segmentPromises = currentLocalSegments.map(seg => 
+          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
+          })
+        );
+        await Promise.all(segmentPromises);
+
+        const deletedSegments = documentSegments.filter(oldSeg => !currentLocalSegments.find(ls => ls.id === oldSeg.id));
+        const deletePromises = deletedSegments.map(seg => 
+          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, { method: 'DELETE' })
+        );
+        await Promise.all(deletePromises);
+
         setTimeout(() => {
           setLastSavedContent(contentToSave);
           setAutoSaveStatus("saved");
@@ -297,7 +311,7 @@ const ProjectPageDocumentPanel = ({
 
     // Set up interval to auto-save every 3 seconds
     autoSaveIntervalRef.current = setInterval(() => {
-      performAutoSave(editContent);
+      performAutoSave(editContent,localSegments);
     }, 1000);
 
     // Cleanup interval on unmount or when editing stops
