@@ -366,6 +366,7 @@ const ProjectPageDocumentPanel = ({
       setIsEditing(false);
       setAutoSaveStatus("");
     }
+  }
   };
 
   // --- NEW: SOFT REFRESH LOGIC ---
