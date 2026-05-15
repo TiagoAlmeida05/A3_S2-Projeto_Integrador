@@ -168,8 +168,10 @@ function ProjectPage() {
 
   // FILE MANAGEMENT LOGIC
 
-  const handleFileUpload = async (event) => {
-    const files = Array.from(event.target.files);
+  const handleFileUpload = async (eventOrFiles) => {
+    const files = Array.isArray(eventOrFiles)
+      ? eventOrFiles
+      : Array.from(eventOrFiles?.target?.files || []);
     if (files.length === 0) return;
 
     setUploadStatus("Checking files...");
@@ -260,31 +262,25 @@ function ProjectPage() {
     const failedUploads = [];
 
     setUploadProgress({ current: 0, total, isActive: true });
+    setUploadStatus(`Importing ${total} file${total === 1 ? "" : "s"}...`);
 
-    for (let i = 0; i < total; i++) {
-      const currentIndex = i + 1;
-      const file = filesToUpload[i];
+    const formData = new FormData();
+    filesToUpload.forEach((file) => formData.append("files", file));
 
-      setUploadStatus(`Importing ${currentIndex} of ${total} files...`);
-      setUploadProgress({ current: currentIndex, total, isActive: true });
+    try {
+      const res = await fetch(`${API_BASE}/projects/${id}/documents/`, {
+        method: "POST",
+        body: formData,
+      });
 
-      const formData = new FormData();
-      formData.append("files", file);
+      setUploadProgress({ current: total, total, isActive: false });
 
-      try {
-        const res = await fetch(`${API_BASE}/projects/${id}/documents/`, {
-          method: "POST",
-          body: formData,
+      if (!res.ok) {
+        failedUploads.push({
+          filename: filesToUpload.map((file) => file.name).join(", "),
+          reason: `HTTP ${res.status}`,
         });
-
-        if (!res.ok) {
-          failedUploads.push({
-            filename: file.name,
-            reason: `HTTP ${res.status}`,
-          });
-          continue;
-        }
-
+      } else {
         const data = await res.json();
         if (data.failed && data.failed.length > 0) {
           failedUploads.push(...data.failed);
@@ -292,13 +288,12 @@ function ProjectPage() {
         if (data.successful && data.successful.length > 0) {
           successfulUploads.push(...data.successful);
         }
-      } catch (err) {
-        failedUploads.push({ filename: file.name, reason: "Network error" });
-        console.error(err);
       }
+    } catch (err) {
+      setUploadProgress({ current: total, total, isActive: false });
+      failedUploads.push({ filename: "Batch upload", reason: "Network error" });
+      console.error(err);
     }
-
-    setUploadProgress({ current: total, total, isActive: false });
 
     if (failedUploads.length > 0) {
       const errorList = failedUploads
@@ -318,7 +313,9 @@ function ProjectPage() {
 
     fetchDocuments();
 
-    event.target.value = null;
+    if (eventOrFiles?.target) {
+      eventOrFiles.target.value = null;
+    }
   };
 
   const handleCreateTextDocument = async (docdata) => {

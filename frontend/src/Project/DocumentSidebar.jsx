@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 function DocumentSidebar({ 
   documents, 
@@ -15,6 +15,8 @@ function DocumentSidebar({
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState(new Set());
+  const dragCounter = useRef(0);
+  const [isImportDropActive, setIsImportDropActive] = useState(false);
 
   // Unified Drag State
   const [draggedItem, setDraggedItem] = useState(null); 
@@ -132,6 +134,41 @@ function DocumentSidebar({
     setDragPosition(null);
   };
 
+  const handleImportDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    setIsImportDropActive(true);
+  };
+
+  const handleImportDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsImportDropActive(true);
+  };
+
+  const handleImportDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = Math.max(0, dragCounter.current - 1);
+    if (dragCounter.current === 0) {
+      setIsImportDropActive(false);
+    }
+  };
+
+  const handleImportDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsImportDropActive(false);
+
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length > 0) {
+      onFileUpload(files);
+    }
+  };
+
   const handleDrop = async (e, targetType, targetId) => {
     e.preventDefault();
     e.stopPropagation();
@@ -223,7 +260,28 @@ function DocumentSidebar({
         </button>
       </div>
 
-      <div style={{ marginBottom: '20px' }}>
+      <div
+        style={{
+          marginBottom: '20px',
+          padding: '14px',
+          borderRadius: '12px',
+          border: isImportDropActive ? '1px solid #646cff' : '1px dashed #3a3a3a',
+          backgroundColor: isImportDropActive ? 'rgba(100, 108, 255, 0.14)' : '#202020',
+          transition: 'all 0.2s ease',
+        }}
+        onDragEnter={handleImportDragEnter}
+        onDragOver={handleImportDragOver}
+        onDragLeave={handleImportDragLeave}
+        onDrop={handleImportDrop}
+      >
+        <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+          <div style={{ fontSize: '13px', color: '#cfcfcf', fontWeight: 'bold', marginBottom: '4px' }}>
+            Drop files here to import
+          </div>
+          <div style={{ fontSize: '12px', color: '#888' }}>
+            Multiple text files are supported.
+          </div>
+        </div>
         <input 
           type="file" 
           multiple 
