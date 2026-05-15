@@ -36,6 +36,11 @@ const ProjectPageDocumentPanel = ({
   const [editContent, setEditContent] = useState("");
   const [localSegments, setLocalSegments] = useState([]);
   const bgRef = useRef(null);
+  
+  // Auto-save state
+  const [lastSavedContent, setLastSavedContent] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "saving", "saved", or ""
+  const autoSaveIntervalRef = useRef(null);
 
   const hexToRGBA = (hex, opacity) => {
     if (!hex) return "transparent";
@@ -266,6 +271,68 @@ const ProjectPageDocumentPanel = ({
     setEditContent(newContent);
   };
 
+  // Auto-save function
+  const performAutoSave = async (contentToSave, currentLocalSegments) => {
+    if (!activeDocument || !activeDocument.id || contentToSave === lastSavedContent) {
+      return; 
+    }
+
+    try {
+      setAutoSaveStatus("saving");
+      const res = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/content`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: contentToSave }),
+      });
+
+      if (res.ok) {
+        const segmentPromises = currentLocalSegments.map(seg => 
+          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
+          })
+        );
+        await Promise.all(segmentPromises);
+
+        const deletedSegments = documentSegments.filter(oldSeg => !currentLocalSegments.find(ls => ls.id === oldSeg.id));
+        const deletePromises = deletedSegments.map(seg => 
+          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, { method: 'DELETE' })
+        );
+        await Promise.all(deletePromises);
+
+        setTimeout(() => {
+          setLastSavedContent(contentToSave);
+          setAutoSaveStatus("saved");
+          
+          setTimeout(() => setAutoSaveStatus(""), 1500);
+        }, 1000); 
+      } else {
+        console.error("Auto-save failed:", res.statusText);
+        setAutoSaveStatus("");
+      }
+    } catch (error) {
+      console.error("Auto-save error:", error);
+      setAutoSaveStatus("");
+    }
+  };
+
+  // Set up auto-save interval when editing
+  useEffect(() => {
+    if (!isEditing || !activeDocument) return;
+
+    // Set up interval to auto-save every 3 seconds
+    autoSaveIntervalRef.current = setInterval(() => {
+      performAutoSave(editContent,localSegments);
+    }, 1000);
+
+    // Cleanup interval on unmount or when editing stops
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+      }
+    };
+  }, [isEditing, editContent, activeDocument, lastSavedContent]);
+
   const handleScroll = (e) => {
     if (bgRef.current) {
       bgRef.current.scrollTop = e.target.scrollTop;
@@ -275,7 +342,9 @@ const ProjectPageDocumentPanel = ({
 
   const handleToggleEdit = () => {
     if (!isEditing) {
-      setEditContent(activeDocument.content || "");
+      const initialContent = activeDocument.content || "";
+      setEditContent(initialContent);
+      setLastSavedContent(initialContent);
       setLocalSegments([...documentSegments]); 
       setIsEditing(true);
     } else {
@@ -283,7 +352,7 @@ const ProjectPageDocumentPanel = ({
         setActiveDocument(null);
       } else {
       setIsEditing(false);
-      }
+      setAutoSaveStatus("");
     }
   };
 
@@ -546,11 +615,60 @@ const ProjectPageDocumentPanel = ({
         
         <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
           {isEditing ? (
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={handleSaveEdit} style={{ padding: '6px 12px', background: '#4CAF50', color: 'white', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+             {autoSaveStatus && (
+               <div
+                 style={{
+                   display: "inline-flex",
+                   alignItems: "center",
+                   justifyContent: "center",
+                   padding: "0 12px",
+                   borderRadius: "4px",
+                   fontSize: "14px",
+                   height: "36px",     
+                   minWidth: "110px",
+                   boxSizing: "border-box",
+                   fontWeight: 600,
+                   backgroundColor: autoSaveStatus === "saving" ? "#fff3cd" : "#d4edda",
+                   color: autoSaveStatus === "saving" ? "#856404" : "#155724",
+                   border: "1px solid transparent",
+                 }}
+               >
+                 {autoSaveStatus === 'saving' ? '⏳ Saving...' : '✓ Saved'}
+               </div>
+            )}
+              <button 
+                onClick={handleSaveEdit} 
+                style={{ 
+                  height: "36px",        // Match height
+                  padding: '0 16px', 
+                  background: '#4CAF50', 
+                  color: 'white', 
+                  borderRadius: '4px', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  fontWeight: 'bold',
+                  display: 'flex',       // Center the text/icon
+                  alignItems: 'center' 
+                }}
+              >
                 💾 Save
               </button>
-              <button onClick={handleToggleEdit} style={{ padding: '6px 12px', background: 'transparent', color: '#555', border: '1px solid #999', borderRadius: '4px', cursor: 'pointer' }}>
+              
+              <button 
+                onClick={handleToggleEdit} 
+                style={{ 
+                  height: "36px",        // Match height
+                  padding: '0 16px', 
+                  background: 'transparent', 
+                  color: '#555', 
+                  border: '1px solid #999', 
+                  borderRadius: '4px', 
+                  cursor: 'pointer',
+                  display: 'flex',       // Center the text
+                  alignItems: 'center'
+                }}
+              >
                 Cancel
               </button>
             </div>
