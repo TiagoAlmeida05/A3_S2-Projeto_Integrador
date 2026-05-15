@@ -1,5 +1,6 @@
 from typing import Optional, List
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -16,6 +17,20 @@ from refi_service import export_refi_xml, import_refi_xml
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
+PROJECT_UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+
+
+def get_project_storage_path(project: models.Project) -> str:
+    if project.local_path:
+        return project.local_path
+    return os.path.join(PROJECT_UPLOADS_DIR, f"project_{project.id}")
+
+
+def get_legacy_project_storage_path(project: models.Project) -> str:
+    if project.local_path:
+        return project.local_path
+    return os.path.join(PROJECT_UPLOADS_DIR, f"project_{project.id}")
 
 origins = [
     "http://localhost:5173",
@@ -323,11 +338,11 @@ async def upload_documents(project_id: int, files: List[UploadFile] = File(...),
                 failed_uploads.append({"filename": file.filename, "reason": "Unsupported file type"})
                 continue
 
-            if project.local_path:
-                os.makedirs(project.local_path, exist_ok=True)
-                physical_file_path = os.path.join(project.local_path, file.filename)
-                with open(physical_file_path, "wb") as f:
-                    f.write(content)
+            storage_path = get_project_storage_path(project)
+            os.makedirs(storage_path, exist_ok=True)
+            physical_file_path = os.path.join(storage_path, file.filename)
+            with open(physical_file_path, "wb") as f:
+                f.write(content)
 
             # 2. Create the Document object
             new_doc = models.Document(
@@ -367,14 +382,14 @@ def create_text_document(project_id: int, doc_data: DocumentCreateText, db: Sess
     db.commit()
     db.refresh(new_doc)
 
-    if project.local_path:
-        os.makedirs(project.local_path, exist_ok=True)
-        physical_file_path = os.path.join(project.local_path, filename)
-        try:
-            with open(physical_file_path, "w", encoding="utf-8") as f:
-                f.write(doc_data.content)
-        except Exception as e:
-            print(f"Warning: Could not save physical file: {e}")
+    storage_path = get_project_storage_path(project)
+    os.makedirs(storage_path, exist_ok=True)
+    physical_file_path = os.path.join(storage_path, filename)
+    try:
+        with open(physical_file_path, "w", encoding="utf-8") as f:
+            f.write(doc_data.content)
+    except Exception as e:
+        print(f"Warning: Could not save physical file: {e}")
     
     return {"id": new_doc.id, "filename": new_doc.filename, "type": new_doc.type, "created_at": new_doc.created_at}
 
@@ -397,6 +412,33 @@ def get_document(project_id: int, document_id: int, db: Session = Depends(get_db
         raise HTTPException(status_code=404, detail="Document not found")
         
     return {"id": doc.id, "filename": doc.filename, "type": doc.type,"content": doc.content}
+
+@app.get("/projects/{project_id}/documents/{document_id}/file")
+def get_document_file(project_id: int, document_id: int, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Document file not available")
+
+    doc = db.query(models.Document).filter(
+        models.Document.id == document_id,
+        models.Document.project_id == project_id
+    ).first()
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    physical_file_path = os.path.join(get_project_storage_path(project), doc.filename)
+    if not os.path.exists(physical_file_path):
+        physical_file_path = os.path.join(get_legacy_project_storage_path(project), doc.filename)
+    if not os.path.exists(physical_file_path):
+        raise HTTPException(status_code=404, detail="Physical file not found")
+
+    return FileResponse(
+        physical_file_path,
+        filename=doc.filename,
+        content_disposition_type="inline",
+        media_type="application/pdf" if doc.filename.lower().endswith(".pdf") else None,
+    )
 
 @app.delete("/projects/{project_id}/documents/{document_id}")
 def delete_document(project_id: int, document_id: int, db: Session = Depends(get_db)):
@@ -490,9 +532,12 @@ def delete_project(project_id: int, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    if project.local_path and os.path.exists(project.local_path):
+    storage_paths = [get_project_storage_path(project), get_legacy_project_storage_path(project)]
+    for storage_path in storage_paths:
+        if not os.path.exists(storage_path):
+            continue
         try:
-            shutil.rmtree(project.local_path)
+            shutil.rmtree(storage_path)
         except Exception as e:
             print(f"Warning: Could not delete physical folder: {e}")
 
