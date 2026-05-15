@@ -870,5 +870,5 @@ const ProjectPageDocumentPanel = ({
     </div>
   );
 };
-}
+
 export default ProjectPageDocumentPanel;
