@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
-import { uploadProjectDataToDrive } from '../Utils/driveAPI';
+import { uploadProjectDataToDrive, uploadRawFileToDrive } from '../Utils/driveAPI';
 
 import axios from "axios";
 
@@ -379,6 +379,22 @@ function ProjectPage() {
       };
 
       await uploadProjectDataToDrive(folderId, fullProjectData);
+      setUploadStatus("Syncing source files... 📁");
+      for (const doc of docsRes) {
+        try {
+          const fileResponse = await fetch(`${API_BASE}/projects/${id}/documents/${doc.id}/download`);
+
+          if(fileResponse.ok){
+            const fileBlob = await fileResponse.blob();
+            await uploadRawFileToDrive(folderId, doc.filename, fileBlob);
+          } else {
+            console.error(`Backend refused to download ${doc.filename}: HTTP ${fileResponse.status}`);           
+          }
+        } catch (fileErr) {
+          console.error(`Failed to sync file ${doc.filename}:`, fileErr);
+        }
+      }
+
       console.log("Auto-sync successful!");
       setUploadStatus("Cloud sync complete! ✅");
       setTimeout(() => setUploadStatus(""), 3000);

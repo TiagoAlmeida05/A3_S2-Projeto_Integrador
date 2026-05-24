@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import CreateProjectModal from "./CreateProjectModal";
 import ImportProjectModal from "./ImportProjectModal";
 import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
-import { checkLockStatus, acquireLock, getProjectFolderIfExists, initializeDriveFolder } from '../Utils/driveAPI';
+import { checkLockStatus, acquireLock, getProjectFolderIfExists, initializeDriveFolder, getSharedProjects } from '../Utils/driveAPI';
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -20,23 +20,40 @@ function Dashboard() {
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [isConnected]);
 
   const fetchProjects = async () => {
     try {
       const res = await fetch(`${API_BASE}/projects`, { cache: "no-store" });
+      let localProjects = [];
       if (res.ok) {
-        const data = await res.json();
- 
-        const sortedData = data.sort((a, b) => {
-          if (a.last_accessed && b.last_accessed) {
-            return new Date(b.last_accessed) - new Date(a.last_accessed);
-          }
-          return b.id - a.id; // Fallback if no date exists
-        });
-        
-        setProjects(sortedData);
+        localProjects = await res.json();
       }
+
+      let sharedProjects = [];
+      const token = localStorage.getItem('google_drive_tokens');
+      if (token) {
+        try {
+          sharedProjects = await getSharedProjects();
+        } catch (err) {
+          console.error("Failed to fetch shared projects from Drive:", err);
+        }
+      }
+
+      const localNames = new Set(localProjects.map(p => p.name));
+      const purelySharedProjects = sharedProjects.filter(sp => !localNames.has(sp.name));
+
+      const combined = [...localProjects, ...purelySharedProjects];
+
+      // 4. Sort them
+      const sortedData = combined.sort((a, b) => {
+        if (a.last_accessed && b.last_accessed) {
+          return new Date(b.last_accessed) - new Date(a.last_accessed);
+        }
+        return -1; 
+      });
+      
+      setProjects(sortedData);
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     }
@@ -75,6 +92,11 @@ function Dashboard() {
   };
 
   const handleOpenProject = async (project) => {
+    if (project.isShared && typeof project.id === 'string') {
+        alert(`You clicked a shared project!\n\nNext step: We need to write the function that downloads this into your local database.`);
+        return;
+    }
+
     const token = localStorage.getItem('google_drive_tokens');
     const masterFolderId = localStorage.getItem('google_drive_folder_id');
 
@@ -266,6 +288,12 @@ function Dashboard() {
                   <div style={{ flex: 1, minWidth: 0, paddingRight: "20px",textAlign: "left" }}>
                     <h3 style={{ margin: "0 0 6px 0", fontSize: "18px", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {project.name}
+                      {/* 🔥 ADDED: The Shared Badge */}
+                      {project.isShared && (
+                        <span style={{ fontSize: "12px", backgroundColor: "#2a4a35", padding: "2px 6px", borderRadius: "4px", marginLeft: "8px", color: "#4CAF50", verticalAlign: "middle" }}>
+                          Shared 🤝
+                        </span>
+                      )}
                     </h3>
                     <p style={{ margin: 0, fontSize: "14px", color: "#aaa", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {openingProjectName === project.name ? "⏳ Checking Cloud Lock..." : (project.description || "No description provided.")}
