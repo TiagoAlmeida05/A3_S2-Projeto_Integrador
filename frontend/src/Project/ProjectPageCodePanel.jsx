@@ -7,12 +7,14 @@ const ProjectPageCodePanel = ({
   documents,
   codePanelOpen,
   activeCode,
+  refreshToken,
   setCodePanelOpen,
   setActiveCode,
   setActiveDocument,
   setDocumentSegments,
   setPendingQuoteJump,
   fetchCodes,
+  pushUndoAction,
 }) => {
   const [selectedQuoteId, setSelectedQuoteId] = useState(null);
   const [includeSubCodes, setIncludeSubCodes] = useState(true); 
@@ -54,7 +56,7 @@ const ProjectPageCodePanel = ({
     };
 
     loadQuotes();
-  }, [activeCode, includeSubCodes, codePanelOpen, documents, projectId, API_BASE, projectCodes]);
+  }, [activeCode, includeSubCodes, codePanelOpen, documents, projectId, API_BASE, projectCodes, refreshToken]);
 
   useEffect(() => {
     const missingDocIds = [...new Set(localSegments.map(s => s.document_id))]
@@ -101,6 +103,8 @@ const ProjectPageCodePanel = ({
     const confirmDelete = window.confirm("Are you sure you want to delete this highlighted quote?");
     if (!confirmDelete) return;
 
+    const segmentSnapshot = localSegments.find((segment) => segment.id === segmentId);
+
     try {
       const response = await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`, { method: "DELETE" });
       if (response.ok) {
@@ -108,6 +112,12 @@ const ProjectPageCodePanel = ({
         setLocalSegments((prev) => prev.filter((segment) => segment.id !== segmentId)); // Update panel instantly
         if (setDocumentSegments) {
           setDocumentSegments((prev) => prev.filter((segment) => segment.id !== segmentId));
+        }
+        if (segmentSnapshot && pushUndoAction) {
+          pushUndoAction({
+            type: "delete-segment",
+            segment: segmentSnapshot,
+          });
         }
         if (selectedQuoteId === segmentId) setSelectedQuoteId(null);
       } else {

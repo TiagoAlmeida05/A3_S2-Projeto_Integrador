@@ -39,6 +39,8 @@ function ProjectPage() {
   const [activeCode, setActiveCode] = useState(null);
   const [codeSegments, setCodeSegments] = useState([]);
   const [pendingQuoteJump, setPendingQuoteJump] = useState(null);
+  const [undoStack, setUndoStack] = useState([]);
+  const [codePanelRefreshTick, setCodePanelRefreshTick] = useState(0);
 
   // UI & Navigation State
   const [activeTab, setActiveTab] = useState("documents");
@@ -89,13 +91,179 @@ function ProjectPage() {
       .catch((err) => console.error(err));
   };
 
+  const pushUndoAction = (action) => {
+    setUndoStack((prev) => [action, ...prev].slice(0, 20));
+  };
+
+  const fetchAllDocumentSegments = async () => {
+    const segmentResponses = await Promise.all(
+      documents.map((doc) =>
+        fetch(`${API_BASE}/projects/${id}/segments?document_id=${doc.id}`).then((res) => res.json()),
+      ),
+    );
+
+    return segmentResponses.flat().filter((segment) => segment && !segment.detail);
+  };
+
+  const buildCodeTreeSnapshot = (rootCodeId) => {
+    const rootCode = projectCodes.find((code) => Number(code.id) === Number(rootCodeId));
+    if (!rootCode) return [];
+
+    const collected = [rootCode];
+
+    const visitChildren = (parentId, depth) => {
+      const children = projectCodes.filter((code) => Number(code.parent_id) === Number(parentId));
+      children.forEach((child) => {
+        collected.push({ ...child, _undoDepth: depth });
+        visitChildren(child.id, depth + 1);
+      });
+    };
+
+    visitChildren(rootCodeId, 1);
+    return collected;
+  };
+
+  const refreshSegmentsForDocument = async (documentId) => {
+    if (!activeDocument || Number(activeDocument.id) !== Number(documentId)) return;
+
+    const res = await fetch(`${API_BASE}/projects/${id}/segments?document_id=${documentId}`);
+    const data = await res.json();
+    setDocumentSegments(Array.isArray(data) ? data : []);
+  };
+
+  const handleUndoLastAction = async () => {
+    if (undoStack.length === 0) {
+      setUploadStatus("Nothing to undo.");
+      setTimeout(() => setUploadStatus(""), 2000);
+      return;
+    }
+
+    const [lastAction, ...remainingActions] = undoStack;
+    setUndoStack(remainingActions);
+    setUploadStatus("Undoing last action...");
+
+    try {
+      if (lastAction.type === "create-segment" || lastAction.type === "create-quick-code") {
+        for (const segment of lastAction.segments || []) {
+          await fetch(`${API_BASE}/projects/${id}/segments/${segment.id}`, { method: "DELETE" });
+          await refreshSegmentsForDocument(segment.document_id);
+        }
+
+        if (lastAction.type === "create-quick-code" && lastAction.code?.id) {
+          await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.code.id}`, { method: "DELETE" });
+        }
+
+        fetchCodes();
+        setCodePanelRefreshTick((tick) => tick + 1);
+      } else if (lastAction.type === "delete-segment") {
+        const segment = lastAction.segment;
+        const restoreResponse = await fetch(`${API_BASE}/projects/${id}/segments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            document_id: segment.document_id,
+            code_id: segment.code_id,
+            start_char: segment.start_char,
+            end_char: segment.end_char,
+            content: segment.content,
+          }),
+        });
+
+        if (!restoreResponse.ok) {
+          throw new Error("Failed to restore segment");
+        }
+
+        await refreshSegmentsForDocument(segment.document_id);
+        fetchCodes();
+        setCodePanelRefreshTick((tick) => tick + 1);
+      } else if (lastAction.type === "delete-code") {
+        const restoredCodeIds = new Map();
+        const orderedCodes = [...(lastAction.codes || [])].sort(
+          (a, b) => (a._undoDepth ?? 0) - (b._undoDepth ?? 0),
+        );
+
+        for (const code of orderedCodes) {
+          const restoredParentId = code.parent_id && restoredCodeIds.has(Number(code.parent_id))
+            ? restoredCodeIds.get(Number(code.parent_id))
+            : code.parent_id;
+
+          const restoreResponse = await fetch(`${API_BASE}/projects/${id}/codes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: code.name,
+              color: code.color,
+              description: code.description,
+              parent_id: restoredParentId,
+            }),
+          });
+
+          if (!restoreResponse.ok) {
+            throw new Error(`Failed to restore code ${code.name}`);
+          }
+
+          const restoredCode = await restoreResponse.json();
+          restoredCodeIds.set(Number(code.id), restoredCode.id);
+        }
+
+        if (lastAction.codes?.length > 0) {
+          const reorderPayload = orderedCodes
+            .map((code, index) => ({
+              id: restoredCodeIds.get(Number(code.id)),
+              parent_id: code.parent_id && restoredCodeIds.has(Number(code.parent_id))
+                ? restoredCodeIds.get(Number(code.parent_id))
+                : code.parent_id,
+              order_index: code.order_index ?? index,
+            }))
+            .filter((item) => item.id);
+
+          await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ codes: reorderPayload }),
+          });
+        }
+
+        for (const segment of lastAction.segments || []) {
+          const restoredCodeId = restoredCodeIds.get(Number(segment.code_id)) || segment.code_id;
+          const restoreResponse = await fetch(`${API_BASE}/projects/${id}/segments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              document_id: segment.document_id,
+              code_id: restoredCodeId,
+              start_char: segment.start_char,
+              end_char: segment.end_char,
+              content: segment.content,
+            }),
+          });
+
+          if (!restoreResponse.ok) {
+            throw new Error("Failed to restore segment");
+          }
+
+          await refreshSegmentsForDocument(segment.document_id);
+        }
+
+        fetchCodes();
+        setCodePanelRefreshTick((tick) => tick + 1);
+      }
+
+      setUploadStatus("Undo complete.");
+      setTimeout(() => setUploadStatus(""), 2500);
+    } catch (error) {
+      console.error(error);
+      setUploadStatus("Undo failed.");
+    }
+  };
+
   const openCodePanel = async (code) => {
     setActiveCode(code);
     setCodePanelOpen(true);
     setPendingQuoteJump(null);
 
     try {
-      // Bulletproof: Fetch segments for every document we know exists
+      // Fetch segments for every document we know exists
       const segmentPromises = documents.map((doc) =>
         fetch(`${API_BASE}/projects/${id}/segments?document_id=${doc.id}`).then((res) => res.json())
       );
@@ -165,6 +333,28 @@ function ProjectPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      const isUndoShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
+      if (!isUndoShortcut) return;
+
+      const target = event.target;
+      const isEditableTarget = target && (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      );
+
+      if (isEditableTarget) return;
+
+      event.preventDefault();
+      handleUndoLastAction();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undoStack, activeDocument, documents, projectCodes]);
+
   const autoSyncToCloud = async () => {
     const folderId = localStorage.getItem('current_project_folder_id');
     const isConnected = localStorage.getItem('google_drive_tokens');
@@ -200,7 +390,13 @@ function ProjectPage() {
   };
 
   const handleDeleteCode = async (codeId) => {
-      try {
+    try {
+      const codeSnapshot = buildCodeTreeSnapshot(codeId);
+      const codeIdsToDelete = new Set(codeSnapshot.map((code) => Number(code.id)));
+      const segmentsSnapshot = codeSnapshot.length > 0
+        ? (await fetchAllDocumentSegments()).filter((segment) => codeIdsToDelete.has(Number(segment.code_id)))
+        : [];
+
       const response = await fetch(
         `${API_BASE}/projects/${id}/codes/${codeId}`,
         { method: "DELETE" },
@@ -208,6 +404,14 @@ function ProjectPage() {
       if (response.ok) {
         setProjectCodes((prev) => prev.filter((c) => c.id !== codeId));
         setDocumentSegments((prev) => prev.filter((s) => s.code_id !== codeId));
+        if (codeSnapshot.length > 0) {
+          pushUndoAction({
+            type: "delete-code",
+            codes: codeSnapshot,
+            segments: segmentsSnapshot,
+          });
+        }
+        setCodePanelRefreshTick((tick) => tick + 1);
       } else {
         console.error("Failed to delete code");
       }
@@ -218,8 +422,10 @@ function ProjectPage() {
 
   // FILE MANAGEMENT LOGIC
 
-  const handleFileUpload = async (event) => {
-    const files = Array.from(event.target.files);
+  const handleFileUpload = async (eventOrFiles) => {
+    const files = Array.isArray(eventOrFiles)
+      ? eventOrFiles
+      : Array.from(eventOrFiles?.target?.files || []);
     if (files.length === 0) return;
 
     setUploadStatus("Checking files...");
@@ -310,31 +516,25 @@ function ProjectPage() {
     const failedUploads = [];
 
     setUploadProgress({ current: 0, total, isActive: true });
+    setUploadStatus(`Importing ${total} file${total === 1 ? "" : "s"}...`);
 
-    for (let i = 0; i < total; i++) {
-      const currentIndex = i + 1;
-      const file = filesToUpload[i];
+    const formData = new FormData();
+    filesToUpload.forEach((file) => formData.append("files", file));
 
-      setUploadStatus(`Importing ${currentIndex} of ${total} files...`);
-      setUploadProgress({ current: currentIndex, total, isActive: true });
+    try {
+      const res = await fetch(`${API_BASE}/projects/${id}/documents/`, {
+        method: "POST",
+        body: formData,
+      });
 
-      const formData = new FormData();
-      formData.append("files", file);
+      setUploadProgress({ current: total, total, isActive: false });
 
-      try {
-        const res = await fetch(`${API_BASE}/projects/${id}/documents/`, {
-          method: "POST",
-          body: formData,
+      if (!res.ok) {
+        failedUploads.push({
+          filename: filesToUpload.map((file) => file.name).join(", "),
+          reason: `HTTP ${res.status}`,
         });
-
-        if (!res.ok) {
-          failedUploads.push({
-            filename: file.name,
-            reason: `HTTP ${res.status}`,
-          });
-          continue;
-        }
-
+      } else {
         const data = await res.json();
         if (data.failed && data.failed.length > 0) {
           failedUploads.push(...data.failed);
@@ -342,13 +542,12 @@ function ProjectPage() {
         if (data.successful && data.successful.length > 0) {
           successfulUploads.push(...data.successful);
         }
-      } catch (err) {
-        failedUploads.push({ filename: file.name, reason: "Network error" });
-        console.error(err);
       }
+    } catch (err) {
+      setUploadProgress({ current: total, total, isActive: false });
+      failedUploads.push({ filename: "Batch upload", reason: "Network error" });
+      console.error(err);
     }
-
-    setUploadProgress({ current: total, total, isActive: false });
 
     if (failedUploads.length > 0) {
       const errorList = failedUploads
@@ -368,7 +567,9 @@ function ProjectPage() {
 
     fetchDocuments();
 
-    event.target.value = null;
+    if (eventOrFiles?.target) {
+      eventOrFiles.target.value = null;
+    }
   };
 
   const handleCreateTextDocument = async (docdata) => {
@@ -521,12 +722,14 @@ function ProjectPage() {
     activeCode,
     codeSegments,
     pendingQuoteJump,
+    codePanelRefreshTick,
     activeTab,
     uploadStatus,
     uploadProgress,
     segmentContextMenu,
     conflictDialog,
     isSettingsOpen,
+    pushUndoAction,
     setActiveTab,
     setActiveDocument,
     setIsSettingsOpen,

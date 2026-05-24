@@ -11,6 +11,7 @@ const ProjectPageDocumentPanel = ({
   setActiveDocument, 
   fetchCodes,
   fetchDocuments,
+  pushUndoAction,
   API_BASE,
   projectId,
 }) => {
@@ -30,12 +31,18 @@ const ProjectPageDocumentPanel = ({
   const [quickCodeName, setQuickCodeName] = useState("");
   const [quickCodeParentId, setQuickCodeParentId] = useState("");
   const [quickCodeColor, setQuickCodeColor] = useState("#646cff");
+  const [isPdfPreviewCollapsed, setIsPdfPreviewCollapsed] = useState(false);
   
   // Edit Mode & Real-Time Segment State
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [localSegments, setLocalSegments] = useState([]);
   const bgRef = useRef(null);
+  
+  // Auto-save state
+  const [lastSavedContent, setLastSavedContent] = useState("");
+  const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "saving", "saved", or ""
+  const autoSaveIntervalRef = useRef(null);
 
   const hexToRGBA = (hex, opacity) => {
     if (!hex) return "transparent";
@@ -55,6 +62,7 @@ const ProjectPageDocumentPanel = ({
     }else {
       setIsEditing(false);
     }
+    setIsPdfPreviewCollapsed(false);
   }, [activeDocument?.id]);
 
   const handleRightClickSegment = (e, segmentId) => {
@@ -152,6 +160,7 @@ const ProjectPageDocumentPanel = ({
 
     try {
       let finalCodeID;
+      let createdCode = null;
       if (quickCodeMode === "new") {
         const codeName = quickCodeName.trim() || (selectionText.length > 30 ? `${selectionText.slice(0, 27)}...` : selectionText);
         const codeResponse = await fetch(`${API_BASE}/projects/${projectId}/codes`, {
@@ -164,8 +173,9 @@ const ProjectPageDocumentPanel = ({
             parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null // 🔥 Fixed
           }),
         });
-        const createdCode = await codeResponse.json();
-        if (!codeResponse.ok) throw new Error(createdCode.detail || "Failed to create quick code");
+        const createdCodeData = await codeResponse.json();
+        if (!codeResponse.ok) throw new Error(createdCodeData.detail || "Failed to create quick code");
+        createdCode = createdCodeData;
         finalCodeID = createdCode.id;
         fetchCodes();
       } else {
@@ -191,6 +201,13 @@ const ProjectPageDocumentPanel = ({
       );
 
       const createdSegments = await Promise.all(segmentPromises);
+      if (pushUndoAction) {
+        pushUndoAction({
+          type: createdCode ? "create-quick-code" : "create-segment",
+          code: createdCode,
+          segments: createdSegments,
+        });
+      }
       setUploadStatus(`Applied ${createdSegments.length} code(s)!`);
       setTimeout(() => setUploadStatus(""), 3000);
       clearTextSelection();
@@ -266,6 +283,68 @@ const ProjectPageDocumentPanel = ({
     setEditContent(newContent);
   };
 
+  // Auto-save function
+  const performAutoSave = async (contentToSave, currentLocalSegments) => {
+    if (!activeDocument || !activeDocument.id || contentToSave === lastSavedContent) {
+      return; 
+    }
+
+    try {
+      setAutoSaveStatus("saving");
+      const res = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/content`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: contentToSave }),
+      });
+
+      if (res.ok) {
+        const segmentPromises = currentLocalSegments.map(seg => 
+          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
+          })
+        );
+        await Promise.all(segmentPromises);
+
+        const deletedSegments = documentSegments.filter(oldSeg => !currentLocalSegments.find(ls => ls.id === oldSeg.id));
+        const deletePromises = deletedSegments.map(seg => 
+          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, { method: 'DELETE' })
+        );
+        await Promise.all(deletePromises);
+
+        setTimeout(() => {
+          setLastSavedContent(contentToSave);
+          setAutoSaveStatus("saved");
+          
+          setTimeout(() => setAutoSaveStatus(""), 1500);
+        }, 1000); 
+      } else {
+        console.error("Auto-save failed:", res.statusText);
+        setAutoSaveStatus("");
+      }
+    } catch (error) {
+      console.error("Auto-save error:", error);
+      setAutoSaveStatus("");
+    }
+  };
+
+  // Set up auto-save interval when editing
+  useEffect(() => {
+    if (!isEditing || !activeDocument) return;
+
+    // Set up interval to auto-save every 3 seconds
+    autoSaveIntervalRef.current = setInterval(() => {
+      performAutoSave(editContent,localSegments);
+    }, 1000);
+
+    // Cleanup interval on unmount or when editing stops
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+      }
+    };
+  }, [isEditing, editContent, activeDocument, lastSavedContent]);
+
   const handleScroll = (e) => {
     if (bgRef.current) {
       bgRef.current.scrollTop = e.target.scrollTop;
@@ -275,7 +354,9 @@ const ProjectPageDocumentPanel = ({
 
   const handleToggleEdit = () => {
     if (!isEditing) {
-      setEditContent(activeDocument.content || "");
+      const initialContent = activeDocument.content || "";
+      setEditContent(initialContent);
+      setLastSavedContent(initialContent);
       setLocalSegments([...documentSegments]); 
       setIsEditing(true);
     } else {
@@ -283,8 +364,9 @@ const ProjectPageDocumentPanel = ({
         setActiveDocument(null);
       } else {
       setIsEditing(false);
-      }
+      setAutoSaveStatus("");
     }
+  }
   };
 
   // --- NEW: SOFT REFRESH LOGIC ---
@@ -526,7 +608,9 @@ const ProjectPageDocumentPanel = ({
     );
   }
 
-  const isPDF = activeDocument?.filename?.toLowerCase().endsWith('.pdf');
+  const isPDF = activeDocument?.filename?.toLowerCase().endsWith('.pdf') || activeDocument?.type === "pdf";
+  const showPdfPreview = isPDF && !isPdfPreviewCollapsed;
+  const pdfPreviewUrl = `${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/file`;
 
   return (
     <div style={documentShellStyle}>
@@ -544,19 +628,78 @@ const ProjectPageDocumentPanel = ({
           <h2 style={{ margin: 0, color: "#000", fontWeight: "500" }}>{activeDocument.filename}</h2>
         )}
         
-        <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "15px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
           {isEditing ? (
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button onClick={handleSaveEdit} style={{ padding: '6px 12px', background: '#4CAF50', color: 'white', borderRadius: '4px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+             {autoSaveStatus && (
+               <div
+                 style={{
+                   display: "inline-flex",
+                   alignItems: "center",
+                   justifyContent: "center",
+                   padding: "0 12px",
+                   borderRadius: "4px",
+                   fontSize: "14px",
+                   height: "36px",     
+                   minWidth: "110px",
+                   boxSizing: "border-box",
+                   fontWeight: 600,
+                   backgroundColor: autoSaveStatus === "saving" ? "#fff3cd" : "#d4edda",
+                   color: autoSaveStatus === "saving" ? "#856404" : "#155724",
+                   border: "1px solid transparent",
+                 }}
+               >
+                 {autoSaveStatus === 'saving' ? '⏳ Saving...' : '✓ Saved'}
+               </div>
+            )}
+              <button 
+                onClick={handleSaveEdit} 
+                style={{ 
+                  height: "36px",        // Match height
+                  padding: '0 16px', 
+                  background: '#4CAF50', 
+                  color: 'white', 
+                  borderRadius: '4px', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  fontWeight: 'bold',
+                  display: 'flex',       // Center the text/icon
+                  alignItems: 'center' 
+                }}
+              >
                 💾 Save
               </button>
-              <button onClick={handleToggleEdit} style={{ padding: '6px 12px', background: 'transparent', color: '#555', border: '1px solid #999', borderRadius: '4px', cursor: 'pointer' }}>
+              
+              <button 
+                onClick={handleToggleEdit} 
+                style={{ 
+                  height: "36px",        // Match height
+                  padding: '0 16px', 
+                  background: 'transparent', 
+                  color: '#555', 
+                  border: '1px solid #999', 
+                  borderRadius: '4px', 
+                  cursor: 'pointer',
+                  display: 'flex',       // Center the text
+                  alignItems: 'center'
+                }}
+              >
                 Cancel
               </button>
             </div>
           ) : (
             <button onClick={handleToggleEdit} style={{ padding: '6px 12px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}>
               ✏️ {isPDF ? "Edit PDF Text (Not Recommended)" : "Edit Text"}
+            </button>
+          )}
+
+          {isPDF && (
+            <button
+              onClick={() => setIsPdfPreviewCollapsed((prev) => !prev)}
+              style={{ padding: '6px 12px', background: '#1f1f28', color: '#fff', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer' }}
+              title={isPdfPreviewCollapsed ? 'Show the PDF preview' : 'Hide the PDF preview'}
+            >
+              {isPdfPreviewCollapsed ? 'Show PDF Preview' : 'Hide PDF Preview'}
             </button>
           )}
 
@@ -567,9 +710,10 @@ const ProjectPageDocumentPanel = ({
         </div>
       </div>
 
-      <div style={{ display: "flex", position: "relative" }}>
-        {isEditing ? (
-          <div style={{ position: "relative", width: "75%", minHeight: "600px", border: "2px solid #646cff", borderRadius: "6px", backgroundColor: "#fafafa", overflow: "hidden" }}>
+      <div style={{ display: "flex", position: "relative", gap: "16px", alignItems: "stretch" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {isEditing ? (
+            <div style={{ position: "relative", width: "100%", minHeight: "600px", border: "2px solid #646cff", borderRadius: "6px", backgroundColor: "#fafafa", overflow: "hidden" }}>
             
             <div
               ref={bgRef}
@@ -608,12 +752,39 @@ const ProjectPageDocumentPanel = ({
             tabIndex={0}
             onMouseUp={handleTextSelection}
             onKeyUp={handleTextSelection}
-            style={{ width: "75%", paddingRight: "30px", whiteSpace: "pre-wrap", fontSize: "16px", lineHeight: "1.6", fontFamily: "system-ui, sans-serif", outline: "none", position: "relative" }}
+            style={{ width: "100%", paddingRight: isPDF && showPdfPreview ? "0" : "30px", whiteSpace: "pre-wrap", fontSize: "16px", lineHeight: "1.6", fontFamily: "system-ui, sans-serif", outline: "none", position: "relative" }}
           >
             {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes)}
           </div>
+          )}
+        </div>
+
+        {isPDF && showPdfPreview && (
+          <div style={{ flex: "0 0 38%", minWidth: "320px", minHeight: "600px", display: "flex", flexDirection: "column", backgroundColor: "#0f1115", border: "1px solid #2d2f36", borderRadius: "8px", overflow: "hidden" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #2d2f36", color: "#e5e7eb", backgroundColor: "#151922" }}>
+              <div style={{ fontSize: "13px", fontWeight: "bold" }}>Original PDF</div>
+            </div>
+            <embed
+              title={`${activeDocument.filename} preview`}
+              src={`${pdfPreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+              type="application/pdf"
+              style={{ width: "100%", flex: 1, border: "none", backgroundColor: "#fff" }}
+            />
+          </div>
         )}
-        
+
+        {isPDF && isPdfPreviewCollapsed && (
+          <div style={{ flex: "0 0 52px", minHeight: "600px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <button
+              onClick={() => setIsPdfPreviewCollapsed(false)}
+              style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", backgroundColor: "#1f1f28", color: "#fff", border: "1px solid #555", borderRadius: "8px", padding: "12px 8px", cursor: "pointer", fontSize: "12px", letterSpacing: "0.4px" }}
+              title="Show the PDF preview"
+            >
+              Show PDF Preview
+            </button>
+          </div>
+        )}
+
         <MarginSidebar marginBars={marginBars} projectCodes={projectCodes} />
       </div>
 

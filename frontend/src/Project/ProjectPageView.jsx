@@ -28,6 +28,7 @@ const ProjectPageView = ({ page }) => {
     uploadStatus,
     uploadProgress,
     segmentContextMenu,
+    codePanelRefreshTick,
     setActiveTab,
     setActiveDocument,
     setCodePanelOpen,
@@ -48,6 +49,7 @@ const ProjectPageView = ({ page }) => {
     setSegmentContextMenu,
     handleCreateTextDocument,
     autoSyncToCloud,
+    pushUndoAction,
   } = page;
 
   return (
@@ -96,6 +98,7 @@ const ProjectPageView = ({ page }) => {
           documents={documents}
           codePanelOpen={codePanelOpen}
           activeCode={activeCode}
+          refreshToken={codePanelRefreshTick}
           codeSegments={codeSegments}
           setCodePanelOpen={setCodePanelOpen}
           setActiveCode={setActiveCode}
@@ -104,6 +107,7 @@ const ProjectPageView = ({ page }) => {
           setDocumentSegments={setDocumentSegments}
           setPendingQuoteJump={setPendingQuoteJump}
           fetchCodes={fetchCodes}
+          pushUndoAction={pushUndoAction}
         />
         <ProjectPageDocumentPanel
           viewerRef={viewerRef}
@@ -117,6 +121,7 @@ const ProjectPageView = ({ page }) => {
           fetchDocuments={fetchDocuments}
           API_BASE={API_BASE}
           projectId={id}
+          pushUndoAction={pushUndoAction}
         />
       </div>
 
