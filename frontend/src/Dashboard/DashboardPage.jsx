@@ -110,7 +110,7 @@ function Dashboard() {
     setOpeningProjectName(project.name);
 
     try {
-      const projectDriveId = await getProjectFolderIfExists(project.name, masterFolderId);
+      const projectDriveId = project.isShared ? project.id : await getProjectFolderIfExists(project.name, masterFolderId);
       
       if(!projectDriveId) {
         navigate(`/project/${project.id}`);
