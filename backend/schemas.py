@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 
 # Project Schemas
@@ -104,3 +104,16 @@ class DocumentUpdateContent(BaseModel):
 class DocumentCreateText(BaseModel):
     name: str
     content: str
+
+
+class DocumentReorderItem(BaseModel):
+    id: int
+    order_index: int
+
+
+class DocumentReorderRequest(BaseModel):
+    documents: List[DocumentReorderItem]
+
+
+class DocumentMetadataUpdate(BaseModel):
+    metadata: Dict[str, Optional[str]]

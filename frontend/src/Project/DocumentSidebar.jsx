@@ -9,7 +9,8 @@ function DocumentSidebar({
   onWriteDocument,
   onDocumentClick, 
   onDeleteDocument,
-  projectId
+  projectId,
+  fetchDocuments,
 }) {
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState("");
@@ -17,6 +18,11 @@ function DocumentSidebar({
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const dragCounter = useRef(0);
   const [isImportDropActive, setIsImportDropActive] = useState(false);
+  const [sortMode, setSortMode] = useState("custom");
+  const [metadataFilterKey, setMetadataFilterKey] = useState("");
+  const [metadataDialog, setMetadataDialog] = useState({ isOpen: false, documentId: null, documentName: "" });
+  const [metadataFieldName, setMetadataFieldName] = useState("");
+  const [metadataFieldValue, setMetadataFieldValue] = useState("");
 
   // Unified Drag State
   const [draggedItem, setDraggedItem] = useState(null); 
@@ -35,11 +41,192 @@ function DocumentSidebar({
     return () => document.removeEventListener('click', handleClickOutside);
   }, [projectId]);
 
+  const normalizeMetadata = (doc) => {
+    if (!doc || !doc.metadata || typeof doc.metadata !== "object") {
+      return {};
+    }
+
+    return doc.metadata;
+  };
+
+  const formatImportedDate = (createdAt) => {
+    if (!createdAt) return "Unknown date";
+    const parsedDate = new Date(createdAt);
+    if (Number.isNaN(parsedDate.getTime())) return "Unknown date";
+    return parsedDate.toLocaleDateString();
+  };
+
+  const getMetadataSummary = (doc) => {
+    const entries = Object.entries(normalizeMetadata(doc));
+    if (entries.length === 0) return "";
+    return entries.slice(0, 2).map(([key, value]) => `${key}: ${value}`).join(" · ");
+  };
+
+  const matchesMetadataFilter = (doc) => {
+    const metadata = normalizeMetadata(doc);
+    const normalizedKey = metadataFilterKey.trim();
+
+    if (!normalizedKey) return true;
+    if (normalizedKey && !(normalizedKey in metadata)) return false;
+    return true;
+  };
+
+  const compareDocuments = (left, right) => {
+    if (sortMode === "custom") {
+      return (left.order_index ?? 0) - (right.order_index ?? 0) || left.filename.localeCompare(right.filename, undefined, { sensitivity: "base" });
+    }
+
+    if (sortMode === "date") {
+      const leftTime = new Date(left.created_at || 0).getTime();
+      const rightTime = new Date(right.created_at || 0).getTime();
+      return rightTime - leftTime || left.filename.localeCompare(right.filename, undefined, { sensitivity: "base" });
+    }
+
+    return left.filename.localeCompare(right.filename, undefined, { sensitivity: "base" });
+  };
+
+  const sortAndFilterDocuments = (documentList) => {
+    return [...documentList].filter(matchesMetadataFilter).sort(compareDocuments);
+  };
+
+  const hasMetadataField = (doc) => {
+    const normalizedKey = metadataFilterKey.trim();
+    if (!normalizedKey) return true;
+    const metadata = normalizeMetadata(doc);
+    return Object.prototype.hasOwnProperty.call(metadata, normalizedKey);
+  };
+
+  const getDocumentBuckets = (documentList) => {
+    const normalizedKey = metadataFilterKey.trim();
+    const sortedDocuments = [...documentList].sort(compareDocuments);
+
+    if (!normalizedKey) {
+      return { matching: sortedDocuments, missingField: [] };
+    }
+
+    const matching = [];
+    const missingField = [];
+
+    sortedDocuments.forEach((doc) => {
+      if (!hasMetadataField(doc)) {
+        missingField.push(doc);
+        return;
+      }
+
+      matching.push(doc);
+    });
+
+    return { matching, missingField };
+  };
+
+  const isSameContainer = (leftDoc, rightDoc) => (leftDoc?.folder_id ?? null) === (rightDoc?.folder_id ?? null);
+
+  const reorderDocumentsInContainer = async (draggedDocId, targetDocId, targetFolderId, dropPosition) => {
+    const containerDocuments = sortAndFilterDocuments(
+      documents.filter((doc) => (doc.folder_id ?? null) === (targetFolderId ?? null))
+    );
+
+    const draggedDoc = containerDocuments.find((doc) => doc.id === draggedDocId);
+    const targetDoc = containerDocuments.find((doc) => doc.id === targetDocId);
+    if (!draggedDoc || !targetDoc) return;
+
+    const nextDocuments = containerDocuments.filter((doc) => doc.id !== draggedDocId);
+    const targetIndex = nextDocuments.findIndex((doc) => doc.id === targetDocId);
+    const insertIndex = dropPosition === "after" ? targetIndex + 1 : targetIndex;
+    nextDocuments.splice(insertIndex, 0, draggedDoc);
+
+    const reorderPayload = nextDocuments.map((doc, index) => ({ id: doc.id, order_index: index }));
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/documents/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documents: reorderPayload }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to reorder documents');
+      }
+
+      if (fetchDocuments) fetchDocuments();
+    } catch (err) {
+      console.error(err);
+      if (fetchDocuments) fetchDocuments();
+    }
+  };
+
+  const moveDocumentToFolder = async (documentId, folderId) => {
+    const moveUrl = new URL(`http://127.0.0.1:8000/projects/${projectId}/documents/${documentId}/move`);
+    if (folderId !== null && folderId !== undefined) {
+      moveUrl.searchParams.set('folder_id', String(folderId));
+    }
+
+    try {
+      const response = await fetch(moveUrl.toString(), { method: 'PUT' });
+      if (!response.ok) {
+        throw new Error('Failed to move document');
+      }
+
+      if (fetchDocuments) fetchDocuments();
+      else window.location.reload();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const fetchFolders = () => {
     fetch(`http://127.0.0.1:8000/projects/${projectId}/folders`)
       .then(res => res.json())
       .then(data => setFolders(data || [])) // Fallback to empty array if crash
       .catch(err => console.error(err));
+  };
+
+  const openMetadataDialog = (documentId, documentName) => {
+    setMetadataDialog({ isOpen: true, documentId, documentName: documentName || "Document" });
+    setMetadataFieldName("");
+    setMetadataFieldValue("");
+    setContextMenu(null);
+  };
+
+  const closeMetadataDialog = () => {
+    setMetadataDialog({ isOpen: false, documentId: null, documentName: "" });
+    setMetadataFieldName("");
+    setMetadataFieldValue("");
+  };
+
+  const saveDocumentMetadata = async () => {
+    const fieldName = metadataFieldName.trim();
+    const fieldValue = metadataFieldValue.trim();
+    if (!fieldName || !metadataDialog.documentId) return;
+
+    const currentDocument = documents.find((doc) => doc.id === metadataDialog.documentId);
+    const currentMetadata = normalizeMetadata(currentDocument);
+    const nextMetadata = { ...currentMetadata };
+
+    if (fieldValue) {
+      nextMetadata[fieldName] = fieldValue;
+    } else {
+      delete nextMetadata[fieldName];
+    }
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/documents/${metadataDialog.documentId}/metadata`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ metadata: nextMetadata }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save details');
+      }
+
+      if (fetchDocuments) fetchDocuments();
+      fetchFolders();
+      closeMetadataDialog();
+    } catch (err) {
+      console.error(err);
+      window.alert('We could not save those details. Please try again.');
+    }
   };
 
   const handleCreateFolder = async (e) => {
@@ -123,6 +310,8 @@ function DocumentSidebar({
       } else if (draggedItem?.type === 'doc') {
          position = "inside";
       }
+    } else if (targetType === 'doc' && draggedItem?.type === 'doc' && sortMode === 'custom') {
+      position = y < rect.height / 2 ? "before" : "after";
     }
 
     setDragOverId(`${targetType}-${targetId}`);
@@ -196,13 +385,26 @@ function DocumentSidebar({
       } catch (err) { console.error(err); }
 
     } else if (type === 'doc') {
-      const folderId = targetType === 'folder' ? targetId : '';
-      try {
-        const res = await fetch(`http://127.0.0.1:8000/projects/${projectId}/documents/${id}/move?folder_id=${folderId}`, {
-          method: 'PUT'
-        });
-        if (res.ok) window.location.reload(); 
-      } catch (err) { console.error(err); }
+      const draggedDoc = documents.find((doc) => doc.id === id);
+
+      if (targetType === 'root') {
+        await moveDocumentToFolder(id, null);
+      } else if (targetType === 'doc') {
+        const targetDoc = documents.find((doc) => doc.id === targetId);
+        if (!draggedDoc || !targetDoc) {
+          return;
+        }
+
+        if (isSameContainer(draggedDoc, targetDoc)) {
+          await reorderDocumentsInContainer(id, targetId, targetDoc.folder_id ?? null, dragPosition);
+        } else if ((targetDoc.folder_id ?? null) === null) {
+          await moveDocumentToFolder(id, null);
+        } else {
+          await moveDocumentToFolder(id, targetDoc.folder_id ?? null);
+        }
+      } else {
+        await moveDocumentToFolder(id, null);
+      }
     }
 
     setDraggedItem(null);
@@ -212,6 +414,7 @@ function DocumentSidebar({
 
   const renderDoc = (doc, isNested = false) => {
     const isDragging = draggedItem?.type === 'doc' && draggedItem.id === doc.id;
+    const metadataSummary = getMetadataSummary(doc);
     return (
       <li 
         key={doc.id} 
@@ -219,10 +422,15 @@ function DocumentSidebar({
         onDragStart={(e) => handleDragStart(e, 'doc', doc.id)}
         onClick={() => onDocumentClick(doc.id)} 
         onContextMenu={(e) => handleContextMenu(e, 'doc', doc.id, doc.filename)}
+        onDragOver={(e) => handleDragOver(e, 'doc', doc.id)}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, 'doc', doc.id)}
         style={{ 
           marginBottom: '5px',
           marginLeft: isNested ? '20px' : '0',
           opacity: isDragging ? 0.3 : 1,
+          borderTop: dragOverId === `doc-${doc.id}` && dragPosition === 'before' ? '2px solid #646cff' : '2px solid transparent',
+          borderBottom: dragOverId === `doc-${doc.id}` && dragPosition === 'after' ? '2px solid #646cff' : '2px solid transparent',
           padding: '8px 12px', 
           backgroundColor: activeDocumentId === doc.id ? 'rgba(100, 108, 255, 0.2)' : '#2a2a2a', 
           border: activeDocumentId === doc.id ? '1px solid #646cff' : '1px solid transparent',
@@ -238,11 +446,31 @@ function DocumentSidebar({
       > 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
           <div style={{ color: '#666', fontSize: '14px', cursor: 'grab' }}>⋮⋮</div>
-          <span style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            📄 {doc.filename}
-          </span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              📄 {doc.filename}
+            </div>
+            <div style={{ marginTop: '2px', fontSize: '11px', color: '#a9a9a9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {formatImportedDate(doc.created_at)}{metadataSummary ? ` · ${metadataSummary}` : ''}
+            </div>
+          </div>
         </div>
       </li>
+    );
+  };
+
+  const renderDocumentBucket = (title, docs, isNested = false) => {
+    if (docs.length === 0) return null;
+
+    return (
+      <div style={{ marginTop: isNested ? '8px' : '12px' }}>
+        {title && (
+          <div style={{ marginBottom: '6px', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            {title}
+          </div>
+        )}
+        {docs.map((doc) => renderDoc(doc, isNested))}
+      </div>
     );
   };
 
@@ -346,6 +574,77 @@ function DocumentSidebar({
         <div style={{ marginTop: '10px', color: '#646cff', fontSize: '14px', textAlign: 'center' }}>{uploadStatus}</div>
       </div>
 
+      <div style={{
+        marginBottom: '20px',
+        padding: '14px',
+        borderRadius: '12px',
+        border: '1px solid #333',
+        backgroundColor: '#202020',
+      }}>
+        <div style={{ marginBottom: '10px', fontSize: '12px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Filters and sorting
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              borderRadius: '6px',
+              border: '1px solid #333',
+              backgroundColor: '#111',
+              color: 'white',
+              fontSize: '12px',
+            }}
+          >
+            <option value="custom">Custom order</option>
+            <option value="alphabetical">Alphabetical</option>
+            <option value="date">Date imported</option>
+          </select>
+          <input
+            value={metadataFilterKey}
+            onChange={(e) => setMetadataFilterKey(e.target.value)}
+            placeholder="Metadata field"
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              borderRadius: '6px',
+              border: '1px solid #333',
+              backgroundColor: '#111',
+              color: 'white',
+              fontSize: '12px',
+            }}
+          />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+          <div style={{ fontSize: '11px', color: '#888', lineHeight: 1.4 }}>
+            {metadataFilterKey
+              ? 'Filtering the list by metadata tags.'
+              : sortMode === 'custom'
+                ? 'Drag documents up or down to set a custom order.'
+                : 'Sort documents alphabetically or by import date.'}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMetadataFilterKey("");
+            }}
+            style={{
+              padding: '6px 10px',
+              backgroundColor: 'transparent',
+              border: '1px solid #444',
+              color: '#ddd',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+      </div>
+
       {/* MAIN LIST AREA - Right clicking the empty space triggers the Root menu */}
       <ul 
         style={{ listStyleType: 'none', padding: 0, overflowY: 'auto', flex: 1, minHeight: '300px' }}
@@ -359,7 +658,6 @@ function DocumentSidebar({
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDrop(e, 'root', 'root')}
       >
-        
         {/* INLINE FOLDER CREATION (Only shows when triggered from context menu) */}
         {isCreatingFolder && (
           <div style={{ 
@@ -388,7 +686,7 @@ function DocumentSidebar({
 
         {/* RENDER FOLDERS */}
         {folders.map(folder => {
-          const folderDocs = documents.filter(d => d.folder_id === folder.id);
+          const folderGroups = getDocumentBuckets(documents.filter(d => d.folder_id === folder.id));
           const isExpanded = expandedFolders.has(folder.id);
           const isDraggingOver = dragOverId === `folder-${folder.id}`;
           const isBeingDragged = draggedItem?.type === 'folder' && draggedItem.id === folder.id;
@@ -437,17 +735,20 @@ function DocumentSidebar({
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                   <span style={{ backgroundColor: '#111', color: '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
-                    {folderDocs.length}
+                    {folderGroups.matching.length + folderGroups.missingField.length}
                   </span>
                 </div>
               </div>
               
               {isExpanded && (
                 <ul style={{ listStyleType: 'none', padding: 0, marginTop: '4px' }}>
-                  {folderDocs.length === 0 ? (
+                  {folderGroups.matching.length === 0 && folderGroups.missingField.length === 0 ? (
                     <div style={{ marginLeft: '40px', fontSize: '12px', color: '#555', fontStyle: 'italic', padding: '4px' }}>Empty folder</div>
                   ) : (
-                    folderDocs.map(doc => renderDoc(doc, true))
+                    <>
+                      {renderDocumentBucket('', folderGroups.matching, true)}
+                      {metadataFilterKey.trim() && renderDocumentBucket(`Doesn't contain ${metadataFilterKey.trim()}`, folderGroups.missingField, true)}
+                    </>
                   )}
                 </ul>
               )}
@@ -456,18 +757,34 @@ function DocumentSidebar({
         })}
 
         {/* ROOT LEVEL DOCUMENTS */}
-        <div style={{ 
-            marginTop: '10px', 
+        <li
+          style={{
+            marginTop: '10px',
             minHeight: '40px',
-            borderTop: folders.length > 0 ? '1px solid #333' : 'none', 
+            borderTop: folders.length > 0 ? '1px solid #333' : 'none',
             paddingTop: '10px',
             backgroundColor: dragOverId === 'root-root' ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
             borderRadius: '4px',
-            transition: 'background-color 0.2s'
+            transition: 'background-color 0.2s',
           }}
+          onDragOver={(e) => handleDragOver(e, 'root', 'root')}
+          onDrop={(e) => handleDrop(e, 'root', 'root')}
         >
-          {documents.filter(d => !d.folder_id).map(doc => renderDoc(doc, false))}
-        </div>
+          <div style={{ marginBottom: '8px', fontSize: '11px', color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Files without folder
+          </div>
+          <div style={{ minHeight: '24px' }}>
+            {(() => {
+              const rootGroups = getDocumentBuckets(documents.filter((doc) => !doc.folder_id));
+              return (
+                <>
+                  {renderDocumentBucket('', rootGroups.matching, false)}
+                  {metadataFilterKey.trim() && renderDocumentBucket(`Doesn't contain ${metadataFilterKey.trim()}`, rootGroups.missingField, false)}
+                </>
+              );
+            })()}
+          </div>
+        </li>
       </ul>
 
       {/* --- UNIFIED CONTEXT MENU --- */}
@@ -511,19 +828,135 @@ function DocumentSidebar({
           )}
 
           {contextMenu.type === 'doc' && (
-            <button 
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                onDeleteDocument(contextMenu.id, contextMenu.name);
-                setContextMenu(null); 
-              }}
-              style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: '#ff6b6b', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#441111'}
-              onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-            >
-              Delete Document
-            </button>
+            <>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  openMetadataDialog(contextMenu.id, contextMenu.name);
+                }}
+                style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
+                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                Add details
+              </button>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  onDeleteDocument(contextMenu.id, contextMenu.name);
+                  setContextMenu(null); 
+                }}
+                style={{ width: '100%', marginTop: '4px', padding: '8px 12px', backgroundColor: 'transparent', color: '#ff6b6b', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#441111'}
+                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                Delete document
+              </button>
+            </>
           )}
+        </div>
+      )}
+
+      {metadataDialog.isOpen && (
+        <div
+          onClick={closeMetadataDialog}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '16px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              backgroundColor: '#1c1c22',
+              border: '1px solid #444',
+              borderRadius: '12px',
+              padding: '18px',
+              color: 'white',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.45)',
+            }}
+          >
+            <h4 style={{ marginTop: 0, marginBottom: '6px' }}>Add details to this document</h4>
+            <p style={{ marginTop: 0, color: '#b8b8b8', fontSize: '13px', lineHeight: 1.5 }}>
+              Use this to add simple labels like “Interview date” or “Location” so you can find the document again later.
+            </p>
+            <div style={{ marginBottom: '14px', fontSize: '12px', color: '#8f8f8f' }}>
+              {metadataDialog.documentName}
+            </div>
+            <label style={{ display: 'block', fontSize: '13px', marginBottom: '10px' }}>
+              Label name
+              <input
+                value={metadataFieldName}
+                onChange={(e) => setMetadataFieldName(e.target.value)}
+                placeholder='For example: Interview date'
+                style={{
+                  width: '100%',
+                  marginTop: '6px',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #444',
+                  backgroundColor: '#111',
+                  color: 'white',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </label>
+            <label style={{ display: 'block', fontSize: '13px', marginBottom: '16px' }}>
+              Label value
+              <input
+                value={metadataFieldValue}
+                onChange={(e) => setMetadataFieldValue(e.target.value)}
+                placeholder='For example: 2026-05-24 or Lisbon'
+                style={{
+                  width: '100%',
+                  marginTop: '6px',
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #444',
+                  backgroundColor: '#111',
+                  color: 'white',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                onClick={closeMetadataDialog}
+                style={{
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  border: '1px solid #555',
+                  backgroundColor: 'transparent',
+                  color: '#ddd',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveDocumentMetadata}
+                style={{
+                  padding: '9px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  backgroundColor: '#646cff',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                }}
+              >
+                Save details
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

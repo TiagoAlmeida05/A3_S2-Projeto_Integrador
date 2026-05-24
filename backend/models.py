@@ -26,6 +26,14 @@ class Project(Base):
     document_folders = relationship("DocumentFolder", back_populates="project", cascade="all, delete-orphan")
     last_accessed = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    @property
+    def document_count(self):
+        return len(self.documents or [])
+
+    @property
+    def code_count(self):
+        return len(self.codes or [])
+
 class Document(Base):
     __tablename__ = "documents"
 
@@ -34,6 +42,8 @@ class Document(Base):
     filename = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     type = Column(String, nullable=True, default="text")
+    order_index = Column(Integer, nullable=False, default=0)
+    metadata_json = Column(Text, nullable=False, default="{}")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     folder_id = Column(Integer, ForeignKey("document_folders.id", ondelete="SET NULL"), nullable=True)
 
