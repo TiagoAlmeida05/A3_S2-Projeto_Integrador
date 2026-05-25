@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import CreateProjectModal from "./CreateProjectModal";
 import ImportProjectModal from "./ImportProjectModal";
 import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
-import { checkLockStatus, acquireLock, getProjectFolderIfExists, initializeDriveFolder, getSharedProjects } from '../Utils/driveAPI';
+import { checkLockStatus, acquireLock, getProjectFolderIfExists, initializeDriveFolder, getSharedProjects, downloadCloudProjectData, releaseLock, deleteDriveFolder } from '../Utils/driveAPI';
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -84,23 +84,107 @@ function Dashboard() {
   const executeDelete = async () => {
     if (!deleteTarget.project) return;
     try {
+      const token = localStorage.getItem('google_drive_tokens');
+      const masterFolderId = localStorage.getItem('google_drive_folder_id');
+      
+      if (token && masterFolderId && !deleteTarget.project.isShared) {
+          const folderId = await getProjectFolderIfExists(deleteTarget.project.name, masterFolderId);
+          if (folderId) {
+              const deleteCloud = window.confirm("☁️ Do you also want to delete this project from Google Drive for all collaborators?");
+              if (deleteCloud) await deleteDriveFolder(folderId);
+          }
+      }
+
       const res = await fetch(`${API_BASE}/projects/${deleteTarget.project.id}`, { method: "DELETE" });
       if (res.ok) fetchProjects();
     } catch (err) {
       console.error("Failed to delete project:", err);
     }
+    setDeleteTarget({ isOpen: false, project: null });
   };
 
   const handleOpenProject = async (project) => {
-    if (project.isShared && typeof project.id === 'string') {
-        alert(`You clicked a shared project!\n\nNext step: We need to write the function that downloads this into your local database.`);
-        return;
-    }
-
+    const storedNickname = localStorage.getItem(`nickname_${project.name}`) || "Anonymous";
     const token = localStorage.getItem('google_drive_tokens');
     const masterFolderId = localStorage.getItem('google_drive_folder_id');
 
-    const storedNickname = localStorage.getItem(`nickname_${project.name}`) || "Anonymous";
+    const ensureUnlocked = async (folderId) => {
+      const lockStatus = await checkLockStatus(folderId);
+      if (lockStatus.isLocked) {
+        const force = window.confirm(`🔒 "${project.name}" is currently locked by: ${lockStatus.lockedBy}.\n\nWARNING: Forcing entry will override their session and may cause data loss if they are actively saving. \n\nDo you want to Force Enter?`);
+        if (!force) return false;
+        
+        setAuthStatus("Breaking lock...");
+        await releaseLock(lockStatus.lockFileId);
+      }
+      return true;
+    };
+
+    if (project.isShared && typeof project.id === 'string') {
+        if (!token) return;
+        setOpeningProjectName(project.name);
+
+        try {
+            const canEnter = await ensureUnlocked(project.id);
+            if (!canEnter) { setOpeningProjectName(null); return; }
+
+            setAuthStatus("Downloading project from cloud...");
+            const projectData = await downloadCloudProjectData(project.driveFileId);
+
+            setAuthStatus("Rebuilding local database...");
+            const projRes = await fetch(`${API_BASE}/projects`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: projectData.details.name, description: projectData.details.description || "" })
+            });
+            const newProj = await projRes.json();
+            const newId = newProj.id;
+
+            const docMap = {};
+            for (const doc of projectData.documents) {
+                const docRes = await fetch(`${API_BASE}/projects/${newId}/documents/create`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: doc.filename, content: doc.content || "" })
+                });
+                const newDoc = await docRes.json();
+                docMap[doc.id] = newDoc.id; 
+            }
+
+            const codeMap = {};
+            const sortedCodes = [...projectData.codes].sort((a, b) => (a.parent_id === null ? -1 : 1));
+            for (const code of sortedCodes) {
+                const codeRes = await fetch(`${API_BASE}/projects/${newId}/codes`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: code.name, color: code.color, description: code.description || "", parent_id: code.parent_id ? codeMap[code.parent_id] : null })
+                });
+                const newCode = await codeRes.json();
+                codeMap[code.id] = newCode.id;
+            }
+
+            for (const seg of projectData.segments) {
+                await fetch(`${API_BASE}/projects/${newId}/segments`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ document_id: docMap[seg.document_id], code_id: codeMap[seg.code_id], start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
+                });
+            }
+
+            setAuthStatus("Acquiring cloud lock...");
+            const lockFileId = await acquireLock(project.id, storedNickname);
+            localStorage.setItem(`current_project_lock_id`, lockFileId);
+            localStorage.setItem(`current_project_folder_id`, project.id);
+
+            setOpeningProjectName(null);
+            setAuthStatus("");
+            navigate(`/project/${newId}`); 
+            return;
+
+        } catch (err) {
+            console.error(err);
+            alert("Failed to import shared project. See console.");
+            setOpeningProjectName(null);
+            setAuthStatus("");
+            return;
+        }
+    }
 
     if(!token || !masterFolderId){
       navigate(`/project/${project.id}`);
@@ -110,7 +194,7 @@ function Dashboard() {
     setOpeningProjectName(project.name);
 
     try {
-      const projectDriveId = project.isShared ? project.id : await getProjectFolderIfExists(project.name, masterFolderId);
+      const projectDriveId = await getProjectFolderIfExists(project.name, masterFolderId);
       
       if(!projectDriveId) {
         navigate(`/project/${project.id}`);
@@ -118,13 +202,8 @@ function Dashboard() {
         return;
       }
       
-      const lockStatus = await checkLockStatus(projectDriveId);
-
-      if(lockStatus.isLocked) {
-        alert(`🔒 Cannot open project!\n\n"${project.name}" is currently being edited by: ${lockStatus.lockedBy}.\n\nPlease wait for them to finish and close the project.`);
-        setOpeningProjectName(null);
-        return;
-      }
+      const canEnter = await ensureUnlocked(projectDriveId);
+      if (!canEnter) { setOpeningProjectName(null); return; }
 
       const lockFileId = await acquireLock(projectDriveId, storedNickname);
       localStorage.setItem(`current_project_lock_id`, lockFileId);
@@ -288,7 +367,6 @@ function Dashboard() {
                   <div style={{ flex: 1, minWidth: 0, paddingRight: "20px",textAlign: "left" }}>
                     <h3 style={{ margin: "0 0 6px 0", fontSize: "18px", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {project.name}
-                      {/* 🔥 ADDED: The Shared Badge */}
                       {project.isShared && (
                         <span style={{ fontSize: "12px", backgroundColor: "#2a4a35", padding: "2px 6px", borderRadius: "4px", marginLeft: "8px", color: "#4CAF50", verticalAlign: "middle" }}>
                           Shared 🤝

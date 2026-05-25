@@ -364,15 +364,19 @@ function ProjectPage() {
     setUploadStatus("Saving to cloud... ☁️");
 
     try {
-      const [docsRes, codesRes, segmentsRes] = await Promise.all([
+      const [docsList, codesRes, segmentsRes] = await Promise.all([
         fetch(`${API_BASE}/projects/${id}/documents/`).then(res => res.json()),
         fetch(`${API_BASE}/projects/${id}/codes`).then(res => res.json()),
         fetch(`${API_BASE}/projects/${id}/segments`).then(res => res.json()),
-      ]); 
+      ]);
+
+      const fullDocs = await Promise.all(docsList.map(doc => 
+          fetch(`${API_BASE}/projects/${id}/documents/${doc.id}`).then(res => res.json())
+      ));
 
       const fullProjectData = {
         details: projectDetails,
-        documents: docsRes,
+        documents: fullDocs,
         codes: codesRes,
         segments: segmentsRes,
         last_synced: new Date().toISOString()
@@ -380,7 +384,7 @@ function ProjectPage() {
 
       await uploadProjectDataToDrive(folderId, fullProjectData);
       setUploadStatus("Syncing source files... 📁");
-      for (const doc of docsRes) {
+      for (const doc of docsList) {
         try {
           const fileResponse = await fetch(`${API_BASE}/projects/${id}/documents/${doc.id}/download`);
 
@@ -388,7 +392,7 @@ function ProjectPage() {
             const fileBlob = await fileResponse.blob();
             await uploadRawFileToDrive(folderId, doc.filename, fileBlob);
           } else {
-            console.error(`Backend refused to download ${doc.filename}: HTTP ${fileResponse.status}`);           
+            console.error(`Backend refused to download ${doc.filename}: HTTP ${fileResponse.status}`);     
           }
         } catch (fileErr) {
           console.error(`Failed to sync file ${doc.filename}:`, fileErr);

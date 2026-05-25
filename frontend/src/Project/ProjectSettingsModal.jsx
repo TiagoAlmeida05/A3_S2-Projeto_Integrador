@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
-import { getOrCreateProjectFolder, checkLockStatus, acquireLock } from '../Utils/driveAPI';
+import { getOrCreateProjectFolder, checkLockStatus, acquireLock, getProjectFolderIfExists, deleteDriveFolder, releaseLock } from '../Utils/driveAPI';
 
 function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription, currentLocalPath, onSave, onDelete }) {
   const [name, setName] = useState("");
@@ -54,6 +54,33 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
       }
     }
     onSave(name, description);
+  };
+
+  const handleConfirmDelete = async () => {
+    setShowConfirmDelete(false);
+
+    if (isConnected && driveFolderId) {
+      try {
+        const folderId = await getProjectFolderIfExists(currentName, driveFolderId);
+        if (folderId) {
+          const deleteCloud = window.confirm("☁️ Do you also want to delete this project from Google Drive for all collaborators?");
+          if (deleteCloud) {
+            setDriveStatus("Deleting from cloud...");
+            await deleteDriveFolder(folderId);
+          } else {
+            setDriveStatus("Removing orphaned cloud lock...");
+            const lockStatus = await checkLockStatus(folderId);
+            if (lockStatus.isLocked) {
+                await releaseLock(lockStatus.lockFileId);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to check/delete cloud folder:", err);
+      }
+    }
+    
+    onDelete(); 
   };
 
   return (
@@ -126,7 +153,9 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
         </div>
         
         <ConfirmDeleteModal 
-            isOpen={showConfirmDelete} onClose={() => setShowConfirmDelete(false)} onConfirm={() => { setShowConfirmDelete(false); onDelete(); }}
+            isOpen={showConfirmDelete} 
+            onClose={() => setShowConfirmDelete(false)} 
+            onConfirm={handleConfirmDelete}
             title={currentName ? `Delete "${currentName}"?` : "Delete Project?"}
             warningText="Are you sure you want to delete this project? All associated documents, transcripts, and highlighted codes will be permanently destroyed."
         />

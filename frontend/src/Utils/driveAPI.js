@@ -415,3 +415,27 @@ export const getSharedProjects = async () => {
     
     return sharedProjects;
 };
+
+export const downloadCloudProjectData = async (fileId) => {
+    console.log("Downloading project data from cloud...");
+    
+    const response = await fetchWithAuth(`${DRIVE_API_URL}/${fileId}?alt=media`, {
+        method: 'GET'
+    });
+
+    if(!response.ok) {
+        throw new Error("Failed to download project data from Google Drive");
+    }
+
+    return await response.json();
+};
+
+export const deleteDriveFolder = async (folderId) => {
+    const response = await fetchWithAuth(`${DRIVE_API_URL}/${folderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trashed: true })
+    });
+    if(!response.ok) throw new Error("Failed to trash cloud folder");
+    return true;
+};
