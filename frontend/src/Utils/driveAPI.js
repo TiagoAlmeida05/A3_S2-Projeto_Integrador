@@ -384,7 +384,7 @@ export const shareDriveFolder = async (folderId, emailAddress) => {
 export const getSharedProjects = async () => {
     console.log("Searching for projects shared with me...");
     
-    const query = encodeURIComponent(`name='project_data.json' and sharedWithMe=true and trashed=false`);
+    const query = encodeURIComponent(`name='project_data.json' and trashed=false`);
     const searchResponse = await fetchWithAuth(`${DRIVE_API_URL}?q=${query}&fields=files(id, parents)`, { 
         method: 'GET' 
     });
@@ -407,7 +407,8 @@ export const getSharedProjects = async () => {
             sharedProjects.push({ 
                 id: folderData.id, 
                 name: folderData.name, 
-                isShared: true 
+                isShared: true,
+                driveFileId: file.id
             });
         }
     }
