@@ -192,11 +192,25 @@ def delete_document(project_id: int, document_id: int, repo: DocumentRepository 
     return {"message": "Document deleted successfully"}
 
 @router.put("/{document_id}/move")
-def move_document(project_id: int, document_id: int, folder_id: Optional[int] = None, repo: DocumentRepository = Depends(get_doc_repo)):
-    doc = repo.move_to_folder(project_id, document_id, folder_id)
+def move_document(
+    project_id: int, 
+    document_id: int, 
+    folder_id: Optional[str] = None, # Accept string format temporarily for parsing compatibility
+    repo: DocumentRepository = Depends(get_doc_repo)
+):
+    # If the frontend passes an empty string folder_id='', turn it back into an actual Python None
+    parsed_folder_id = None
+    if folder_id and folder_id.strip() != "" and folder_id.lower() != "null":
+        try:
+            parsed_folder_id = int(folder_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid folder ID format")
+
+    doc = repo.move_to_folder(project_id, document_id, parsed_folder_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Moved successfully"}
+
 
 @router.put("/{document_id}/content")
 def update_document_content(project_id: int, document_id: int, doc_update: schemas.DocumentUpdateContent, repo: DocumentRepository = Depends(get_doc_repo)):
