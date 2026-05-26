@@ -62,11 +62,10 @@ function DocumentSidebar({
 
   const matchesMetadataFilter = (doc) => {
     const metadata = normalizeMetadata(doc);
-    const normalizedKey = metadataFilterKey.trim();
+    const normalizedKey = metadataFilterKey.trim().toLowerCase();
 
     if (!normalizedKey) return true;
-    if (normalizedKey && !(normalizedKey in metadata)) return false;
-    return true;
+    return Object.keys(metadata).some((key) => key.toLowerCase().includes(normalizedKey));
   };
 
   const compareDocuments = (left, right) => {
@@ -81,15 +80,27 @@ function DocumentSidebar({
     return left.filename.localeCompare(right.filename, undefined, { sensitivity: "base" });
   };
 
+  const compareFolders = (left, right) => {
+    if (sortMode === "custom") {
+      return (left.order_index ?? 0) - (right.order_index ?? 0) || left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+    }
+    if (sortMode === "date") {
+      const leftTime = left.created_at ? new Date(left.created_at).getTime() : Number(left.id ?? 0);
+      const rightTime = right.created_at ? new Date(right.created_at).getTime() : Number(right.id ?? 0);
+      return rightTime - leftTime || left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+    }
+    return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+  };
+
   const sortAndFilterDocuments = (documentList) => {
     return [...documentList].filter(matchesMetadataFilter).sort(compareDocuments);
   };
 
   const hasMetadataField = (doc) => {
-    const normalizedKey = metadataFilterKey.trim();
+    const normalizedKey = metadataFilterKey.trim().toLowerCase();
     if (!normalizedKey) return true;
     const metadata = normalizeMetadata(doc);
-    return Object.prototype.hasOwnProperty.call(metadata, normalizedKey);
+    return Object.keys(metadata).some((key) => key.toLowerCase().includes(normalizedKey));
   };
 
   const getDocumentBuckets = (documentList) => {
@@ -113,6 +124,8 @@ function DocumentSidebar({
 
     return { matching, missingField };
   };
+
+  const sortedFolders = [...folders].sort(compareFolders);
 
   const isSameContainer = (leftDoc, rightDoc) => (leftDoc?.folder_id ?? null) === (rightDoc?.folder_id ?? null);
 
@@ -457,6 +470,41 @@ function DocumentSidebar({
     );
   };
 
+  const renderMetadataSections = (groups, isNested) => {
+    const filterLabel = metadataFilterKey.trim();
+    const isFiltering = Boolean(filterLabel);
+
+    if (!isFiltering) {
+      return groups.matching.map((doc) => renderDoc(doc, isNested));
+    }
+
+    return (
+      <>
+        <li style={{ margin: isNested ? '0 0 6px 20px' : '0 0 6px 0', fontSize: '10px', color: '#8ea0ff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Has "{filterLabel}" detail ({groups.matching.length})
+        </li>
+        {groups.matching.length === 0 ? (
+          <li style={{ margin: isNested ? '0 0 8px 20px' : '0 0 8px 0', fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
+            No matching files
+          </li>
+        ) : (
+          groups.matching.map((doc) => renderDoc(doc, isNested))
+        )}
+
+        <li style={{ margin: isNested ? '8px 0 6px 20px' : '8px 0 6px 0', fontSize: '10px', color: '#f0b56a', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Missing "{filterLabel}" detail ({groups.missingField.length})
+        </li>
+        {groups.missingField.length === 0 ? (
+          <li style={{ margin: isNested ? '0 0 8px 20px' : '0 0 8px 0', fontSize: '12px', color: '#666', fontStyle: 'italic' }}>
+            None
+          </li>
+        ) : (
+          groups.missingField.map((doc) => renderDoc(doc, isNested))
+        )}
+      </>
+    );
+  };
+
   return (
     <>
       {/* HEADER */}
@@ -560,13 +608,13 @@ function DocumentSidebar({
           <input
             value={metadataFilterKey}
             onChange={(e) => setMetadataFilterKey(e.target.value)}
-            placeholder="Metadata field"
-            style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #333', backgroundColor: '#111', color: 'white', fontSize: '12px' }}
+            placeholder="Detail field"
+            style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', padding: '8px 10px', borderRadius: '6px', border: '1px solid #333', backgroundColor: '#111', color: 'white', fontSize: '12px' }}
           />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
           <div style={{ fontSize: '11px', color: '#888', lineHeight: 1.4 }}>
-            {metadataFilterKey ? 'Filtering by metadata tags.' : sortMode === 'custom' ? 'Drag documents up or down.' : 'Sorted list.'}
+            {metadataFilterKey ? 'Filtering by details.' : sortMode === 'custom' ? 'Drag documents up or down.' : 'Sorted list.'}
           </div>
           <button
             type="button"
@@ -600,7 +648,7 @@ function DocumentSidebar({
         )}
 
         {/* FOLDERS LIST */}
-        {folders.map(folder => {
+        {sortedFolders.map(folder => {
           const folderGroups = getDocumentBuckets(documents.filter(d => d.folder_id === folder.id));
           const isExpanded = expandedFolders.has(folder.id);
           const isDraggingOver = dragOverId === `folder-${folder.id}`;
@@ -636,7 +684,7 @@ function DocumentSidebar({
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                   <span style={{ backgroundColor: '#111', color: '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
-                    {folderGroups.matching.length + folderGroups.missingField.length}
+                    {metadataFilterKey.trim() ? `${folderGroups.matching.length}/${folderGroups.matching.length + folderGroups.missingField.length}` : folderGroups.matching.length + folderGroups.missingField.length}
                   </span>
                 </div>
               </div>
@@ -648,10 +696,7 @@ function DocumentSidebar({
                       <div style={{ marginLeft: '40px', fontSize: '12px', color: '#555', fontStyle: 'italic', padding: '4px' }}>Empty folder</div>
                     </li>
                   ) : (
-                    <>
-                      {folderGroups.matching.map(doc => renderDoc(doc, true))}
-                      {metadataFilterKey.trim() && folderGroups.missingField.map(doc => renderDoc(doc, true))}
-                    </>
+                    renderMetadataSections(folderGroups, true)
                   )}
                 </ul>
               )}
@@ -676,8 +721,7 @@ function DocumentSidebar({
               const rootGroups = getDocumentBuckets(documents.filter((doc) => !doc.folder_id));
               return (
                 <>
-                  {rootGroups.matching.map(doc => renderDoc(doc, false))}
-                  {metadataFilterKey.trim() && rootGroups.missingField.map(doc => renderDoc(doc, false))}
+                  {renderMetadataSections(rootGroups, false)}
                 </>
               );
             })()}
@@ -707,7 +751,7 @@ function DocumentSidebar({
         <div onClick={closeMetadataDialog} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.55)', display: 'flex', alignItems: 'center', justifyIntent: 'center', justifyContent: 'center', zIndex: 10000, padding: '16px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '420px', backgroundColor: '#1c1c22', border: '1px solid #444', borderRadius: '12px', padding: '18px', color: 'white', boxShadow: '0 20px 40px rgba(0,0,0,0.45)' }}>
             <h4 style={{ marginTop: 0, marginBottom: '6px' }}>Add details to this document</h4>
-            <p style={{ marginTop: 0, color: '#b8b8b8', fontSize: '13px', lineHeight: 1.5 }}>Use simple metadata tags to easily locate items later.</p>
+            <p style={{ marginTop: 0, color: '#b8b8b8', fontSize: '13px', lineHeight: 1.5 }}>Use simple details to easily locate items later.</p>
             <div style={{ marginBottom: '14px', fontSize: '12px', color: '#8f8f8f' }}>{metadataDialog.documentName}</div>
             <label style={{ display: 'block', fontSize: '13px', marginBottom: '10px' }}>
               Label name
