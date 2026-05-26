@@ -399,7 +399,7 @@ export const getSharedProjects = async () => {
         if (file.parents && file.parents.length > 0) {
             const folderId = file.parents[0];
             
-            const folderRes = await fetchWithAuth(`${DRIVE_API_URL}/${folderId}?fields=id,name`, { 
+            const folderRes = await fetchWithAuth(`${DRIVE_API_URL}/${folderId}?fields=id,name,shared,ownedByMe`, { 
                 method: 'GET' 
             });
             const folderData = await folderRes.json();
@@ -407,7 +407,8 @@ export const getSharedProjects = async () => {
             sharedProjects.push({ 
                 id: folderData.id, 
                 name: folderData.name, 
-                isShared: true,
+                isShared: folderData.shared || folderData.ownedByMe === false,
+                isOwner: folderData.ownedByMe,
                 driveFileId: file.id
             });
         }

@@ -30,22 +30,36 @@ function Dashboard() {
         localProjects = await res.json();
       }
 
-      let sharedProjects = [];
+      let cloudProjects = [];
       const token = localStorage.getItem('google_drive_tokens');
       if (token) {
         try {
-          sharedProjects = await getSharedProjects();
+          cloudProjects = await getSharedProjects();
         } catch (err) {
-          console.error("Failed to fetch shared projects from Drive:", err);
+          console.error("Failed to fetch cloud projects from Drive:", err);
         }
       }
 
+      const cloudMap = {};
+      for (const cp of cloudProjects) cloudMap[cp.name] = cp;
+
+      const mergedLocalProjects = localProjects.map(p => {
+          if (cloudMap[p.name]) {
+              return {
+                  ...p,
+                  cloudFolderId: cloudMap[p.name].id,
+                  isShared: cloudMap[p.name].isShared,
+                  isOwner: cloudMap[p.name].isOwner
+              };
+          }
+          return p;
+      });
+
       const localNames = new Set(localProjects.map(p => p.name));
-      const purelySharedProjects = sharedProjects.filter(sp => !localNames.has(sp.name));
+      const purelyCloudProjects = cloudProjects.filter(sp => !localNames.has(sp.name));
 
-      const combined = [...localProjects, ...purelySharedProjects];
+      const combined = [...mergedLocalProjects, ...purelyCloudProjects];
 
-      // 4. Sort them
       const sortedData = combined.sort((a, b) => {
         if (a.last_accessed && b.last_accessed) {
           return new Date(b.last_accessed) - new Date(a.last_accessed);
@@ -87,14 +101,10 @@ function Dashboard() {
     if (!deleteTarget.project) return;
     try {
       const token = localStorage.getItem('google_drive_tokens');
-      const masterFolderId = localStorage.getItem('google_drive_folder_id');
       
-      if (token && masterFolderId && !deleteTarget.project.isShared) {
-          const folderId = await getProjectFolderIfExists(deleteTarget.project.name, masterFolderId);
-          if (folderId) {
-              const deleteCloud = window.confirm("☁️ Do you also want to delete this project from Google Drive for all collaborators?");
-              if (deleteCloud) await deleteDriveFolder(folderId);
-          }
+      if (token && deleteTarget.project.isOwner && deleteTarget.project.cloudFolderId) {
+          const deleteCloud = window.confirm("☁️ Do you also want to delete this project from Google Drive for all collaborators?");
+          if (deleteCloud) await deleteDriveFolder(deleteTarget.project.cloudFolderId);
       }
 
       const res = await fetch(`${API_BASE}/projects/${deleteTarget.project.id}`, { method: "DELETE" });
@@ -122,7 +132,7 @@ function Dashboard() {
       return true;
     };
 
-    if (project.isShared && typeof project.id === 'string') {
+    if (typeof project.id === 'string') {
         if (!token) return;
         setOpeningProjectName(project.name);
 
@@ -188,7 +198,7 @@ function Dashboard() {
         }
     }
 
-    if(!token || !masterFolderId){
+    if(!token) {
       navigate(`/project/${project.id}`);
       return;
     }
@@ -196,7 +206,7 @@ function Dashboard() {
     setOpeningProjectName(project.name);
 
     try {
-      const projectDriveId = await getProjectFolderIfExists(project.name, masterFolderId);
+      const projectDriveId = project.cloudFolderId || await getProjectFolderIfExists(project.name, masterFolderId);
       
       if(!projectDriveId) {
         navigate(`/project/${project.id}`);
@@ -220,39 +230,6 @@ function Dashboard() {
     }
 
     setOpeningProjectName(null);
-  };
-
-  const handleGoogleConnect = async () => {
-    try {
-      setAuthStatus("Opening Google Login...");
-      const tokens = await window.electronAPI.loginToGoogle();
-
-      if (tokens.access_token && tokens) {
-        console.log("SUCCESS! Full tokens received:", tokens);
-        localStorage.setItem('google_drive_tokens', tokens.access_token);
-
-        if (tokens.refresh_token) {
-          localStorage.setItem('google_drive_refresh_token', tokens.refresh_token);
-        }
-        setIsConnected(true);
-        setAuthStatus("Setting up Drive folder...");
-
-        try {
-          const folderId = await initializeDriveFolder();
-          localStorage.setItem('google_drive_folder_id', folderId);
-          setAuthStatus("");
-        } catch (folderError) {
-          console.error("Folder creation failed:", folderError);
-          setAuthStatus("Connected, but couldn't create the Drive folder.");
-        }
-      } else {
-        console.error("Token exchange failed:", tokens);
-        setAuthStatus("Failed to get access tokens. Check console.");
-      }
-    } catch (error) {
-      console.error(error);
-      setAuthStatus("Google Login failed or was cancelled.");
-    }
   };
 
   const handleDisconnect = () => {
