@@ -73,6 +73,8 @@ function Dashboard() {
 
     const newProject = await res.json();
     setIsCreateModalOpen(false);
+    localStorage.removeItem('current_project_folder_id');
+    localStorage.removeItem('current_project_lock_id');
     navigate(`/project/${newProject.id}`);
   };
 

@@ -44,6 +44,7 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
           setDriveStatus("Locking project for you...");
           const lockFileId = await acquireLock(projectFolderId, nickname);
           localStorage.setItem('current_project_lock_id', lockFileId);
+          localStorage.setItem('current_project_folder_id', projectFolderId);
           localStorage.setItem(`nickname_${name}`, nickname);
           console.log("Lock acquired successfully!");
           setDriveStatus("Cloud sync & Lock successful! ✅");

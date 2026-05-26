@@ -36,7 +36,7 @@ const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen
 
       const folderId = localStorage.getItem('current_project_folder_id');
       if(!folderId) {
-          setShareStatus("Error: This project is not synced to Google Drive.");
+          setShareStatus("Project not in cloud. Open Settings and click 'Save Changes' first!");
           return;
       }
 
