@@ -16,6 +16,7 @@ const ProjectPageSidebar = ({
   projectCodes,
   handleDeleteCode,
   fetchCodes,
+  fetchDocuments,
   openCodePanel,
   setProjectCodes,
   handleCreateTextDocument,
@@ -120,6 +121,7 @@ const ProjectPageSidebar = ({
             onDeleteDocument={handleDeleteDocument}
             projectId={id}
             onWriteDocument={handleCreateTextDocument}
+            fetchDocuments={fetchDocuments}
           />
         )}
         {activeTab === "codes" && (

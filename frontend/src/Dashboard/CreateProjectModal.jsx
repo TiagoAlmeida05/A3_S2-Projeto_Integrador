@@ -70,6 +70,11 @@ function CreateProjectModal({ isOpen, onClose, onCreate }) {
                 📂 Browse...
               </button>
             </div>
+            {!localPath && (
+              <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#f0c36d', lineHeight: 1.4 }}>
+                ⚠️ If you do not choose a local folder, PDF previews may not always show correctly. The text content will still be saved.
+              </p>
+            )}
             {folderError ? (
               <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#ff4444', fontWeight: 'bold' }}>
                 ⚠️ {folderError}

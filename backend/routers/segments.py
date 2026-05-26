@@ -6,7 +6,7 @@ import schemas
 import models
 from repositories.segment_repo import SegmentRepository
 
-# We use an empty prefix here because we have two different base paths!
+# We use an empty prefix here because we have two different base paths
 router = APIRouter(tags=["Segments"])
 
 def get_seg_repo(db: Session = Depends(get_db)):
