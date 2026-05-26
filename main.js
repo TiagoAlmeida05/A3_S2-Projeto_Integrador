@@ -51,7 +51,7 @@ app.whenReady().then(() => {
       const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
       const REDIRECT_URI = 'http://127.0.0.1';
-      const SCOPES = 'https://www.googleapis.com/auth/drive.file email profile';
+      const SCOPES = 'https://www.googleapis.com/auth/drive';
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&response_type=code&scope=${SCOPES}&access_type=offline&prompt=consent&code_challenge=${challenge}&code_challenge_method=S256`;
   
       let authWindow = new BrowserWindow({
