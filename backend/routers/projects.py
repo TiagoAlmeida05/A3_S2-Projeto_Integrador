@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
 import os
@@ -15,6 +15,18 @@ router = APIRouter(
 
 def get_project_repo(db: Session = Depends(get_db)):
     return ProjectRepository(db)
+
+
+@router.post("/import/refi", response_model=schemas.ProjectResponse)
+async def import_refi_xml_route(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # Import locally to avoid circular dependencies
+    from refi_service import import_refi_xml
+    return await import_refi_xml(file, db)
+
+@router.get("/{project_id}/export/refi")
+def export_refi_xml_route(project_id: int, db: Session = Depends(get_db)):
+    from refi_service import export_refi_xml
+    return export_refi_xml(project_id, db)
 
 @router.get("", response_model=List[schemas.ProjectResponse])
 def get_projects(repo: ProjectRepository = Depends(get_project_repo)):
