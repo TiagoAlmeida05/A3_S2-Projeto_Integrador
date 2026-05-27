@@ -43,6 +43,7 @@ const ProjectPageView = ({ page }) => {
     handleFileUpload,
     handleDocumentClick,
     handleDeleteDocument,
+    handleRenameDocument,
     handleDeleteCode,
     openCodePanel,
     handleExportREFI,
@@ -82,6 +83,7 @@ const ProjectPageView = ({ page }) => {
           handleFileUpload={handleFileUpload}
           handleDocumentClick={handleDocumentClick}
           handleDeleteDocument={handleDeleteDocument}
+          handleRenameDocument={handleRenameDocument}
           projectCodes={projectCodes}
           handleDeleteCode={handleDeleteCode}
           fetchCodes={fetchCodes}

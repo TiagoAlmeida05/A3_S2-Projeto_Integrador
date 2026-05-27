@@ -143,3 +143,19 @@ def update_document_content(project_id: int, document_id: int, doc_update: schem
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Document updated successfully"}
+
+@router.put("/{document_id}/rename")
+def rename_document(project_id: int, document_id: int, doc_update: schemas.DocumentRename, repo: DocumentRepository = Depends(get_doc_repo)):
+    filename = doc_update.filename.strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="Document name cannot be empty")
+
+    existing_doc = repo.get_by_filename(project_id, filename, exclude_document_id=document_id)
+    if existing_doc:
+        raise HTTPException(status_code=409, detail="A document with that name already exists in this project")
+
+    doc = repo.update_filename(project_id, document_id, filename)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {"id": doc.id, "filename": doc.filename, "type": doc.type, "created_at": doc.created_at, "folder_id": doc.folder_id}

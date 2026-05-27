@@ -13,6 +13,7 @@ const ProjectPageSidebar = ({
   handleFileUpload,
   handleDocumentClick,
   handleDeleteDocument,
+  handleRenameDocument,
   projectCodes,
   handleDeleteCode,
   fetchCodes,
@@ -118,6 +119,7 @@ const ProjectPageSidebar = ({
             onFileUpload={handleFileUpload}
             onDocumentClick={handleDocumentClick}
             onDeleteDocument={handleDeleteDocument}
+            onRenameDocument={handleRenameDocument}
             projectId={id}
             onWriteDocument={handleCreateTextDocument}
           />

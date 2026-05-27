@@ -9,6 +9,7 @@ function DocumentSidebar({
   onWriteDocument,
   onDocumentClick, 
   onDeleteDocument,
+  onRenameDocument,
   projectId
 }) {
   const [folders, setFolders] = useState([]);
@@ -22,6 +23,7 @@ function DocumentSidebar({
   const [draggedItem, setDraggedItem] = useState(null); 
   const [dragOverId, setDragOverId] = useState(null); 
   const [dragPosition, setDragPosition] = useState(null); 
+  const [renamingDocument, setRenamingDocument] = useState(null);
 
   // Right-Click Context Menu State
   const [contextMenu, setContextMenu] = useState(null);
@@ -97,6 +99,36 @@ function DocumentSidebar({
       id: targetId,
       name: filename
     });
+  };
+
+  const startRenameDocument = (doc) => {
+    setRenamingDocument({ id: doc.id, value: doc.filename });
+    setContextMenu(null);
+  };
+
+  const finishRenameDocument = async () => {
+    if (!renamingDocument) return;
+
+    const nextName = renamingDocument.value.trim();
+    const currentDocument = documents.find((doc) => doc.id === renamingDocument.id);
+
+    if (!currentDocument) {
+      setRenamingDocument(null);
+      return;
+    }
+
+    if (!nextName || nextName === currentDocument.filename) {
+      setRenamingDocument(null);
+      return;
+    }
+
+    try {
+      await onRenameDocument(renamingDocument.id, nextName);
+      setRenamingDocument(null);
+    } catch (error) {
+      console.error(error);
+      alert(error.message || "Failed to rename document");
+    }
   };
 
   // --- DRAG AND DROP ---
@@ -212,6 +244,7 @@ function DocumentSidebar({
 
   const renderDoc = (doc, isNested = false) => {
     const isDragging = draggedItem?.type === 'doc' && draggedItem.id === doc.id;
+    const isRenaming = renamingDocument?.id === doc.id;
     return (
       <li 
         key={doc.id} 
@@ -238,9 +271,40 @@ function DocumentSidebar({
       > 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
           <div style={{ color: '#666', fontSize: '14px', cursor: 'grab' }}>⋮⋮</div>
-          <span style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            📄 {doc.filename}
-          </span>
+          {isRenaming ? (
+            <input
+              autoFocus
+              value={renamingDocument.value}
+              onChange={(e) => setRenamingDocument((prev) => prev ? { ...prev, value: e.target.value } : prev)}
+              onBlur={finishRenameDocument}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  finishRenameDocument();
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  setRenamingDocument(null);
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                background: '#111',
+                border: '1px solid #646cff',
+                color: '#fff',
+                outline: 'none',
+                borderRadius: '4px',
+                fontSize: '13px',
+                padding: '6px 8px'
+              }}
+            />
+          ) : (
+            <span style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              📄 {doc.filename}
+            </span>
+          )}
         </div>
       </li>
     );
@@ -286,8 +350,7 @@ function DocumentSidebar({
           type="file" 
           multiple 
           id="file-upload" 
-          accept=".txt,.md,.rtf,.pdf,.docx,.odt" 
-          style={{ display: 'none' }} 
+          accept=".txt,.md,.rtf,.pdf,.docx,.odt,audio/wav,audio/mp3,audio/mpeg,audio/m4a,audio/webm,audio/ogg"          style={{ display: 'none' }} 
           onChange={onFileUpload}
         />
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -511,18 +574,33 @@ function DocumentSidebar({
           )}
 
           {contextMenu.type === 'doc' && (
-            <button 
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                onDeleteDocument(contextMenu.id, contextMenu.name);
-                setContextMenu(null); 
-              }}
-              style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: '#ff6b6b', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
-              onMouseOver={(e) => e.target.style.backgroundColor = '#441111'}
-              onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-            >
-              Delete Document
-            </button>
+            <>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  const doc = documents.find((item) => item.id === contextMenu.id);
+                  if (doc) startRenameDocument(doc);
+                  setContextMenu(null); 
+                }}
+                style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#3a3a46'}
+                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                Rename Document
+              </button>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  onDeleteDocument(contextMenu.id, contextMenu.name);
+                  setContextMenu(null); 
+                }}
+                style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: '#ff6b6b', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#441111'}
+                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                Delete Document
+              </button>
+            </>
           )}
         </div>
       )}

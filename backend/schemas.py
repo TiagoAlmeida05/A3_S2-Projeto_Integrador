@@ -101,6 +101,9 @@ class FolderReorderRequest(BaseModel):
 class DocumentUpdateContent(BaseModel):
     content: str
 
+class DocumentRename(BaseModel):
+    filename: str
+
 class DocumentCreateText(BaseModel):
     name: str
     content: str

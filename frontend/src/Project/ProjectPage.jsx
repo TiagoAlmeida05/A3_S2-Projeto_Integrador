@@ -373,30 +373,37 @@ function ProjectPage() {
   // FILE MANAGEMENT LOGIC
 
   const handleFileUpload = async (eventOrFiles) => {
-    const files = Array.isArray(eventOrFiles)
-      ? eventOrFiles
-      : Array.from(eventOrFiles?.target?.files || []);
+    const files = Array.from(eventOrFiles?.target?.files || eventOrFiles || []);
     if (files.length === 0) return;
 
-    setUploadStatus("Checking files...");
-    setUploadProgress({ current: 0, total: 0, isActive: false });
+    setUploadStatus("Processing files...");
+    setUploadProgress({ current: 0, total: files.length, isActive: true });
 
     let existingNames = documents.map((doc) => doc.filename);
-    const filesToUpload = [];
+    const audioExtensions = [".wav", ".mp3", ".m4a", ".webm", ".ogg", ".mpeg"];
+    
+    const successfulUploads = [];
+    const failedUploads = [];
 
+    // Process every single file sequentially to handle custom conflict dialogs or track state cleanly
     for (let i = 0; i < files.length; i++) {
       let cur = files[i];
       let shouldUpload = true;
       let finalName = cur.name;
       let isNameValid = !existingNames.includes(finalName);
+      
+      const isAudio = audioExtensions.some(ext => finalName.toLowerCase().endsWith(ext));
 
+      setUploadProgress(prev => ({ ...prev, current: i }));
+
+      // --- 1. CONFLICT RESOLUTION LOOP (Reused from your existing setup) ---
       while (!isNameValid && shouldUpload) {
         const DotIndex = finalName.lastIndexOf(".");
         const ext = DotIndex !== -1 ? finalName.substring(DotIndex) : "";
-        const base =
-          DotIndex !== -1 ? finalName.substring(0, DotIndex) : finalName;
+        const base = DotIndex !== -1 ? finalName.substring(0, DotIndex) : finalName;
         const suggestedN = `${base}_copy${ext}`;
 
+        // Pause thread execution until user maps an action via the React state modal overlay
         const userChoice = await new Promise((resolve) => {
           setConflictDialog({
             isOpen: true,
@@ -416,19 +423,20 @@ function ProjectPage() {
             try {
               const delRes = await fetch(
                 `${API_BASE}/projects/${id}/documents/${oldDoc.id}`,
-                { method: "DELETE" },
+                { method: "DELETE" }
               );
               if (delRes.ok) {
                 isNameValid = true;
-                if (activeDocument && activeDocument.id === oldDoc.id)
+                if (activeDocument && activeDocument.id === oldDoc.id) {
                   setActiveDocument(null);
+                }
                 existingNames = existingNames.filter((n) => n !== finalName);
               } else {
-                window.alert("Server failed to delete. Skipping.");
+                window.alert("Server failed to delete target file. Skipping.");
                 shouldUpload = false;
               }
             } catch (err) {
-              window.alert("❌ Network error. Skipping.");
+              window.alert("❌ Local server network error. Skipping.");
               shouldUpload = false;
             }
           }
@@ -444,60 +452,75 @@ function ProjectPage() {
         }
       }
 
+      // Hide custom overlay instantly once resolved
+      setConflictDialog((prev) => ({ ...prev, isOpen: false }));
+
+      // --- 2. UPLOAD DISPATCH LOOP ---
       if (shouldUpload) {
+        // Enforce the custom file instance rename map onto the blob before sending
         if (finalName !== cur.name) {
           cur = new File([cur], finalName, { type: cur.type });
         }
-        filesToUpload.push(cur);
-        existingNames.push(finalName);
+
+        if (isAudio) {
+          // Send to the dedicated local audio-to-text pipeline
+          setUploadStatus(`🎙️ Transcribing offline audio (${i + 1}/${files.length}): ${finalName}...`);
+          const audioFormData = new FormData();
+          audioFormData.append("file", cur);
+
+          try {
+            const res = await fetch(`${API_BASE}/projects/${id}/audio/transcribe`, {
+              method: "POST",
+              body: audioFormData,
+            });
+
+            if (!res.ok) {
+              const errData = await res.json();
+              failedUploads.push({ filename: finalName, reason: errData.detail || `HTTP ${res.status}` });
+            } else {
+              const docData = await res.json();
+              successfulUploads.push(docData);
+              existingNames.push(docData.filename); // Track actual filename returned by backend
+            }
+          } catch (err) {
+            failedUploads.push({ filename: finalName, reason: "Local service connection timeout" });
+            console.error("Local audio process crashed:", err);
+          }
+
+        } else {
+          // Send to your traditional textual ingestion route
+          setUploadStatus(`📄 Importing text document (${i + 1}/${files.length}): ${finalName}...`);
+          const textFormData = new FormData();
+          textFormData.append("files", cur);
+
+          try {
+            const res = await fetch(`${API_BASE}/projects/${id}/documents/`, {
+              method: "POST",
+              body: textFormData,
+            });
+
+            if (!res.ok) {
+              failedUploads.push({ filename: finalName, reason: `HTTP ${res.status}` });
+            } else {
+              const data = await res.json();
+              if (data.failed && data.failed.length > 0) {
+                failedUploads.push(...data.failed);
+              }
+              if (data.successful && data.successful.length > 0) {
+                successfulUploads.push(...data.successful);
+                existingNames.push(finalName);
+              }
+            }
+          } catch (err) {
+            failedUploads.push({ filename: finalName, reason: "Network communication error" });
+            console.error("Text process crashed:", err);
+          }
+        }
       }
     }
 
-    setConflictDialog((prev) => ({ ...prev, isOpen: false }));
-
-    if (filesToUpload.length === 0) {
-      setUploadStatus("Upload cancelled. No files were added.");
-      event.target.value = null;
-      return;
-    }
-
-    const total = filesToUpload.length;
-    const successfulUploads = [];
-    const failedUploads = [];
-
-    setUploadProgress({ current: 0, total, isActive: true });
-    setUploadStatus(`Importing ${total} file${total === 1 ? "" : "s"}...`);
-
-    const formData = new FormData();
-    filesToUpload.forEach((file) => formData.append("files", file));
-
-    try {
-      const res = await fetch(`${API_BASE}/projects/${id}/documents/`, {
-        method: "POST",
-        body: formData,
-      });
-
-      setUploadProgress({ current: total, total, isActive: false });
-
-      if (!res.ok) {
-        failedUploads.push({
-          filename: filesToUpload.map((file) => file.name).join(", "),
-          reason: `HTTP ${res.status}`,
-        });
-      } else {
-        const data = await res.json();
-        if (data.failed && data.failed.length > 0) {
-          failedUploads.push(...data.failed);
-        }
-        if (data.successful && data.successful.length > 0) {
-          successfulUploads.push(...data.successful);
-        }
-      }
-    } catch (err) {
-      setUploadProgress({ current: total, total, isActive: false });
-      failedUploads.push({ filename: "Batch upload", reason: "Network error" });
-      console.error(err);
-    }
+    // --- 3. FINALIZATION AND STATUS REPORTING ---
+    setUploadProgress({ current: files.length, total: files.length, isActive: false });
 
     if (failedUploads.length > 0) {
       const errorList = failedUploads
@@ -505,16 +528,17 @@ function ProjectPage() {
         .join(", ");
       if (successfulUploads.length > 0) {
         setUploadStatus(
-          `Uploaded ${successfulUploads.length} files. Failed: ${errorList}`,
+          `Imported ${successfulUploads.length} item(s). Failed tracks: ${errorList}`
         );
       } else {
-        setUploadStatus(`All uploads failed: ${errorList}`);
+        setUploadStatus(`All items failed processing: ${errorList}`);
       }
     } else {
-      setUploadStatus(`Upload complete! ${successfulUploads.length} files imported.`);
-      setTimeout(() => setUploadStatus(""), 3000);
+      setUploadStatus(`Success! All ${successfulUploads.length} items parsed and cataloged offline.`);
+      setTimeout(() => setUploadStatus(""), 4000);
     }
 
+    // Instantly refresh documents list viewport
     fetchDocuments();
 
     if (eventOrFiles?.target) {
@@ -562,6 +586,39 @@ function ProjectPage() {
       console.error(err);
       setUploadStatus("Server error during deletion.");
     }
+  };
+
+  const handleRenameDocument = async (docId, newName) => {
+    const filename = newName.trim();
+    if (!filename) {
+      throw new Error("Document name cannot be empty.");
+    }
+
+    const response = await fetch(
+      `${API_BASE}/projects/${id}/documents/${docId}/rename`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename }),
+      },
+    );
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail || "Failed to rename document");
+    }
+
+    setDocuments((prevDocs) =>
+      prevDocs.map((doc) => (doc.id === docId ? { ...doc, ...data } : doc)),
+    );
+    if (activeDocument && activeDocument.id === docId) {
+      setActiveDocument((prevDoc) => (prevDoc ? { ...prevDoc, ...data } : prevDoc));
+    }
+
+    setUploadStatus(`Renamed to ${data.filename}`);
+    setTimeout(() => setUploadStatus(""), 2500);
+
+    return data;
   };
 
   useEffect(() => {
@@ -693,6 +750,7 @@ function ProjectPage() {
     handleFileUpload,
     handleDocumentClick,
     handleDeleteDocument,
+    handleRenameDocument,
     handleDeleteCode,
     fetchCodes,
     fetchDocuments,
