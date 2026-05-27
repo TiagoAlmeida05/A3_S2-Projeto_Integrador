@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import CreateProjectModal from "./CreateProjectModal";
 import ImportProjectModal from "./ImportProjectModal";
 import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
-import { checkLockStatus, acquireLock, getProjectFolderIfExists, initializeDriveFolder, getSharedProjects, downloadCloudProjectData, releaseLock, deleteDriveFolder } from '../Utils/driveAPI';
+import { checkLockStatus, acquireLock, getProjectFolderIfExists, initializeDriveFolder, getSharedProjects, downloadCloudProjectData, releaseLock, deleteDriveFolder, downloadProjectDataFromDrive } from '../Utils/driveAPI';
 
 const API_BASE = "http://127.0.0.1:8000";
 
@@ -61,10 +61,12 @@ function Dashboard() {
       const combined = [...mergedLocalProjects, ...purelyCloudProjects];
 
       const sortedData = combined.sort((a, b) => {
-        if (a.last_accessed && b.last_accessed) {
-          return new Date(b.last_accessed) - new Date(a.last_accessed);
-        }
-        return -1; 
+        // Safe sorting that protects against NaN errors
+        let dateA = a.last_accessed ? new Date(a.last_accessed).getTime() : 0;
+        let dateB = b.last_accessed ? new Date(b.last_accessed).getTime() : 0;
+        if (isNaN(dateA)) dateA = 0;
+        if (isNaN(dateB)) dateB = 0;
+        return dateB - dateA; 
       });
       
       setProjects(sortedData);
@@ -120,116 +122,133 @@ function Dashboard() {
     const token = localStorage.getItem('google_drive_tokens');
     const masterFolderId = localStorage.getItem('google_drive_folder_id');
 
-    const ensureUnlocked = async (folderId) => {
-      const lockStatus = await checkLockStatus(folderId);
-      if (lockStatus.isLocked) {
-        const force = window.confirm(`🔒 "${project.name}" is currently locked by: ${lockStatus.lockedBy}.\n\nWARNING: Forcing entry will override their session and may cause data loss if they are actively saving. \n\nDo you want to Force Enter?`);
-        if (!force) return false;
-        
-        setAuthStatus("Breaking lock...");
-        await releaseLock(lockStatus.lockFileId);
-      }
-      return true;
-    };
-
-    if (typeof project.id === 'string') {
-        if (!token) return;
-        setOpeningProjectName(project.name);
-
-        try {
-            const canEnter = await ensureUnlocked(project.id);
-            if (!canEnter) { setOpeningProjectName(null); return; }
-
-            setAuthStatus("Downloading project from cloud...");
-            const projectData = await downloadCloudProjectData(project.driveFileId);
-
-            setAuthStatus("Rebuilding local database...");
-            const projRes = await fetch(`${API_BASE}/projects`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: projectData.details.name, description: projectData.details.description || "" })
-            });
-            const newProj = await projRes.json();
-            const newId = newProj.id;
-
-            const docMap = {};
-            for (const doc of projectData.documents) {
-                const docRes = await fetch(`${API_BASE}/projects/${newId}/documents/create`, {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: doc.filename, content: doc.content || "" })
-                });
-                const newDoc = await docRes.json();
-                docMap[doc.id] = newDoc.id; 
-            }
-
-            const codeMap = {};
-            const sortedCodes = [...projectData.codes].sort((a, b) => (a.parent_id === null ? -1 : 1));
-            for (const code of sortedCodes) {
-                const codeRes = await fetch(`${API_BASE}/projects/${newId}/codes`, {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: code.name, color: code.color, description: code.description || "", parent_id: code.parent_id ? codeMap[code.parent_id] : null })
-                });
-                const newCode = await codeRes.json();
-                codeMap[code.id] = newCode.id;
-            }
-
-            for (const seg of projectData.segments) {
-                await fetch(`${API_BASE}/projects/${newId}/segments`, {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ document_id: docMap[seg.document_id], code_id: codeMap[seg.code_id], start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
-                });
-            }
-
-            setAuthStatus("Acquiring cloud lock...");
-            const lockFileId = await acquireLock(project.id, storedNickname);
-            localStorage.setItem(`current_project_lock_id`, lockFileId);
-            localStorage.setItem(`current_project_folder_id`, project.id);
-
-            setOpeningProjectName(null);
-            setAuthStatus("");
-            navigate(`/project/${newId}`); 
-            return;
-
-        } catch (err) {
-            console.error(err);
-            alert("Failed to import shared project. See console.");
-            setOpeningProjectName(null);
-            setAuthStatus("");
-            return;
-        }
-    }
-
-    if(!token) {
-      navigate(`/project/${project.id}`);
-      return;
-    }
-
     setOpeningProjectName(project.name);
 
     try {
-      const projectDriveId = project.cloudFolderId || await getProjectFolderIfExists(project.name, masterFolderId);
-      
-      if(!projectDriveId) {
-        navigate(`/project/${project.id}`);
-        setOpeningProjectName(null);
-        return;
-      }
-      
-      const canEnter = await ensureUnlocked(projectDriveId);
-      if (!canEnter) { setOpeningProjectName(null); return; }
+        let projectDriveId = null;
 
-      const lockFileId = await acquireLock(projectDriveId, storedNickname);
-      localStorage.setItem(`current_project_lock_id`, lockFileId);
-      localStorage.setItem(`current_project_folder_id`, projectDriveId);
+        if (token) {
+            projectDriveId = project.cloudFolderId || await getProjectFolderIfExists(project.name, masterFolderId);
+            
+            if (projectDriveId) {
+                const lockStatus = await checkLockStatus(projectDriveId);
+                if (lockStatus.isLocked) {
+                    const force = window.confirm(`🔒 "${project.name}" is currently locked by: ${lockStatus.lockedBy}.\n\nWARNING: Forcing entry will override their session and may cause data loss if they are actively saving. \n\nDo you want to Force Enter?`);
+                    if (!force) {
+                        setOpeningProjectName(null);
+                        return;
+                    }
+                    setAuthStatus("Breaking lock...");
+                    await releaseLock(lockStatus.lockFileId);
+                }
 
-      navigate(`/project/${project.id}`);
-      
-    } catch (error) {
-      console.error("Cloud check failed:", error);
-      alert(`⚠️ Could not connect to Google Drive to check lock status. Opening in local mode.`);
-      navigate(`/project/${project.id}`);
+                setAuthStatus("Acquiring cloud lock...");
+                const lockFileId = await acquireLock(projectDriveId, storedNickname);
+                localStorage.setItem(`current_project_lock_id`, lockFileId);
+                localStorage.setItem(`current_project_folder_id`, projectDriveId);
+
+                setAuthStatus("Checking for cloud updates...");
+                const projectData = await downloadProjectDataFromDrive(projectDriveId);
+
+                if (projectData) {
+                    setAuthStatus("Syncing local database...");
+                    
+                    if (typeof project.id === 'number') {
+                        await fetch(`${API_BASE}/projects/${project.id}`, { method: "DELETE" });
+                    }
+
+                    const projRes = await fetch(`${API_BASE}/projects`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ name: projectData.details.name, description: projectData.details.description || "" })
+                    });
+                    const newProj = await projRes.json();
+                    const newId = newProj.id;
+
+                    const docMap = {};
+                    for (const doc of projectData.documents) {
+                        let cleanName = doc.filename.replace(/\.(pdf|docx|txt)$/i, "");
+                        
+                        const docRes = await fetch(`${API_BASE}/projects/${newId}/documents/create`, {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ name: cleanName, content: doc.content || "" })
+                        });
+                        const newDoc = await docRes.json();
+                        docMap[doc.id] = newDoc.id; 
+                    }
+
+                    const codeMap = {};
+                    const sortedCodes = [...projectData.codes].sort((a, b) => (a.parent_id === null ? -1 : 1));
+                    for (const code of sortedCodes) {
+                        const codeRes = await fetch(`${API_BASE}/projects/${newId}/codes`, {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ name: code.name, color: code.color, description: code.description || "", parent_id: code.parent_id ? codeMap[code.parent_id] : null })
+                        });
+                        const newCode = await codeRes.json();
+                        codeMap[code.id] = newCode.id;
+                    }
+
+                    for (const seg of projectData.segments) {
+                        await fetch(`${API_BASE}/projects/${newId}/segments`, {
+                            method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ document_id: docMap[seg.document_id], code_id: codeMap[seg.code_id], start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
+                        });
+                    }
+
+                    setOpeningProjectName(null);
+                    setAuthStatus("");
+                    navigate(`/project/${newId}`); 
+                    return;
+                }
+            }
+        }
+
+        if (typeof project.id === 'number') {
+            navigate(`/project/${project.id}`);
+        } else {
+            alert("Could not find this shared project in the cloud.");
+        }
+
+    } catch (err) {
+        console.error("Open project error:", err);
+        alert("Network error. Opening in local offline mode.");
+        if (typeof project.id === 'number') navigate(`/project/${project.id}`);
     }
-
+    
     setOpeningProjectName(null);
+    setAuthStatus("");
+  };
+
+  const handleGoogleConnect = async () => {
+    try {
+      setAuthStatus("Opening Google Login...");
+      const tokens = await window.electronAPI.loginToGoogle();
+
+      if (tokens.access_token && tokens) {
+        console.log("SUCCESS! Full tokens received:", tokens);
+        localStorage.setItem('google_drive_tokens', tokens.access_token);
+
+        if (tokens.refresh_token) {
+          localStorage.setItem('google_drive_refresh_token', tokens.refresh_token);
+        }
+        setIsConnected(true);
+        setAuthStatus("Setting up Drive folder...");
+
+        try {
+          const folderId = await initializeDriveFolder();
+          localStorage.setItem('google_drive_folder_id', folderId);
+          setAuthStatus("");
+        } catch (folderError) {
+          console.error("Folder creation failed:", folderError);
+          setAuthStatus("Connected, but couldn't create the Drive folder.");
+        }
+      } else {
+        console.error("Token exchange failed:", tokens);
+        setAuthStatus("Failed to get access tokens. Check console.");
+      }
+    } catch (error) {
+      console.error(error);
+      setAuthStatus("Google Login failed or was cancelled.");
+    }
   };
 
   const handleDisconnect = () => {
@@ -238,6 +257,13 @@ function Dashboard() {
     localStorage.removeItem('google_drive_folder_id');
     setIsConnected(false);
     setAuthStatus("Disconnected from Google Drive.");
+  };
+
+  const formatSafeDate = (dateString) => {
+    if (!dateString) return "New";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "New"; // If Python corrupted the date, safely default to "New"
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const pageStyle = {
@@ -361,7 +387,7 @@ function Dashboard() {
                     <div style={{ display: "flex", gap: "20px" }}>
                       
                       <span style={{ fontSize: "14px", color: "#888", display: "flex", alignItems: "center", gap: "6px" }}>
-                        🕒 {project.last_accessed ? new Date(project.last_accessed).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : "New"}
+                        🕒 {formatSafeDate(project.last_accessed)}
                       </span>
 
                       <span style={{ fontSize: "14px", color: "#888", display: "flex", alignItems: "center", gap: "6px" }}>
