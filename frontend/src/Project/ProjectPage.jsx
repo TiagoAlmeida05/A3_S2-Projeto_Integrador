@@ -656,20 +656,24 @@ function ProjectPage() {
   // RENDER
 
   const renderHighlightedContent = (content, segments, codes) => {
-    if (!segments || segments.length === 0) return content;
-
     let boundaries = new Set([0, content.length]);
 
-    segments.forEach(seg => {
-      boundaries.add(seg.start_char);
-      boundaries.add(seg.end_char);
-    })
+    // Add segment boundaries if they exist
+    if (segments && segments.length > 0) {
+      segments.forEach(seg => {
+        boundaries.add(seg.start_char);
+        boundaries.add(seg.end_char);
+      });
+    }
 
     // Add temporary highlight boundaries if they exist
     if (temporaryHighlight) {
       boundaries.add(temporaryHighlight.start);
       boundaries.add(temporaryHighlight.end);
     }
+
+    // If there are no boundaries (no segments and no highlight), just return content
+    if (boundaries.size === 2 && !temporaryHighlight) return content;
 
     const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
 
@@ -681,7 +685,7 @@ function ProjectPage() {
       if (start === end) continue;
 
       const chunkText = content.slice(start, end);
-      const coveringSegments = segments.filter(seg => seg.start_char <= start && seg.end_char >= end);
+      const coveringSegments = (segments || []).filter(seg => seg.start_char <= start && seg.end_char >= end);
 
       // Check if this chunk is part of the temporary highlight
       const isTemporaryHighlight = temporaryHighlight && 
