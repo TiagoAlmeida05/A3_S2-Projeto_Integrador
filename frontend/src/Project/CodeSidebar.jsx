@@ -22,16 +22,22 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [dragPosition, setDragPosition] = useState(null); // "before", "after", "inside"
+  const [pendingDropAction, setPendingDropAction] = useState(null);
   
   const [expandedCodes, setExpandedCodes] = useState(new Set());
   const [codeToDelete, setCodeToDelete] = useState(null);
+  
+  const [mergeModalConfig, setMergeModalConfig] = useState(null);
 
   useEffect(() => {
-    const handleClick = () => setContextMenu(null);
+    const handleClick = () => {
+      setContextMenu(null);
+      setPendingDropAction(null); 
+    };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
-
+  
   const handleCreateCode = async (e) => {
     e.preventDefault();
     if (!newCodeName.trim()) return;
@@ -172,17 +178,8 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     setDragPosition(null);
   }
 
-  const handleDrop = async (e, targetCode) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!draggedId || draggedId === targetCode.id || isDecendant(targetCode.id, draggedId)) {
-      setDragOverId(null);
-      setDragPosition(null);
-      return;
-    }
-
-    const draggedCode = codes.find(c => c.id === draggedId);
+  const executeReorder = async (sourceId, targetCode, position) => {
+    const draggedCode = codes.find(c => c.id === sourceId);
 
     const getAllDescendants = (parentId) => {
       let desc = [];
@@ -194,29 +191,24 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       return desc;
     };
 
-    const draggedDescendants = getAllDescendants(draggedId);
+    const draggedDescendants = getAllDescendants(sourceId);
 
     let newParentId = targetCode.parent_id;
-    if (dragPosition === "inside") {
+    if (position === "inside") {
       newParentId = targetCode.id;
       setExpandedCodes(prev => new Set(prev).add(targetCode.id));
     }
 
-    if (newParentId === draggedId) {
-      setDraggedId(null);
-      setDragOverId(null);
-      setDragPosition(null);
-      return;
-    }
+    if (newParentId === sourceId) return;
 
     draggedCode.parent_id = newParentId;
 
-    let remainingCodes = codes.filter(c => c.id !== draggedId && !draggedDescendants.some(d => d.id === c.id));
+    let remainingCodes = codes.filter(c => c.id !== sourceId && !draggedDescendants.some(d => d.id === c.id));
     
     const targetIndex = remainingCodes.findIndex(c => c.id === targetCode.id);
     let insertIndex = targetIndex;
 
-    if (dragPosition === "after" || dragPosition === "inside") {
+    if (position === "after" || position === "inside") {
       const targetDescendants = getAllDescendants(targetCode.id);
       insertIndex = targetIndex + 1 + targetDescendants.length;
     }
@@ -240,7 +232,32 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     } catch (error) {
       console.error("Failed to reorder codes:", error);
     }
+  };
 
+  const handleDrop = async (e, targetCode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedId || draggedId === targetCode.id || isDecendant(targetCode.id, draggedId)) {
+      setDragOverId(null);
+      setDragPosition(null);
+      return;
+    }
+
+    if (dragPosition === "inside") {
+      setPendingDropAction({ 
+        sourceId: draggedId, 
+        targetCode: targetCode,
+        x: e.clientX,
+        y: e.clientY
+      });
+      setDraggedId(null);
+      setDragOverId(null);
+      setDragPosition(null);
+      return; 
+    }
+
+    await executeReorder(draggedId, targetCode, dragPosition);
     setDraggedId(null);
     setDragOverId(null);
     setDragPosition(null);
@@ -636,6 +653,160 @@ return (
           >
             ✨ Create Code Memo
           </button>
+        </div>
+      )}
+
+      {pendingDropAction && (
+        <div 
+          onClick={(e) => e.stopPropagation()} 
+          style={{ 
+            position: 'fixed', 
+            top: pendingDropAction.y, 
+            left: pendingDropAction.x, 
+            zIndex: 9999, 
+            backgroundColor: '#23232a', 
+            border: '1px solid #444', 
+            borderRadius: '6px', 
+            boxShadow: '0 8px 16px rgba(0,0,0,0.5)', 
+            padding: '4px', 
+            minWidth: '180px' 
+          }}
+        >
+          <div style={{ padding: '4px 8px', fontSize: '11px', color: '#888', borderBottom: '1px solid #444', marginBottom: '4px' }}>
+            Action for <b>{codes.find(c => c.id === pendingDropAction.sourceId)?.name}</b>:
+          </div>
+
+          <button 
+            onClick={async (e) => {
+              e.stopPropagation();
+              const { sourceId, targetCode } = pendingDropAction;
+              setPendingDropAction(null);
+              await executeReorder(sourceId, targetCode, "inside");
+            }}
+            style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+            onMouseOver={(e) => e.target.style.backgroundColor = '#4CAF50'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            ↳ Turn into Sub-Code
+          </button>
+
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              const { sourceId, targetCode } = pendingDropAction;
+              const sourceCode = codes.find(c => c.id === sourceId);
+              
+              setMergeModalConfig({
+                source: sourceCode,
+                target: targetCode,
+                newName: targetCode.name,
+                newColor: targetCode.color
+              });
+              setPendingDropAction(null);
+            }}
+            style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+            onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            🔗 Merge Codes Together
+          </button>
+        </div>
+      )}
+
+      {/* Merge Configuration Modal */}
+      {mergeModalConfig && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ backgroundColor: '#242424', padding: '24px', borderRadius: '8px', width: '380px', border: '1px solid #444', color: 'white', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Configure Merge</h3>
+            
+            {/* Direction display and Swap Button */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1a1a1a', padding: '12px', borderRadius: '6px', marginBottom: '20px', border: '1px solid #333' }}>
+              <div style={{ flex: 1, textAlign: 'center', fontSize: '13px', color: '#aaa', textDecoration: 'line-through' }}>
+                {mergeModalConfig.source.name}
+              </div>
+              
+              <button 
+                title="Swap Direction"
+                onClick={() => {
+                  setMergeModalConfig(prev => ({
+                    ...prev,
+                    source: prev.target,
+                    target: prev.source,
+                    newName: prev.source.name, 
+                    newColor: prev.source.color
+                  }));
+                }}
+                style={{ margin: '0 10px', padding: '6px', backgroundColor: '#333', border: 'none', borderRadius: '50%', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                🔄
+              </button>
+
+              <div style={{ flex: 1, textAlign: 'center', fontSize: '14px', fontWeight: 'bold', color: mergeModalConfig.target.color }}>
+                {mergeModalConfig.target.name}
+              </div>
+            </div>
+
+            {/* Custom Name & Color Inputs */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '6px' }}>Final Code Name:</label>
+              <input 
+                type="text" 
+                value={mergeModalConfig.newName}
+                onChange={(e) => setMergeModalConfig(prev => ({ ...prev, newName: e.target.value }))}
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '12px', color: '#aaa' }}>Final Color:</label>
+              <input 
+                type="color" 
+                value={mergeModalConfig.newColor}
+                onChange={(e) => setMergeModalConfig(prev => ({ ...prev, newColor: e.target.value }))}
+                style={{ width: '36px', height: '36px', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setMergeModalConfig(null)}
+                style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button 
+                disabled={!mergeModalConfig.newName.trim()}
+                onClick={async () => {
+                  try {
+                    await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/merge`, {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify({ 
+                        source_code_id: mergeModalConfig.source.id, 
+                        target_code_id: mergeModalConfig.target.id,
+                        new_name: mergeModalConfig.newName.trim(),
+                        new_color: mergeModalConfig.newColor
+                      })
+                    });
+                    
+                    if(onRefreshCodes) onRefreshCodes();
+
+                    window.dispatchEvent(new CustomEvent('codes-merged', { 
+                      detail: { sourceId: mergeModalConfig.source.id, targetId: mergeModalConfig.target.id } 
+                    })); 
+                    
+                    setMergeModalConfig(null);
+                  } catch(err) {
+                    console.error(err);
+                  }
+                }}
+                style={{ padding: '8px 16px', backgroundColor: mergeModalConfig.newName.trim() ? '#646cff' : '#444', color: 'white', border: 'none', borderRadius: '4px', cursor: mergeModalConfig.newName.trim() ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
+              >
+                Confirm Merge
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
