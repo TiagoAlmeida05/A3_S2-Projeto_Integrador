@@ -26,6 +26,8 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   
   const [expandedCodes, setExpandedCodes] = useState(new Set());
   const [codeToDelete, setCodeToDelete] = useState(null);
+  
+  const [mergeModalConfig, setMergeModalConfig] = useState(null);
 
   useEffect(() => {
     const handleClick = () => {
@@ -614,26 +616,18 @@ return (
           </button>
 
           <button 
-            onClick={async (e) => {
+            onClick={(e) => {
               e.stopPropagation();
               const { sourceId, targetCode } = pendingDropAction;
+              const sourceCode = codes.find(c => c.id === sourceId);
+              
+              setMergeModalConfig({
+                source: sourceCode,
+                target: targetCode,
+                newName: targetCode.name,
+                newColor: targetCode.color
+              });
               setPendingDropAction(null);
-              try {
-                await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/merge`, {
-                  method: 'POST',
-                  headers: {'Content-Type': 'application/json'},
-                  body: JSON.stringify({ source_code_id: sourceId, target_code_id: targetCode.id })
-                });
-                
-                if(onRefreshCodes) onRefreshCodes();
-
-                window.dispatchEvent(new CustomEvent('codes-merged', { 
-                  detail: { sourceId: sourceId, targetId: targetCode.id } 
-                })); 
-
-              } catch(err) {
-                console.error(err);
-              }
             }}
             style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
             onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
@@ -641,6 +635,103 @@ return (
           >
             🔗 Merge Codes Together
           </button>
+        </div>
+      )}
+
+      {/* Merge Configuration Modal */}
+      {mergeModalConfig && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ backgroundColor: '#242424', padding: '24px', borderRadius: '8px', width: '380px', border: '1px solid #444', color: 'white', boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '20px' }}>Configure Merge</h3>
+            
+            {/* Direction display and Swap Button */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#1a1a1a', padding: '12px', borderRadius: '6px', marginBottom: '20px', border: '1px solid #333' }}>
+              <div style={{ flex: 1, textAlign: 'center', fontSize: '13px', color: '#aaa', textDecoration: 'line-through' }}>
+                {mergeModalConfig.source.name}
+              </div>
+              
+              <button 
+                title="Swap Direction"
+                onClick={() => {
+                  setMergeModalConfig(prev => ({
+                    ...prev,
+                    source: prev.target,
+                    target: prev.source,
+                    newName: prev.source.name, 
+                    newColor: prev.source.color
+                  }));
+                }}
+                style={{ margin: '0 10px', padding: '6px', backgroundColor: '#333', border: 'none', borderRadius: '50%', cursor: 'pointer', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                🔄
+              </button>
+
+              <div style={{ flex: 1, textAlign: 'center', fontSize: '14px', fontWeight: 'bold', color: mergeModalConfig.target.color }}>
+                {mergeModalConfig.target.name}
+              </div>
+            </div>
+
+            {/* Custom Name & Color Inputs */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#aaa', marginBottom: '6px' }}>Final Code Name:</label>
+              <input 
+                type="text" 
+                value={mergeModalConfig.newName}
+                onChange={(e) => setMergeModalConfig(prev => ({ ...prev, newName: e.target.value }))}
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white', boxSizing: 'border-box' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '12px', color: '#aaa' }}>Final Color:</label>
+              <input 
+                type="color" 
+                value={mergeModalConfig.newColor}
+                onChange={(e) => setMergeModalConfig(prev => ({ ...prev, newColor: e.target.value }))}
+                style={{ width: '36px', height: '36px', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setMergeModalConfig(null)}
+                style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button 
+                disabled={!mergeModalConfig.newName.trim()}
+                onClick={async () => {
+                  try {
+                    await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/merge`, {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify({ 
+                        source_code_id: mergeModalConfig.source.id, 
+                        target_code_id: mergeModalConfig.target.id,
+                        new_name: mergeModalConfig.newName.trim(),
+                        new_color: mergeModalConfig.newColor
+                      })
+                    });
+                    
+                    if(onRefreshCodes) onRefreshCodes();
+
+                    window.dispatchEvent(new CustomEvent('codes-merged', { 
+                      detail: { sourceId: mergeModalConfig.source.id, targetId: mergeModalConfig.target.id } 
+                    })); 
+                    
+                    setMergeModalConfig(null);
+                  } catch(err) {
+                    console.error(err);
+                  }
+                }}
+                style={{ padding: '8px 16px', backgroundColor: mergeModalConfig.newName.trim() ? '#646cff' : '#444', color: 'white', border: 'none', borderRadius: '4px', cursor: mergeModalConfig.newName.trim() ? 'pointer' : 'not-allowed', fontWeight: 'bold' }}
+              >
+                Confirm Merge
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

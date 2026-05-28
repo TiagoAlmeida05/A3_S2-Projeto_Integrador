@@ -43,7 +43,13 @@ def delete_code(project_id: int, code_id: int, repo: CodeRepository = Depends(ge
 
 @router.post("/merge")
 def merge_codes(project_id: int, merge_req: schemas.CodeMergeRequest, repo: CodeRepository = Depends(get_code_repo)):
-    success = repo.merge(project_id, merge_req.source_code_id, merge_req.target_code_id)
+    success = repo.merge(
+        project_id, 
+        merge_req.source_code_id, 
+        merge_req.target_code_id,
+        merge_req.new_name,   
+        merge_req.new_color 
+    )
     if not success:
         raise HTTPException(status_code=400, detail="Merge failed. Ensure both codes exist.")
     return {"message": "Codes merged successfully"}

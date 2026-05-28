@@ -51,7 +51,9 @@ class CodeReorderRequest(BaseModel):
 class CodeMergeRequest(BaseModel):
     source_code_id: int
     target_code_id: int
-
+    new_name: Optional[str] = None
+    new_color: Optional[str] = None
+    
 
 # Segment Schemas 
 
