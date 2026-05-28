@@ -52,6 +52,8 @@ const ProjectPageView = ({ page }) => {
     pushUndoAction,
     handleExportQuotesCSV,
     handleExportExcel,
+    setIsExportModalOpen,
+    
   } = page;
 
   return (
@@ -72,6 +74,7 @@ const ProjectPageView = ({ page }) => {
         handleExportREFI={handleExportREFI}
         setIsSettingsOpen={setIsSettingsOpen}
         handleExportExcel={handleExportExcel}
+        setIsExportModalOpen={setIsExportModalOpen}
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>

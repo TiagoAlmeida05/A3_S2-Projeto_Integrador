@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen, handleExportExcel }) => {
+const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen, handleExportExcel,setIsExportModalOpen }) => {
 
   const baseButtonStyle = {
     padding: "8px 14px",
@@ -61,7 +61,7 @@ const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen
         </h2>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <button 
-              onClick={handleExportExcel}
+              onClick={() => setIsExportModalOpen(true)}
               style={{ ...baseButtonStyle, border: "1px solid #2d4a22", color: "#81c784" }}
               onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#1b2e1b")}
               onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#1a1a24")}
