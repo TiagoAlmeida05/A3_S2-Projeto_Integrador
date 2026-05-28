@@ -15,6 +15,7 @@ router = APIRouter(
 @router.post("/transcribe")
 async def transcribe_audio(
     project_id: int, 
+    language: str = "auto",
     file: UploadFile = File(...), 
     db: Session = Depends(get_db)
 ):
@@ -26,7 +27,11 @@ async def transcribe_audio(
         )
         
     try:
-        transcribed_text = await transcribe_service.transcribe_audio_file(file)
+        # Convert front-end "auto" label to standard Python None type
+        whisper_lang = None if language == "auto" else language
+
+        # 🌟 FIXED: Passing whisper_lang through to your service execution block
+        transcribed_text = await transcribe_service.transcribe_audio_file(file, language=whisper_lang)
         
         if not transcribed_text:
             transcribed_text = "[Empty or un-decodable local audio captured]"

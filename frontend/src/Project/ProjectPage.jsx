@@ -1,10 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
+import AudioLanguageModal from "../Modal/AudioLanguageModal"; // Adjust path if needed
+
 
 import axios from "axios";
 
 const API_BASE = "http://127.0.0.1:8000";
+
+
 
 const hexToRGBA = (hex, opacity) => {
   if (!hex) return "transparent";
@@ -60,6 +64,12 @@ function ProjectPage() {
     resolve: null,
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  const [audioLanguageDialog, setAudioLanguageDialog] = useState({
+    isOpen: false,
+    filename: "",
+    resolve: null,
+  });
 
   const fetchProjectDetails = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}`)
@@ -385,7 +395,6 @@ function ProjectPage() {
     const successfulUploads = [];
     const failedUploads = [];
 
-    // Process every single file sequentially to handle custom conflict dialogs or track state cleanly
     for (let i = 0; i < files.length; i++) {
       let cur = files[i];
       let shouldUpload = true;
@@ -396,21 +405,15 @@ function ProjectPage() {
 
       setUploadProgress(prev => ({ ...prev, current: i }));
 
-      // --- 1. CONFLICT RESOLUTION LOOP (Reused from your existing setup) ---
+      // --- 1. CONFLICT RESOLUTION ---
       while (!isNameValid && shouldUpload) {
         const DotIndex = finalName.lastIndexOf(".");
         const ext = DotIndex !== -1 ? finalName.substring(DotIndex) : "";
         const base = DotIndex !== -1 ? finalName.substring(0, DotIndex) : finalName;
         const suggestedN = `${base}_copy${ext}`;
 
-        // Pause thread execution until user maps an action via the React state modal overlay
         const userChoice = await new Promise((resolve) => {
-          setConflictDialog({
-            isOpen: true,
-            filename: finalName,
-            suggestedName: suggestedN,
-            resolve,
-          });
+          setConflictDialog({ isOpen: true, filename: finalName, suggestedName: suggestedN, resolve });
         });
 
         if (userChoice.action === "skip") {
@@ -421,15 +424,10 @@ function ProjectPage() {
           if (oldDoc) {
             setUploadStatus(`Replacing ${finalName}...`);
             try {
-              const delRes = await fetch(
-                `${API_BASE}/projects/${id}/documents/${oldDoc.id}`,
-                { method: "DELETE" }
-              );
+              const delRes = await fetch(`${API_BASE}/projects/${id}/documents/${oldDoc.id}`, { method: "DELETE" });
               if (delRes.ok) {
                 isNameValid = true;
-                if (activeDocument && activeDocument.id === oldDoc.id) {
-                  setActiveDocument(null);
-                }
+                if (activeDocument && activeDocument.id === oldDoc.id) setActiveDocument(null);
                 existingNames = existingNames.filter((n) => n !== finalName);
               } else {
                 window.alert("Server failed to delete target file. Skipping.");
@@ -443,33 +441,46 @@ function ProjectPage() {
         } else if (userChoice.action === "rename") {
           let trimmedInput = userChoice.value.trim();
           if (trimmedInput === "") continue;
-
-          if (ext && !trimmedInput.toLowerCase().endsWith(ext.toLowerCase())) {
-            trimmedInput += ext;
-          }
+          if (ext && !trimmedInput.toLowerCase().endsWith(ext.toLowerCase())) trimmedInput += ext;
           finalName = trimmedInput;
           if (!existingNames.includes(finalName)) isNameValid = true;
         }
       }
-
-      // Hide custom overlay instantly once resolved
       setConflictDialog((prev) => ({ ...prev, isOpen: false }));
 
-      // --- 2. UPLOAD DISPATCH LOOP ---
+      // --- 2. UPLOAD DISPATCH ---
       if (shouldUpload) {
-        // Enforce the custom file instance rename map onto the blob before sending
         if (finalName !== cur.name) {
           cur = new File([cur], finalName, { type: cur.type });
         }
 
         if (isAudio) {
-          // Send to the dedicated local audio-to-text pipeline
+          // 🌟 NEW: Pause and wait for user to select interview language
+          const selectedLanguage = await new Promise((resolve) => {
+            setAudioLanguageDialog({
+              isOpen: true,
+              filename: finalName,
+              resolve,
+            });
+          });
+
+          // Close modal instantly
+          setAudioLanguageDialog((prev) => ({ ...prev, isOpen: false }));
+
+          // If user clicked cancel/closed modal, skip this file
+          if (!selectedLanguage) {
+            failedUploads.push({ filename: finalName, reason: "Cancelled by user" });
+            continue;
+          }
+
           setUploadStatus(`🎙️ Transcribing offline audio (${i + 1}/${files.length}): ${finalName}...`);
           const audioFormData = new FormData();
           audioFormData.append("file", cur);
 
           try {
-            const res = await fetch(`${API_BASE}/projects/${id}/audio/transcribe`, {
+            // Send selected language down to Python backend via URL Query parameter!
+            const url = `${API_BASE}/projects/${id}/audio/transcribe?language=${selectedLanguage}`;
+            const res = await fetch(url, {
               method: "POST",
               body: audioFormData,
             });
@@ -480,32 +491,25 @@ function ProjectPage() {
             } else {
               const docData = await res.json();
               successfulUploads.push(docData);
-              existingNames.push(docData.filename); // Track actual filename returned by backend
+              existingNames.push(docData.filename);
             }
           } catch (err) {
             failedUploads.push({ filename: finalName, reason: "Local service connection timeout" });
-            console.error("Local audio process crashed:", err);
+            console.error(err);
           }
 
         } else {
-          // Send to your traditional textual ingestion route
+          // Standard text file branch
           setUploadStatus(`📄 Importing text document (${i + 1}/${files.length}): ${finalName}...`);
           const textFormData = new FormData();
           textFormData.append("files", cur);
-
           try {
-            const res = await fetch(`${API_BASE}/projects/${id}/documents/`, {
-              method: "POST",
-              body: textFormData,
-            });
-
+            const res = await fetch(`${API_BASE}/projects/${id}/documents/`, { method: "POST", body: textFormData });
             if (!res.ok) {
               failedUploads.push({ filename: finalName, reason: `HTTP ${res.status}` });
             } else {
               const data = await res.json();
-              if (data.failed && data.failed.length > 0) {
-                failedUploads.push(...data.failed);
-              }
+              if (data.failed && data.failed.length > 0) failedUploads.push(...data.failed);
               if (data.successful && data.successful.length > 0) {
                 successfulUploads.push(...data.successful);
                 existingNames.push(finalName);
@@ -513,37 +517,21 @@ function ProjectPage() {
             }
           } catch (err) {
             failedUploads.push({ filename: finalName, reason: "Network communication error" });
-            console.error("Text process crashed:", err);
           }
         }
       }
     }
 
-    // --- 3. FINALIZATION AND STATUS REPORTING ---
     setUploadProgress({ current: files.length, total: files.length, isActive: false });
-
     if (failedUploads.length > 0) {
-      const errorList = failedUploads
-        .map((f) => `${f.filename} (${f.reason})`)
-        .join(", ");
-      if (successfulUploads.length > 0) {
-        setUploadStatus(
-          `Imported ${successfulUploads.length} item(s). Failed tracks: ${errorList}`
-        );
-      } else {
-        setUploadStatus(`All items failed processing: ${errorList}`);
-      }
+      const errorList = failedUploads.map((f) => `${f.filename} (${f.reason})`).join(", ");
+      setUploadStatus(successfulUploads.length > 0 ? `Imported ${successfulUploads.length} item(s). Failed: ${errorList}` : `All items failed processing: ${errorList}`);
     } else {
       setUploadStatus(`Success! All ${successfulUploads.length} items parsed and cataloged offline.`);
       setTimeout(() => setUploadStatus(""), 4000);
     }
-
-    // Instantly refresh documents list viewport
     fetchDocuments();
-
-    if (eventOrFiles?.target) {
-      eventOrFiles.target.value = null;
-    }
+    if (eventOrFiles?.target) eventOrFiles.target.value = null;
   };
 
   const handleCreateTextDocument = async (docdata) => {
@@ -761,7 +749,17 @@ function ProjectPage() {
     handleCreateTextDocument,
   };
 
-  return <ProjectPageView page={page} />;
+  return (
+  <>
+    <ProjectPageView page={page} />
+
+    <AudioLanguageModal 
+      dialogState={audioLanguageDialog}
+      onCancel={() => audioLanguageDialog.resolve(null)}
+      onConfirm={(selectedLanguage) => audioLanguageDialog.resolve(selectedLanguage)}
+    />
+  </>
+);
 }
 
 export default ProjectPage;
