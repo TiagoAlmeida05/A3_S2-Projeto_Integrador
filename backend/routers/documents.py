@@ -226,3 +226,26 @@ def update_document_metadata(project_id: int, document_id: int, metadata_update:
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return document_to_dict(doc)
+
+@router.put("/{document_id}/rename")
+def rename_document(project_id: int, document_id: int, doc_update: schemas.DocumentRename, repo: DocumentRepository = Depends(get_doc_repo)):
+    filename = doc_update.filename.strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="Document name cannot be empty")
+    
+    original_doc = repo.get_by_id(project_id, document_id)
+    if not original_doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    _, original_ext = os.path.splitext(original_doc.filename)
+
+    if original_ext and not filename.lower().endswith(original_ext.lower()):
+        filename += original_ext
+
+    existing_doc = repo.get_by_filename(project_id, filename, exclude_document_id=document_id)
+    if existing_doc:
+        raise HTTPException(status_code=409, detail="A document with that name already exists in this project")
+
+    doc = repo.update_filename(project_id, document_id, filename)
+
+    return {"id": doc.id, "filename": doc.filename, "type": doc.type, "created_at": doc.created_at, "folder_id": doc.folder_id}
