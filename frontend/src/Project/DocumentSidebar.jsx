@@ -317,36 +317,6 @@ function DocumentSidebar({
     }
   };
 
-  const startRenameDocument = (doc) => {
-    setRenamingDocument({ id: doc.id, value: doc.filename });
-    setContextMenu(null);
-  };
-
-  const finishRenameDocument = async () => {
-    if (!renamingDocument) return;
-
-    const nextName = renamingDocument.value.trim();
-    const currentDocument = documents.find((doc) => doc.id === renamingDocument.id);
-
-    if (!currentDocument) {
-      setRenamingDocument(null);
-      return;
-    }
-
-    if (!nextName || nextName === currentDocument.filename) {
-      setRenamingDocument(null);
-      return;
-    }
-
-    try {
-      await onRenameDocument(renamingDocument.id, nextName);
-      setRenamingDocument(null);
-    } catch (error) {
-      console.error(error);
-      alert(error.message || "Failed to rename document");
-    }
-  };
-
     // --- DRAG AND DROP ---
   const handleDragStart = (e, type, id) => {
     e.stopPropagation(); // Stops document drag events from triggering parent folder drag parameters!
@@ -849,6 +819,17 @@ function DocumentSidebar({
               <button 
                 onClick={(e) => { 
                   e.stopPropagation(); 
+                  openMetadataDialog(contextMenu.id, contextMenu.name); 
+                }} 
+                style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#3a3a46'}
+                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                Add details
+              </button>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
                   onDeleteDocument(contextMenu.id, contextMenu.name);
                   setContextMenu(null); 
                 }}
@@ -858,10 +839,6 @@ function DocumentSidebar({
               >
                 Delete Document
               </button>
-            </>
-            <>
-              <button onClick={(e) => { e.stopPropagation(); openMetadataDialog(contextMenu.id, contextMenu.name); }} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}>Add details</button>
-              <button onClick={(e) => { e.stopPropagation(); onDeleteDocument(contextMenu.id, contextMenu.name); setContextMenu(null); }} style={{ width: '100%', marginTop: '4px', padding: '8px 12px', backgroundColor: 'transparent', color: '#ff6b6b', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}>Delete document</button>
             </>
           )}
         </div>
