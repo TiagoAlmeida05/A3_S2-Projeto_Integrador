@@ -137,7 +137,7 @@ const ProjectPageDocumentPanel = ({
     setQuickCodeParentId("");
   };
 
-  const handleTextSelection = () => {
+  const handleTextSelection = (e) => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return clearTextSelection();
     const selectedText = selection.toString();
@@ -151,8 +151,24 @@ const ProjectPageDocumentPanel = ({
     const offsetValues = getSelectionOffsets();
     if (!offsetValues) return clearTextSelection();
 
-    const safeLeft = Math.max(8, Math.min(rect.left, window.innerWidth - 280));
-    const safeTop = Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 220));
+    let startX = e?.clientX || rect.right;
+    let startY = e?.clientY || rect.bottom;
+
+    const MENU_WIDTH = 280; 
+    const MENU_HEIGHT = 300;
+
+    let safeLeft = startX + 10; 
+    let safeTop = startY + 15;
+
+    if (safeLeft + MENU_WIDTH > window.innerWidth) {
+      safeLeft = window.innerWidth - MENU_WIDTH - 20;
+    }
+
+    if (safeTop + MENU_HEIGHT > window.innerHeight) {
+      safeTop = startY - MENU_HEIGHT - 10;
+    }
+
+    safeTop = Math.max(16, Math.min(safeTop, window.innerHeight - MENU_HEIGHT - 16));
 
     setSelectionText(selectedText);
     setSelectionRect({ top: safeTop, left: safeLeft });
@@ -189,20 +205,27 @@ const ProjectPageDocumentPanel = ({
       let createdCode = null;
       if (quickCodeMode === "new") {
         const codeName = quickCodeName.trim() || (selectionText.length > 30 ? `${selectionText.slice(0, 27)}...` : selectionText);
-        const codeResponse = await fetch(`${API_BASE}/projects/${projectId}/codes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            name: codeName, 
-            color: quickCodeColor, 
-            parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null 
-          }),
-        });
-        const createdCodeData = await codeResponse.json();
-        if (!codeResponse.ok) throw new Error(createdCodeData.detail || "Failed to create quick code");
-        createdCode = createdCodeData;
-        finalCodeID = createdCode.id;
-        fetchCodes();
+        const exactMatch = projectCodes.find(c => c.name.toLowerCase() === codeName.toLowerCase());
+        
+        if (exactMatch) {
+          finalCodeID = exactMatch.id;
+        } else {
+          const codeResponse = await fetch(`${API_BASE}/projects/${projectId}/codes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+              name: codeName, 
+              color: quickCodeColor, 
+              description: "Created from selected text", 
+              parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null 
+            }),
+          });
+          const createdCodeData = await codeResponse.json();
+          if (!codeResponse.ok) throw new Error(createdCodeData.detail || "Failed to create quick code");
+          createdCode = createdCodeData;
+          finalCodeID = createdCode.id;
+          fetchCodes();
+        }
       } else {
         finalCodeID = parseInt(selectedExistingCodeId);
       }
@@ -287,7 +310,6 @@ const ProjectPageDocumentPanel = ({
       if (editEndOld <= seg.start_char) {
         newStart += deltaLen; newEnd += deltaLen;
       } else if (editStart >= seg.end_char) {
-        // No change
       } else if (editStart >= seg.start_char && editEndOld <= seg.end_char) {
         newEnd += deltaLen;
       } else if (editStart < seg.start_char && editEndOld > seg.start_char && editEndOld <= seg.end_char) {
@@ -394,7 +416,6 @@ const ProjectPageDocumentPanel = ({
   }
   };
 
-  // --- NEW: SOFT REFRESH LOGIC ---
   const handleSaveEdit = async () => {
     setUploadStatus("Saving document and shifting codes...");
     try {
@@ -663,6 +684,10 @@ const ProjectPageDocumentPanel = ({
   const showPdfPreview = isPDF && !isPdfPreviewCollapsed;
   const pdfPreviewUrl = `${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/file`;
 
+  const suggestedCodes = (quickCodeMode === "new" && quickCodeName.trim().length > 0)
+    ? projectCodes.filter(c => c.name.toLowerCase().includes(quickCodeName.trim().toLowerCase()))
+    : [];
+
   return (
     <div style={documentShellStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "2px solid #aaa", paddingBottom: "10px", marginBottom: "20px" }}>
@@ -909,9 +934,14 @@ const ProjectPageDocumentPanel = ({
       )}
 
       {quickMenuOpen && selectionRect && (
-        <div style={{ position: "fixed", top: selectionRect.top + 8, left: selectionRect.left, zIndex: 1000, backgroundColor: "#23232a", border: "1px solid #444", borderRadius: "10px", padding: "10px", minWidth: "240px", color: "white", boxShadow: "0 12px 30px rgba(0, 0, 0, 0.25)" }}>
-          <div style={{ marginBottom: "8px", fontSize: "13px", color: "#b0b0c3" }}>Selected</div>
-          <div style={{ marginBottom: "10px", fontSize: "14px", lineHeight: "1.4", maxHeight: "84px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word" }}>{selectionText}</div>
+        <div style={{ position: "fixed", top: selectionRect.top, left: selectionRect.left, zIndex: 1000, backgroundColor: "#23232a", border: "1px solid #444", borderRadius: "10px", padding: "12px", width: "280px", color: "white", boxShadow: "0 12px 30px rgba(0, 0, 0, 0.4)" }}>
+          <div style={{ marginBottom: "6px", fontSize: "11px", color: "#b0b0c3", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: "bold" }}>Selected Text</div>          
+          <div style={{ marginBottom: "12px", fontSize: "13px", lineHeight: "1.5", color: "#e5e7eb",fontStyle: "italic",backgroundColor: "#1a1a24",padding: "8px 10px",borderRadius: "6px",borderLeft: "3px solid #646cff",wordBreak: "break-word"}}>
+            "{selectionText.length > 120 
+              ? selectionText.replace(/\s+/g, ' ').substring(0, 120).trim() + "..." 
+              : selectionText.replace(/\s+/g, ' ')}"
+          </div>
+          
           <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
             <select value={quickCodeMode === "new" ? "new" : selectedExistingCodeId} onChange={(e) => { if (e.target.value === "new") setQuickCodeMode("new"); else { setQuickCodeMode("existing"); setSelectedExistingCodeId(e.target.value); } }} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", cursor: "pointer" }}>
               <optgroup label="Hierarchical Codes">
@@ -928,17 +958,39 @@ const ProjectPageDocumentPanel = ({
               </label>
             )}
 
-            {/* Inputs for NEW codes (No Description!) */}
+            {/* Inputs for NEW codes */}
             {quickCodeMode === "new" && (
               <>
-                <input
-                  type="text"
-                  value={quickCodeName}
-                  onChange={(e) => setQuickCodeName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleQuickCodeAction(); } }}
-                  placeholder="Code name"
-                  style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", boxSizing: "border-box" }}
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    value={quickCodeName}
+                    onChange={(e) => setQuickCodeName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleQuickCodeAction(); } }}
+                    placeholder="Code name"
+                    style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", boxSizing: "border-box" }}
+                  />
+                  {suggestedCodes.length > 0 && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", backgroundColor: "#2a2a35", border: "1px solid #555", borderRadius: "6px", maxHeight: "150px", overflowY: "auto", zIndex: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.5)" }}>
+                      {suggestedCodes.map(code => (
+                        <div
+                          key={code.id}
+                          onClick={() => {
+                            setQuickCodeMode("existing");
+                            setSelectedExistingCodeId(code.id.toString());
+                          }}
+                          style={{ padding: "8px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", borderBottom: "1px solid #333" }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#3a3a44"}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+                        >
+                          <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: code.color, flexShrink: 0 }}></div>
+                          <span style={{ fontSize: "13px", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getFullPath(code, projectCodes)}</span>
+                          <span style={{ fontSize: "11px", color: "#888", marginLeft: "auto", flexShrink: 0 }}>Reuse</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 
                 <select
                   value={quickCodeParentId}
@@ -969,5 +1021,4 @@ const ProjectPageDocumentPanel = ({
     </div>
   );
 };
-
 export default ProjectPageDocumentPanel;
