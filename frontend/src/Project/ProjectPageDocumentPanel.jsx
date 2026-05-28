@@ -645,7 +645,7 @@ const ProjectPageDocumentPanel = ({
   };
 
   const documentShellStyle = {
-    flex: 1, border: "1px solid #ccc", borderRadius: "8px", padding: "30px",
+    flex: 1, borderLeft: "1px solid #ccc", padding: "30px",borderTop: "1px solid #333",
     backgroundColor: "#fff", color: "#333", overflowY: "auto", position: "relative",
   };
 

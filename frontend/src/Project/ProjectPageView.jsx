@@ -50,6 +50,8 @@ const ProjectPageView = ({ page }) => {
     setSegmentContextMenu,
     handleCreateTextDocument,
     pushUndoAction,
+    handleExportQuotesCSV,
+    handleExportExcel,
   } = page;
 
   return (
@@ -69,6 +71,7 @@ const ProjectPageView = ({ page }) => {
         projectDetails={projectDetails}
         handleExportREFI={handleExportREFI}
         setIsSettingsOpen={setIsSettingsOpen}
+        handleExportExcel={handleExportExcel}
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
@@ -91,6 +94,8 @@ const ProjectPageView = ({ page }) => {
           openCodePanel={openCodePanel}
           setProjectCodes={setProjectCodes}
           handleCreateTextDocument={handleCreateTextDocument}
+          handleExportQuotesCSV={handleExportQuotesCSV}
+          handleExportExcel={handleExportExcel}
         />
         <ProjectPageCodePanel
           API_BASE={API_BASE}

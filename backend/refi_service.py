@@ -7,10 +7,18 @@ from fastapi import HTTPException, UploadFile, Depends, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from database import engine, get_db
+from datetime import datetime
 
 import models
 
-
+def parse_refi_date(date_str):
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    
 def generate_guid(prefix: str, item_id: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"jupiter.qda.{prefix}.{item_id}"))
 
@@ -77,6 +85,9 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
         code_attribs = {"guid": cg, "name": c.name, "isCodable": "true"}
         if c.color: 
             code_attribs["color"] = c.color
+
+        if hasattr(c, 'created_at') and c.created_at:
+            code_attribs["modified"] = c.created_at.strftime("%Y-%m-%dT%H:%M:%SZ")
             
         code_elem = ET.SubElement(parent_xml_element, "{urn:QDA-XML:project:1.0}Code", attrib=code_attribs)
 
@@ -126,10 +137,16 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
                 "creatingUser": master_user_guid
             })
 
+            if hasattr(seg, 'created_at') and seg.created_at:
+                sel_elem.set("modified", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
             coding_elem = ET.SubElement(sel_elem, "{urn:QDA-XML:project:1.0}Coding", attrib={
                 "guid": generate_guid("coding", seg.id),
                 "creatingUser": master_user_guid
             })
+
+            if hasattr(seg, 'created_at') and seg.created_at:
+                coding_elem.set("modified", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
             ET.SubElement(coding_elem, "{urn:QDA-XML:project:1.0}CodeRef", attrib={
                 "targetGUID": code_guid_map[seg.code_id]
@@ -285,6 +302,8 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
             guid = code_elem.attrib.get("guid")
             name = code_elem.attrib.get("name")
             color = code_elem.attrib.get("color", "#646cff")
+
+            date_str = code_elem.attrib.get("modified") or code_elem.attrib.get("created")
             
             c_desc_elem = code_elem.find("Description")
             imported_description = c_desc_elem.text if c_desc_elem is not None else None
@@ -295,6 +314,10 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                 color=color,
                 parent_id=parent_db_id
             )
+            parsed_date = parse_refi_date(date_str)
+            if parsed_date:
+                new_code.created_at = parsed_date
+
             db.add(new_code)
             db.flush() # doesn't commit the whole transaction
             
@@ -386,6 +409,10 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                         if actual_code_id:
                             # Slice the string to get the exact highlighted text
                             segment_text = doc_content[start_pos:end_pos]
+
+                            date_str = sel_elem.attrib.get("modified") or sel_elem.attrib.get("created")
+                            if not date_str and coding_elem is not None:
+                                date_str = coding_elem.attrib.get("modified") or coding_elem.attrib.get("created")
                             
                             new_segment = models.Segment(
                                 document_id=new_doc.id,
@@ -394,6 +421,10 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                                 end_char=end_pos,
                                 content=segment_text
                             )
+                            parsed_date = parse_refi_date(date_str)
+                            if parsed_date:
+                                new_segment.created_at = parsed_date
+
                             db.add(new_segment)
                             db.flush()
 

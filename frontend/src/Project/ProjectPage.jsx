@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
-import AudioLanguageModal from "../Modal/AudioLanguageModal"; // Adjust path if needed
+import AudioLanguageModal from "../Modal/AudioLanguageModal"; 
 
 
 import axios from "axios";
@@ -546,11 +546,7 @@ function ProjectPage() {
   };
 
   const handleDeleteDocument = async (docId, docName) => {
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete "${docName}"? This cannot be undone.`,
-    );
-    if (!confirmDelete) return;
-
+    
     try {
       const response = await fetch(
         `${API_BASE}/projects/${id}/documents/${docId}`,
@@ -701,6 +697,97 @@ function ProjectPage() {
       setTimeout(() => setUploadStatus(""), 4000);
     }
   };
+  const handleExportQuotesCSV = async () => {
+    setUploadStatus("Generating Quotes CSV...");
+    try {
+      const response = await fetch(`${API_BASE}/projects/${id}/segments/export/csv`);
+      if (!response.ok) throw new Error("Failed to export quotes");
+      
+      const blob = await response.blob();
+      
+      if (window.showSaveFilePicker) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: `${projectDetails.name.replace(/ /g, "_")}_Quotes.csv`,
+            types: [{
+              description: "CSV File (Excel Compatible)",
+              accept: { "text/csv": [".csv"] },
+            }],
+          });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setUploadStatus("Quotes exported successfully!");
+        } catch (pickerError) {
+          if (pickerError.name === "AbortError") {
+            setUploadStatus("");
+            return;
+          }
+          throw pickerError;
+        }
+      } else {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `${projectDetails.name.replace(/ /g, "_")}_Quotes.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        setUploadStatus("Quotes exported successfully!");
+      }
+    } catch (error) {
+      console.error(error);
+      setUploadStatus("Failed to export Quotes.");
+    }
+    setTimeout(() => setUploadStatus(""), 4000);
+  };
+
+  const handleExportExcel = async () => {
+    setUploadStatus("Generating Excel Statistics...");
+    try {
+      const response = await fetch(`${API_BASE}/projects/${id}/export/excel`);
+      if (!response.ok) throw new Error("Failed to export Excel file");
+      
+      const blob = await response.blob();
+      
+      if (window.showSaveFilePicker) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: `${projectDetails.name.replace(/ /g, "_")}_Statistics.xlsx`,
+            types: [{
+              description: "Microsoft Excel Workbook",
+              accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
+            }],
+          });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setUploadStatus("Excel export saved successfully!");
+        } catch (pickerError) {
+          if (pickerError.name === "AbortError") {
+            setUploadStatus("");
+            return;
+          }
+          throw pickerError;
+        }
+      } else {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `${projectDetails.name.replace(/ /g, "_")}_Statistics.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        setUploadStatus("Excel export saved successfully!");
+      }
+    } catch (error) {
+      console.error(error);
+      setUploadStatus("Failed to export Excel file.");
+    }
+    setTimeout(() => setUploadStatus(""), 4000);
+  };
 
   const page = {
     id,
@@ -746,6 +833,8 @@ function ProjectPage() {
     handleDeleteProject,
     handleExportREFI,
     handleCreateTextDocument,
+    handleExportQuotesCSV,
+    handleExportExcel,
   };
 
   return (

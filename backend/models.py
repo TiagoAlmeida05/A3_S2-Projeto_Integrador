@@ -59,6 +59,7 @@ class Code(Base):
     color = Column(String, nullable=False, default="#FFFFFF")
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     parent_id = Column(Integer, ForeignKey("codes.id", ondelete="CASCADE"), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     order_index = Column(Integer, default=0)
 
@@ -75,6 +76,7 @@ class Segment(Base):
     content = Column(Text, nullable=False)
     document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     code_id = Column(Integer, ForeignKey("codes.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     document = relationship("Document", back_populates="segments")
     code = relationship("Code", back_populates="segments")
