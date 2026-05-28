@@ -49,6 +49,9 @@ function AudioLanguageModal({ dialogState, onCancel, onConfirm }) {
         <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "16px", wordBreak: "break-all" }}>
           Select the language spoken in: <strong>{dialogState.filename}</strong>
         </p>
+        <p style={{ fontSize: "13px", color: "#f0c674", marginBottom: "16px", lineHeight: 1.4 }}>
+          Warning: Some words may be transcribed incorrectly.
+        </p>
         
         <select 
           id="audio-lang-select"

@@ -343,7 +343,7 @@ function DocumentSidebar({
             Drop files here to import
           </div>
           <div style={{ fontSize: '12px', color: '#888' }}>
-            Multiple text files are supported.
+            Multiple text files are supported. Audio files can also be uploaded and transcribed.
           </div>
         </div>
         <input 
