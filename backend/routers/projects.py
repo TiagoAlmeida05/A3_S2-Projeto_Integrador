@@ -12,6 +12,7 @@ from repositories.project_repo import ProjectRepository
 import models
 import openpyxl
 from openpyxl.styles import Font, PatternFill
+from typing import Optional
 
 router = APIRouter(
     prefix="/projects",
@@ -88,7 +89,7 @@ def delete_project(project_id: int, repo: ProjectRepository = Depends(get_projec
     return {"message": "Project deleted successfully"}
 
 @router.get("/{project_id}/export/excel")
-def export_project_excel(project_id: int, db: Session = Depends(get_db)):
+def export_project_excel(project_id: int,docs: Optional[str] = None,codes: Optional[str] = None, db: Session = Depends(get_db)):
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -109,12 +110,24 @@ def export_project_excel(project_id: int, db: Session = Depends(get_db)):
         cell.fill = header_fill
         cell.font = header_font
 
-    segments = db.query(models.Segment).join(models.Document).filter(
+    query = db.query(models.Segment).join(models.Document).filter(
         models.Document.project_id == project_id
-    ).order_by(models.Segment.document_id, models.Segment.start_char).all()
+    )
 
-    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
-    code_dict = {c.id: c for c in codes}
+    if docs:
+        doc_id_list = [int(x) for x in docs.split(",") if x.strip().isdigit()]
+        if doc_id_list:
+            query = query.filter(models.Segment.document_id.in_(doc_id_list))
+    
+    if codes:
+        code_id_list = [int(x) for x in codes.split(",") if x.strip().isdigit()]
+        if code_id_list:
+            query = query.filter(models.Segment.code_id.in_(code_id_list))
+
+    segments = query.order_by(models.Segment.document_id, models.Segment.start_char).all()
+
+    project_codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
+    code_dict = {c.id: c for c in project_codes}
 
     for seg in segments:
             doc_name = seg.document.filename if seg.document else "Unknown"
@@ -136,17 +149,15 @@ def export_project_excel(project_id: int, db: Session = Depends(get_db)):
 
             ws.append([doc_name, code_name, parent_code_name, text_segment, timestamp])
 
-    # 5. Auto-adjust column widths for readability
+    # Auto-adjust column widths for readability
     ws.column_dimensions['A'].width = 25 # Document Name
     ws.column_dimensions['B'].width = 20 # Code Name
     ws.column_dimensions['C'].width = 20 # Parent Code
     ws.column_dimensions['D'].width = 60 # Text Segment (Wider)
     ws.column_dimensions['E'].width = 18 # Timestamp
 
-    # Freeze the top row so headers stay visible when scrolling down!
     ws.freeze_panes = "A2"
 
-    # 6. Save to an in-memory buffer
     output = io.BytesIO()
     wb.save(output)
     output.seek(0)

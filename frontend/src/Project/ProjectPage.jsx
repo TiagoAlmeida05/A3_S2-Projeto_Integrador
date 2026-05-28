@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
 import AudioLanguageModal from "../Modal/AudioLanguageModal"; 
+import ExportFilterModal from '../Modal/ExportFilterModal';
 
 
 import axios from "axios";
@@ -44,6 +45,7 @@ function ProjectPage() {
   const [pendingQuoteJump, setPendingQuoteJump] = useState(null);
   const [undoStack, setUndoStack] = useState([]);
   const [codePanelRefreshTick, setCodePanelRefreshTick] = useState(0);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // UI & Navigation State
   const [activeTab, setActiveTab] = useState("documents");
@@ -743,50 +745,26 @@ function ProjectPage() {
     setTimeout(() => setUploadStatus(""), 4000);
   };
 
-  const handleExportExcel = async () => {
-    setUploadStatus("Generating Excel Statistics...");
-    try {
-      const response = await fetch(`${API_BASE}/projects/${id}/export/excel`);
-      if (!response.ok) throw new Error("Failed to export Excel file");
-      
-      const blob = await response.blob();
-      
-      if (window.showSaveFilePicker) {
-        try {
-          const fileHandle = await window.showSaveFilePicker({
-            suggestedName: `${projectDetails.name.replace(/ /g, "_")}_Statistics.xlsx`,
-            types: [{
-              description: "Microsoft Excel Workbook",
-              accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
-            }],
-          });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          setUploadStatus("Excel export saved successfully!");
-        } catch (pickerError) {
-          if (pickerError.name === "AbortError") {
-            setUploadStatus("");
-            return;
-          }
-          throw pickerError;
-        }
-      } else {
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.download = `${projectDetails.name.replace(/ /g, "_")}_Statistics.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-        setUploadStatus("Excel export saved successfully!");
+  const handleExportExcel = async (selectedDocIds, selectedCodeIds) => {
+    let url = `${API_BASE}/projects/${id}/export/excel`;
+
+      // Append the filters to the URL as query parameters
+      const params = new URLSearchParams();
+      if (selectedDocIds.length > 0) params.append("docs", selectedDocIds.join(","));
+      if (selectedCodeIds.length > 0) params.append("codes", selectedCodeIds.join(","));
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
       }
-    } catch (error) {
-      console.error(error);
-      setUploadStatus("Failed to export Excel file.");
-    }
-    setTimeout(() => setUploadStatus(""), 4000);
+
+      const link = document.createElement("a");
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      // Close the modal
+      setIsExportModalOpen(false);
   };
 
   const page = {
@@ -835,6 +813,7 @@ function ProjectPage() {
     handleCreateTextDocument,
     handleExportQuotesCSV,
     handleExportExcel,
+    setIsExportModalOpen,
   };
 
   return (
@@ -845,6 +824,14 @@ function ProjectPage() {
       dialogState={audioLanguageDialog}
       onCancel={() => audioLanguageDialog.resolve(null)}
       onConfirm={(selectedLanguage) => audioLanguageDialog.resolve(selectedLanguage)}
+    />
+
+    <ExportFilterModal 
+      isOpen={isExportModalOpen}
+      onClose={() => setIsExportModalOpen(false)}
+      onExport={handleExportExcel}
+      documents={documents}
+      codes={projectCodes}
     />
   </>
 );
