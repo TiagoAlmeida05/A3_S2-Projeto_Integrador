@@ -69,6 +69,15 @@ class DocumentRepository:
             models.Document.project_id == project_id
         ).first()
 
+    def get_by_filename(self, project_id: int, filename: str, exclude_document_id: int = None):
+        query = self.db.query(models.Document).filter(
+            models.Document.project_id == project_id,
+            models.Document.filename == filename,
+        )
+        if exclude_document_id is not None:
+            query = query.filter(models.Document.id != exclude_document_id)
+        return query.first()
+
     def create(self, project_id: int, filename: str, content: str, file_type: str = "text", metadata: Optional[dict] = None):
         next_order_index = (
             self.db.query(func.coalesce(func.max(models.Document.order_index), -1))
@@ -103,6 +112,15 @@ class DocumentRepository:
         doc = self.get_by_id(project_id, document_id)
         if doc:
             doc.content = content
+            self.db.commit()
+            self.db.refresh(doc)
+            return doc
+        return None
+
+    def update_filename(self, project_id: int, document_id: int, filename: str):
+        doc = self.get_by_id(project_id, document_id)
+        if doc:
+            doc.filename = filename
             self.db.commit()
             self.db.refresh(doc)
             return doc
