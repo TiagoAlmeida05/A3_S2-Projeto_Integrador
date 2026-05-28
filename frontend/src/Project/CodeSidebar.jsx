@@ -3,7 +3,7 @@ import CodeMemoModal from './CodeMemoModal';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
 import axios from 'axios';
 
-function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes }) {
+function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV }) {
   const [memoModalOpen, setMemoModalOpen] = useState(false);
   const [memoTargetCode, setMemoTargetCode] = useState(null);
   const [memoError, setMemoError] = useState(null);

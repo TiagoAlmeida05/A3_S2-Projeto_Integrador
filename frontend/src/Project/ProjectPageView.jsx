@@ -50,6 +50,7 @@ const ProjectPageView = ({ page }) => {
     setSegmentContextMenu,
     handleCreateTextDocument,
     pushUndoAction,
+    handleExportQuotesCSV,
   } = page;
 
   return (
@@ -91,6 +92,7 @@ const ProjectPageView = ({ page }) => {
           openCodePanel={openCodePanel}
           setProjectCodes={setProjectCodes}
           handleCreateTextDocument={handleCreateTextDocument}
+          handleExportQuotesCSV={handleExportQuotesCSV}
         />
         <ProjectPageCodePanel
           API_BASE={API_BASE}

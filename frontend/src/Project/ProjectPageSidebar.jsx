@@ -21,6 +21,7 @@ const ProjectPageSidebar = ({
   openCodePanel,
   setProjectCodes,
   handleCreateTextDocument,
+  handleExportQuotesCSV,
 }) => {
 
   return (
@@ -134,6 +135,7 @@ const ProjectPageSidebar = ({
             onRefreshCodes={fetchCodes}
             onOpenCodePanel={openCodePanel}
             onReorderCodes={setProjectCodes}
+            onExportQuotesCSV={handleExportQuotesCSV}
           />
         )}
         {activeTab === "memos" && <MemosTab projectId={id} codes={projectCodes} />}

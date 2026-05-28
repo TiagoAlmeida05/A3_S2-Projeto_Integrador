@@ -5,6 +5,11 @@ from database import get_db
 import schemas
 import models
 from repositories.segment_repo import SegmentRepository
+import csv
+import io
+import urllib.parse
+from fastapi.responses import StreamingResponse
+
 
 # We use an empty prefix here because we have two different base paths
 router = APIRouter(tags=["Segments"])
@@ -67,3 +72,43 @@ def get_segments_by_code(code_id: int, include_children: bool = False, db: Sessi
             "highlight_end": seg.end_char - start, "code_name": seg.code.name, "code_color": seg.code.color
         })
     return results
+
+
+@router.get("/projects/{project_id}/segments/export/csv")
+def export_segments_csv(project_id: int, db: Session = Depends(get_db)):
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    segments = db.query(models.Segment).join(models.Document).filter(
+        models.Document.project_id == project_id
+    ).order_by(models.Segment.document_id, models.Segment.start_char).all()
+
+    output = io.StringIO()
+    output.write('\ufeff') 
+    
+    writer = csv.writer(output)
+    writer.writerow(["Document Name", "Code Name", "Quote Content", "Start Pos", "End Pos", "Attached Memos"])
+
+    for seg in segments:
+        doc_name = seg.document.filename if seg.document else "Unknown"
+        code_name = seg.code.name if seg.code else "Unknown"
+
+        # Fetch all memos attached specifically to this quote
+        memos = db.query(models.Memo).filter(
+            models.Memo.target_type == "segment", 
+            models.Memo.target_id == seg.id
+        ).all()
+        memos_text = "\n---\n".join([m.text for m in memos])
+
+        writer.writerow([doc_name, code_name, seg.content, seg.start_char, seg.end_char, memos_text])
+
+    output.seek(0)
+    
+    safe_filename = urllib.parse.quote(f"Quotes_{project.name}.csv")
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename*=utf-8''{safe_filename}"}
+    )
