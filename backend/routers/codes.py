@@ -98,12 +98,6 @@ def export_codebook_docx(project_id: int, db: Session = Depends(get_db)):
         
         # add the spaces before the code name
         run = heading.add_run(f"{indent_prefix}{code.name}")
-        
-        if code.description:
-            p = doc.add_paragraph()
-            # indent the description to match the code name
-            p.add_run(f"{indent_prefix}Description: ").bold = True
-            p.add_run(code.description)
             
         if code.id in memo_dict:
             for memo_text in memo_dict[code.id]:
