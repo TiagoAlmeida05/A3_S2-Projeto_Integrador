@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
-import AudioLanguageModal from "../Modal/AudioLanguageModal"; // Adjust path if needed
+import AudioLanguageModal from "../Modal/AudioLanguageModal"; 
 
 
 import axios from "axios";
@@ -546,11 +546,7 @@ function ProjectPage() {
   };
 
   const handleDeleteDocument = async (docId, docName) => {
-    const confirmDelete = window.confirm(
-      `Are you sure you want to delete "${docName}"? This cannot be undone.`,
-    );
-    if (!confirmDelete) return;
-
+    
     try {
       const response = await fetch(
         `${API_BASE}/projects/${id}/documents/${docId}`,

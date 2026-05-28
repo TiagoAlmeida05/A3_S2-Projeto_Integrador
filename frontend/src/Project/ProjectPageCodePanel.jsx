@@ -133,7 +133,7 @@ const ProjectPageCodePanel = ({
   const hasChildren = activeCode && projectCodes.some((c) => Number(c.parent_id) === Number(activeCode.id));
 
   return (
-    <div style={{ width: "360px", display: "flex", flexDirection: "column", border: "1px solid #ccc", borderRadius: "8px", padding: "20px", backgroundColor: "#111", color: "#fff", overflowY: "auto" }}>
+    <div style={{ width: "360px", display: "flex", flexDirection: "column", border: "1px solid #ccc",borderRight: "1px solid #333" , padding: "20px", backgroundColor: "#111", color: "#fff", overflowY: "auto",borderTop: "1px solid #ccc" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
         <div>
           <h3 style={{ margin: 0, fontSize: "18px" }}>Compiled Quotes</h3>

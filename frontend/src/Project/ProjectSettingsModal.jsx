@@ -29,7 +29,7 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div style={{ backgroundColor: '#242424', padding: '30px', borderRadius: '8px', border: '1px solid #444', width: '400px', color: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
         
-        <h3 style={{ marginTop: 0 }}>⚙️ Project Settings</h3>
+        <h3 style={{ marginTop: 0 }}> Project Settings</h3>
         
         <div style={{ marginTop: '20px', marginBottom: '15px' }}>
           <label style={{ fontSize: '12px', color: '#aaa', display: 'block', marginBottom: '5px' }}>Project Name</label>
@@ -67,11 +67,11 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
           
           <button 
             onClick={() => setShowConfirmDelete(true)}
-            style={{ padding: '8px 12px', backgroundColor: 'transparent', border: '1px solid #ff6b6b', color: '#ff6b6b', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s' }}
+            style={{ padding: '10px 15px', backgroundColor: 'transparent', border: '1px solid #ff6b6b', color: '#ff6b6b', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s' }}
             onMouseOver={(e) => e.target.style.backgroundColor = 'rgba(255, 107, 107, 0.1)'}
             onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
-            🗑️ Delete Project
+            Delete Project
           </button>
 
           <div style={{ display: 'flex', gap: '10px' }}>

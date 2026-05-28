@@ -522,7 +522,10 @@ function DocumentSidebar({
           ) : (
             <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                📄 {doc.filename}
+                <svg xmlns="http://www.w3.org/2000/svg" width="11px" height="11px" viewBox="0 0 16 16" fill="none">
+                  <path d="M7 0H2V16H14V7H7V0Z" fill="#ccc"/>
+                  <path d="M9 0V5H14L9 0Z" fill="#ccc"/>
+                </svg>  {doc.filename}
               </div>
             <div style={{ marginTop: '2px', fontSize: '11px', color: '#a9a9a9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {formatImportedDate(doc.created_at)}{metadataSummary ? ` · ${metadataSummary}` : ''}
@@ -617,20 +620,29 @@ function DocumentSidebar({
           <label 
             htmlFor="file-upload" 
             style={{ 
-              flex: 1, padding: '10px', backgroundColor: '#4CAF50', color: 'white', 
-              borderRadius: '4px', cursor: 'pointer', textAlign: 'center', fontSize: '14px', fontWeight: 'bold'
+              flex: 1, padding: '10px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', 
+              textAlign: 'center', fontSize: '14px', fontWeight: 'bold', display: 'flex',alignItems: 'center',justifyContent: 'center',gap: '8px'
             }}
           >
-            ➕ Import
+            <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" className="icon line">
+              <polyline points="13 7 13 13 7 13" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+              <line x1="13" y1="13" x2="3" y2="3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+              <path d="M13,3h7a1,1,0,0,1,1,1V20a1,1,0,0,1-1,1H4a1,1,0,0,1-1-1V13" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+            </svg>
+            Import
           </label>
+          
           <button 
             onClick={onWriteDocument}
             style={{ 
-              flex: 1, padding: '10px', backgroundColor: '#646cff', color: 'white', 
-              border: 'none', borderRadius: '4px', cursor: 'pointer', textAlign: 'center', fontSize: '14px', fontWeight: 'bold'
+              flex: 1, padding: '10px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '4px', 
+              cursor: 'pointer', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', display: 'flex',alignItems: 'center',justifyContent: 'center',gap: '8px'
             }}
           >
-            📝 Write
+            <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 64 64" stroke-width="3" stroke="currentColor" fill="none">
+              <path d="M55.5,23.9V53.5a2,2,0,0,1-2,2h-43a2,2,0,0,1-2-2v-43a2,2,0,0,1,2-2H41.64"/>
+              <path d="M19.48,38.77l-.64,5.59a.84.84,0,0,0,.92.93l5.56-.64a.87.87,0,0,0,.5-.24L54.9,15.22a1.66,1.66,0,0,0,0-2.35L51.15,9.1a1.67,1.67,0,0,0-2.36,0L19.71,38.28A.83.83,0,0,0,19.48,38.77Z"/><line x1="44.87" y1="13.04" x2="50.9" y2="19.24"/>
+            </svg> Write
           </button>
         </div>
         {uploadProgress?.isActive && uploadProgress.total > 0 && (
@@ -699,7 +711,11 @@ function DocumentSidebar({
       >
         {isCreatingFolder && (
           <div style={{ marginBottom: '5px', padding: '8px 12px', backgroundColor: '#2a2a2a', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #646cff' }}>
-            <span>📁</span>
+            <span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14px" height="14px" viewBox="0 0 16 16" fill="none">
+                <path d="M0 1H5L8 3H13V5H3.7457L2.03141 11H4.11144L5.2543 7H16L14 14H0V1Z" fill="#ccc"/>
+              </svg>
+            </span>
             <input 
               autoFocus value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleCreateFolder(); if (e.key === 'Escape') setIsCreatingFolder(false); }}
@@ -741,9 +757,15 @@ function DocumentSidebar({
                   <div onClick={(e) => toggleFolder(e, folder.id)} style={{ cursor: 'pointer', fontSize: '12px', color: '#aaa', padding: '4px' }}>
                     {isExpanded ? '▼' : '▶'}
                   </div>
-                  <span style={{ fontSize: '15px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    📁 {folder.name}
-                  </span>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14px" height="14px" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                      <path d="M0 1H5L8 3H13V5H3.7457L2.03141 11H4.11144L5.2543 7H16L14 14H0V1Z" fill="#ccc"/>
+                    </svg> 
+                    <span style={{fontSize: '15px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {folder.name}
+                    </span>
+                </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                   <span style={{ backgroundColor: '#111', color: '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>

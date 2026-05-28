@@ -13,7 +13,7 @@ function CollisionModal({ dialog, resolve }) {
         border: '1px solid #444', width: '400px', color: 'white',
         boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
       }}>
-        <h3 style={{ marginTop: 0, color: '#ffcc00' }}>⚠️ File Already Exists</h3>
+        <h3 style={{ marginTop: 0, color: '#ffcc00' }}>File Already Exists</h3>
         <p>The file <strong>"{dialog.filename}"</strong> already exists in this project.</p>
         
         <div style={{ marginTop: '20px', marginBottom: '20px' }}>

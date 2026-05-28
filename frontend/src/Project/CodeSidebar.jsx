@@ -360,7 +360,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     }
 
 return (
-    <>
+    <> 
       <h3 style={{ marginTop: 0 }}>Code Hierarchy</h3>
       
       <form onSubmit={handleCreateCode} style={{ marginBottom: '20px', display: 'flex', gap: '8px' }}>
@@ -534,14 +534,23 @@ return (
                         style={{ backgroundColor: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
                         title="Edit Code"
                       >
-                        ✏️
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" fill="none">
+                          <path d="M20.1497 7.93997L8.27971 19.81C7.21971 20.88 4.04971 21.3699 3.27971 20.6599C2.50971 19.9499 3.06969 16.78 4.12969 15.71L15.9997 3.84C16.5478 3.31801 17.2783 3.03097 18.0351 3.04019C18.7919 3.04942 19.5151 3.35418 20.0503 3.88938C20.5855 4.42457 20.8903 5.14781 20.8995 5.90463C20.9088 6.66146 20.6217 7.39189 20.0997 7.93997H20.1497Z" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M21 21H12" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                       </button>  
                       <button 
                         onClick={(e) => { e.stopPropagation(); setCodeToDelete(code); }}
                         style={{ backgroundColor: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
                         title="Delete Code"
                       >
-                        🗑️
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" fill="none">
+                          <path d="M10 11V17" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M14 11V17" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M4 7H20" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M6 7H12H18V18C18 19.6569 16.6569 21 15 21H9C7.34315 21 6 19.6569 6 18V7Z" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7H9V5Z" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
                       </button>    
                     </div>
                   </div>

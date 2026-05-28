@@ -35,6 +35,7 @@ const ProjectPageSidebar = ({
           alignItems: "center",
           paddingTop: "20px",
           borderRight: "1px solid #333",
+          borderTop: "1px solid #333",
         }}
       >
         <button
@@ -105,8 +106,6 @@ const ProjectPageSidebar = ({
           width: "300px",
           display: "flex",
           flexDirection: "column",
-          border: "1px solid #ccc",
-          borderRadius: "8px",
           padding: "20px",
           backgroundColor: "#1a1a1a",
           overflowY: "auto",
