@@ -328,6 +328,21 @@ function ProjectPage() {
   }, [id]);
 
   useEffect(() => {
+    const handleCodesMerged = (event) => {
+      const { sourceId, targetId } = event.detail;
+      
+      setDocumentSegments(prevSegments => prevSegments.map(seg => 
+        seg.code_id === sourceId ? { ...seg, code_id: targetId } : seg
+      ));
+
+      fetchCodes(); 
+    };
+    
+    window.addEventListener('codes-merged', handleCodesMerged);
+    return () => window.removeEventListener('codes-merged', handleCodesMerged);
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event) => {
       const isUndoShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
       if (!isUndoShortcut) return;

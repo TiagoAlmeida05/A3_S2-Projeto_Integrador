@@ -22,16 +22,20 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [dragPosition, setDragPosition] = useState(null); // "before", "after", "inside"
+  const [pendingDropAction, setPendingDropAction] = useState(null);
   
   const [expandedCodes, setExpandedCodes] = useState(new Set());
   const [codeToDelete, setCodeToDelete] = useState(null);
 
   useEffect(() => {
-    const handleClick = () => setContextMenu(null);
+    const handleClick = () => {
+      setContextMenu(null);
+      setPendingDropAction(null); 
+    };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
-
+  
   const handleCreateCode = async (e) => {
     e.preventDefault();
     if (!newCodeName.trim()) return;
@@ -172,17 +176,8 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     setDragPosition(null);
   }
 
-  const handleDrop = async (e, targetCode) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (!draggedId || draggedId === targetCode.id || isDecendant(targetCode.id, draggedId)) {
-      setDragOverId(null);
-      setDragPosition(null);
-      return;
-    }
-
-    const draggedCode = codes.find(c => c.id === draggedId);
+  const executeReorder = async (sourceId, targetCode, position) => {
+    const draggedCode = codes.find(c => c.id === sourceId);
 
     const getAllDescendants = (parentId) => {
       let desc = [];
@@ -194,29 +189,24 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       return desc;
     };
 
-    const draggedDescendants = getAllDescendants(draggedId);
+    const draggedDescendants = getAllDescendants(sourceId);
 
     let newParentId = targetCode.parent_id;
-    if (dragPosition === "inside") {
+    if (position === "inside") {
       newParentId = targetCode.id;
       setExpandedCodes(prev => new Set(prev).add(targetCode.id));
     }
 
-    if (newParentId === draggedId) {
-      setDraggedId(null);
-      setDragOverId(null);
-      setDragPosition(null);
-      return;
-    }
+    if (newParentId === sourceId) return;
 
     draggedCode.parent_id = newParentId;
 
-    let remainingCodes = codes.filter(c => c.id !== draggedId && !draggedDescendants.some(d => d.id === c.id));
+    let remainingCodes = codes.filter(c => c.id !== sourceId && !draggedDescendants.some(d => d.id === c.id));
     
     const targetIndex = remainingCodes.findIndex(c => c.id === targetCode.id);
     let insertIndex = targetIndex;
 
-    if (dragPosition === "after" || dragPosition === "inside") {
+    if (position === "after" || position === "inside") {
       const targetDescendants = getAllDescendants(targetCode.id);
       insertIndex = targetIndex + 1 + targetDescendants.length;
     }
@@ -240,7 +230,32 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     } catch (error) {
       console.error("Failed to reorder codes:", error);
     }
+  };
 
+  const handleDrop = async (e, targetCode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!draggedId || draggedId === targetCode.id || isDecendant(targetCode.id, draggedId)) {
+      setDragOverId(null);
+      setDragPosition(null);
+      return;
+    }
+
+    if (dragPosition === "inside") {
+      setPendingDropAction({ 
+        sourceId: draggedId, 
+        targetCode: targetCode,
+        x: e.clientX,
+        y: e.clientY
+      });
+      setDraggedId(null);
+      setDragOverId(null);
+      setDragPosition(null);
+      return; 
+    }
+
+    await executeReorder(draggedId, targetCode, dragPosition);
     setDraggedId(null);
     setDragOverId(null);
     setDragPosition(null);
@@ -560,6 +575,71 @@ return (
             onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
             ✨ Create Code Memo
+          </button>
+        </div>
+      )}
+
+      {pendingDropAction && (
+        <div 
+          onClick={(e) => e.stopPropagation()} 
+          style={{ 
+            position: 'fixed', 
+            top: pendingDropAction.y, 
+            left: pendingDropAction.x, 
+            zIndex: 9999, 
+            backgroundColor: '#23232a', 
+            border: '1px solid #444', 
+            borderRadius: '6px', 
+            boxShadow: '0 8px 16px rgba(0,0,0,0.5)', 
+            padding: '4px', 
+            minWidth: '180px' 
+          }}
+        >
+          <div style={{ padding: '4px 8px', fontSize: '11px', color: '#888', borderBottom: '1px solid #444', marginBottom: '4px' }}>
+            Action for <b>{codes.find(c => c.id === pendingDropAction.sourceId)?.name}</b>:
+          </div>
+
+          <button 
+            onClick={async (e) => {
+              e.stopPropagation();
+              const { sourceId, targetCode } = pendingDropAction;
+              setPendingDropAction(null);
+              await executeReorder(sourceId, targetCode, "inside");
+            }}
+            style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+            onMouseOver={(e) => e.target.style.backgroundColor = '#4CAF50'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            ↳ Turn into Sub-Code
+          </button>
+
+          <button 
+            onClick={async (e) => {
+              e.stopPropagation();
+              const { sourceId, targetCode } = pendingDropAction;
+              setPendingDropAction(null);
+              try {
+                await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/merge`, {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ source_code_id: sourceId, target_code_id: targetCode.id })
+                });
+                
+                if(onRefreshCodes) onRefreshCodes();
+
+                window.dispatchEvent(new CustomEvent('codes-merged', { 
+                  detail: { sourceId: sourceId, targetId: targetCode.id } 
+                })); 
+
+              } catch(err) {
+                console.error(err);
+              }
+            }}
+            style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+            onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            🔗 Merge Codes Together
           </button>
         </div>
       )}

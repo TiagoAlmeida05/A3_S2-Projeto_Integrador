@@ -48,6 +48,10 @@ class CodeReorderItem(BaseModel):
 class CodeReorderRequest(BaseModel):
     codes: List[CodeReorderItem]
 
+class CodeMergeRequest(BaseModel):
+    source_code_id: int
+    target_code_id: int
+
 
 # Segment Schemas 
 

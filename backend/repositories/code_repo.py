@@ -60,3 +60,20 @@ class CodeRepository:
             self.db.commit()
             return True
         return False
+    
+    def merge(self, project_id: int, source_id: int, target_id: int):
+        source = self.db.query(models.Code).filter(models.Code.id == source_id, models.Code.project_id == project_id).first()
+        target = self.db.query(models.Code).filter(models.Code.id == target_id, models.Code.project_id == project_id).first()
+        
+        if not source or not target:
+            return False
+
+        self.db.query(models.Segment).filter(models.Segment.code_id == source_id).update({"code_id": target_id})
+        
+        self.db.query(models.Code).filter(models.Code.parent_id == source_id).update({"parent_id": target_id})
+        
+        self.db.query(models.Memo).filter(models.Memo.target_type == "code", models.Memo.target_id == source_id).update({"target_id": target_id})
+        
+        self.db.delete(source)
+        self.db.commit()
+        return True
