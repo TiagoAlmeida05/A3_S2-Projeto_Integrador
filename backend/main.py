@@ -2,12 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import models
 from database import engine
-from routers import projects, documents, codes, segments, folders, memos
+
+from routers import projects, documents, codes, segments, folders, memos, audio
+
 
 # Import any custom standalone tools you have
 import tkinter as tk
 from tkinter import filedialog
 from refi_service import export_refi_xml, import_refi_xml
+
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -32,6 +35,7 @@ app.include_router(codes.router)
 app.include_router(segments.router)
 app.include_router(folders.router)
 app.include_router(memos.router)
+app.include_router(audio.router)
 
 # --- LEAVE SYSTEM/MISC ENDPOINTS HERE ---
 @app.get("/system/choose-folder")
