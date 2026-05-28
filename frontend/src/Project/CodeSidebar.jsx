@@ -385,26 +385,27 @@ return (
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h3 style={{ margin: 0 }}>Codes</h3>
-        <button 
-          onClick={handleExportCodebook}
-          style={{ 
-            padding: '6px 12px', 
-            backgroundColor: 'transparent', 
-            border: '1px solid #444', 
-            color: '#ccc', 
-            borderRadius: '6px', 
-            cursor: 'pointer',
-            fontSize: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px'
-          }}
-          title="Export Codebook to Word"
-          onMouseOver={(e) => e.target.style.backgroundColor = '#222'}
-          onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-        >
-          Export to Word
-        </button>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <button 
+            onClick={onExportQuotesCSV}
+            style={{ padding: '6px 10px', backgroundColor: 'transparent', border: '1px solid #444', color: '#ccc', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+            title="Export Quotes to CSV"
+            onMouseOver={(e) => e.target.style.backgroundColor = '#222'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            CSV
+          </button>
+          
+          <button 
+            onClick={handleExportCodebook}
+            style={{ padding: '6px 10px', backgroundColor: 'transparent', border: '1px solid #444', color: '#ccc', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+            title="Export Codebook to Word"
+            onMouseOver={(e) => e.target.style.backgroundColor = '#222'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            Word
+          </button>
+        </div>
       </div>
 
       <ul style={{ listStyleType: 'none', padding: 0, overflowY: 'auto', flex: 1 }}>

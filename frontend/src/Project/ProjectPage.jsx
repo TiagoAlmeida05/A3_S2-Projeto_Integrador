@@ -701,6 +701,51 @@ function ProjectPage() {
       setTimeout(() => setUploadStatus(""), 4000);
     }
   };
+  const handleExportQuotesCSV = async () => {
+    setUploadStatus("Generating Quotes CSV...");
+    try {
+      const response = await fetch(`${API_BASE}/projects/${id}/segments/export/csv`);
+      if (!response.ok) throw new Error("Failed to export quotes");
+      
+      const blob = await response.blob();
+      
+      if (window.showSaveFilePicker) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: `${projectDetails.name.replace(/ /g, "_")}_Quotes.csv`,
+            types: [{
+              description: "CSV File (Excel Compatible)",
+              accept: { "text/csv": [".csv"] },
+            }],
+          });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setUploadStatus("Quotes exported successfully!");
+        } catch (pickerError) {
+          if (pickerError.name === "AbortError") {
+            setUploadStatus("");
+            return;
+          }
+          throw pickerError;
+        }
+      } else {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `${projectDetails.name.replace(/ /g, "_")}_Quotes.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        setUploadStatus("Quotes exported successfully!");
+      }
+    } catch (error) {
+      console.error(error);
+      setUploadStatus("Failed to export Quotes.");
+    }
+    setTimeout(() => setUploadStatus(""), 4000);
+  };
 
   const page = {
     id,
@@ -746,6 +791,7 @@ function ProjectPage() {
     handleDeleteProject,
     handleExportREFI,
     handleCreateTextDocument,
+    handleExportQuotesCSV,
   };
 
   return (

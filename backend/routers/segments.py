@@ -87,7 +87,7 @@ def export_segments_csv(project_id: int, db: Session = Depends(get_db)):
     output = io.StringIO()
     output.write('\ufeff') 
     
-    writer = csv.writer(output)
+    writer = csv.writer(output, delimiter=';')
     writer.writerow(["Document Name", "Code Name", "Quote Content", "Start Pos", "End Pos", "Attached Memos"])
 
     for seg in segments:
