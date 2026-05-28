@@ -31,13 +31,11 @@ class ProjectUpdate(BaseModel):
 class CodeCreate(BaseModel):
     name: str
     color: str = "#FFFFFF"
-    description: Optional[str] = None
     parent_id: Optional[int] = None
 
 class CodeUpdate(BaseModel):
     name: Optional[str] = None
     color: Optional[str] = None
-    description: Optional[str] = None
     parent_id: Optional[int] = None
 
 class CodeReorderItem(BaseModel):

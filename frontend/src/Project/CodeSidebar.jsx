@@ -310,6 +310,47 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     });
   };
 
+  const handleExportCodebook = async () => {
+    try {
+  
+      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/export/docx`);
+      if (!response.ok) throw new Error("Failed to generate Codebook");
+      
+      const blob = await response.blob();
+      
+      // Native File System API 
+      if (window.showSaveFilePicker) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: `Codebook.docx`,
+            types: [{
+              description: "Microsoft Word Document",
+              accept: { "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"] },
+            }],
+          });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } catch (pickerError) {
+          if (pickerError.name !== "AbortError") throw pickerError;
+        }
+      } else {
+        // Fallback for older browsers
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `Codebook.docx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Failed to export Codebook.");
+    }
+  };
+
 
   const renderCodes = [];
     if (codes) {
@@ -356,6 +397,30 @@ return (
           Add
         </button>
       </form>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h3 style={{ margin: 0 }}>Codes</h3>
+        <button 
+          onClick={handleExportCodebook}
+          style={{ 
+            padding: '6px 12px', 
+            backgroundColor: 'transparent', 
+            border: '1px solid #444', 
+            color: '#ccc', 
+            borderRadius: '6px', 
+            cursor: 'pointer',
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+          title="Export Codebook to Word"
+          onMouseOver={(e) => e.target.style.backgroundColor = '#222'}
+          onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+        >
+          Export to Word
+        </button>
+      </div>
 
       <ul style={{ listStyleType: 'none', padding: 0, overflowY: 'auto', flex: 1 }}>
         {renderCodes.length === 0 ? (

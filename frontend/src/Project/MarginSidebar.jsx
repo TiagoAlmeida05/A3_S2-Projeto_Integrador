@@ -1,6 +1,6 @@
 import React from 'react';
 
-function MarginSidebar({ marginBars, projectCodes }) {
+function MarginSidebar({ marginBars, projectCodes, onRightClickBar }) {
   if (!marginBars || marginBars.length === 0) {
     return <div style={{ width: '25%', borderLeft: '1px solid #eee', minHeight: '100%' }}></div>;
   }
@@ -142,6 +142,9 @@ function MarginSidebar({ marginBars, projectCodes }) {
         {sortedForLines.map((bar, i) => (
           <div 
             key={`line-${bar.id}-${i}`}
+            onContextMenu={(e) => {
+                  if (onRightClickBar) onRightClickBar(e, bar.id);
+            }}
             style={{
               position: 'absolute',
               top: `${bar.top + 2}px`, 
@@ -173,6 +176,9 @@ function MarginSidebar({ marginBars, projectCodes }) {
             {row.bars.map((bar, i) => (
               <div 
                 key={`label-${bar.id}-${i}`}
+                onContextMenu={(e) => {
+                  if (onRightClickBar) onRightClickBar(e, bar.id);
+                }}
                 style={{
                   backgroundColor: bar.color,
                   color: '#fff',
