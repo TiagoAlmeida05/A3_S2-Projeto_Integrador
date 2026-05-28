@@ -80,9 +80,6 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
             
         code_elem = ET.SubElement(parent_xml_element, "{urn:QDA-XML:project:1.0}Code", attrib=code_attribs)
 
-        if c.description:
-            cd_desc = ET.SubElement(code_elem, "{urn:QDA-XML:project:1.0}Description")
-            cd_desc.text = c.description
 
         if c.id in memos_by_code:
             for m in memos_by_code[c.id]:
@@ -290,19 +287,21 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
             color = code_elem.attrib.get("color", "#646cff")
             
             c_desc_elem = code_elem.find("Description")
-            description = c_desc_elem.text if c_desc_elem is not None else None
+            imported_description = c_desc_elem.text if c_desc_elem is not None else None
 
             new_code = models.Code(
                 project_id=new_project.id,
                 name=name,
                 color=color,
-                description=description,
                 parent_id=parent_db_id
             )
             db.add(new_code)
             db.flush() # doesn't commit the whole transaction
             
             guid_to_code_id[guid] = new_code.id
+
+            if imported_description:
+                db.add(models.Memo(text=imported_description, target_type="code", target_id=new_code.id))
 
             # Extract Code-Level Memos
             for note_ref in code_elem.findall("./NoteRef"):

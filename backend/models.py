@@ -57,7 +57,6 @@ class Code(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     color = Column(String, nullable=False, default="#FFFFFF")
-    description = Column(Text, nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     parent_id = Column(Integer, ForeignKey("codes.id", ondelete="CASCADE"), nullable=True)
 
