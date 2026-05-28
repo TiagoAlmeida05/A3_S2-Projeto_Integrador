@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import models
 from database import engine
 
-# Import your incredibly clean routers
 from routers import projects, documents, codes, segments, folders, memos, audio
+
+
 
 # Import any custom standalone tools you have
 import tkinter as tk
@@ -50,15 +51,3 @@ def choose_folder():
     else:
         raise HTTPException(status_code=400, detail="No folder selected")
 
-from fastapi import Depends
-from sqlalchemy.orm import Session
-from database import get_db
-
-@app.get("/projects/{project_id}/export/refi")
-def export_refi_xml_route(project_id: int, db: Session = Depends(get_db)):
-    return export_refi_xml(project_id, db)
-
-from fastapi import UploadFile, File
-@app.post("/projects/import/refi")
-async def import_refi_xml_route(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    return await import_refi_xml(file, db)

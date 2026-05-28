@@ -87,6 +87,7 @@ const ProjectPageView = ({ page }) => {
           projectCodes={projectCodes}
           handleDeleteCode={handleDeleteCode}
           fetchCodes={fetchCodes}
+          fetchDocuments={fetchDocuments}
           openCodePanel={openCodePanel}
           setProjectCodes={setProjectCodes}
           handleCreateTextDocument={handleCreateTextDocument}
