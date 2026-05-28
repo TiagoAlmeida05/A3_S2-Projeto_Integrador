@@ -192,7 +192,6 @@ function ProjectPage() {
             body: JSON.stringify({
               name: code.name,
               color: code.color,
-              description: code.description,
               parent_id: restoredParentId,
             }),
           });

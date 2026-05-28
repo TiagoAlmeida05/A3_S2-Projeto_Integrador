@@ -195,8 +195,7 @@ const ProjectPageDocumentPanel = ({
           body: JSON.stringify({ 
             name: codeName, 
             color: quickCodeColor, 
-            description: "Created from selected text", 
-            parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null // 🔥 Fixed
+            parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null 
           }),
         });
         const createdCodeData = await codeResponse.json();

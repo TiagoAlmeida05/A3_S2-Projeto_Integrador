@@ -21,7 +21,7 @@ def get_code_repo(db: Session = Depends(get_db)):
 def get_project_codes(project_id: int, repo: CodeRepository = Depends(get_code_repo)):
     codes = repo.get_by_project(project_id)
     return [{
-        "id": c.id, "name": c.name, "color": c.color, "description": c.description,
+        "id": c.id, "name": c.name, "color": c.color, 
         "project_id": c.project_id, "parent_id": c.parent_id, "order_index": c.order_index,
         "frequency": len(c.segments) 
     } for c in codes]

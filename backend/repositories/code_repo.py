@@ -16,7 +16,6 @@ class CodeRepository:
         new_code = models.Code(
             name=code_data.name,
             color=code_data.color,
-            description=code_data.description,
             project_id=project_id,
             parent_id=code_data.parent_id
         )
