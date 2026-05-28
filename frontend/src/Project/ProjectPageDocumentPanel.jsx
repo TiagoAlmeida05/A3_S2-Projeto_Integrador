@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, use } from "react";
+import { useEffect, useState, useRef } from "react";
 import MarginSidebar from "./MarginSidebar";
 
 const ProjectPageDocumentPanel = ({
@@ -43,6 +43,7 @@ const ProjectPageDocumentPanel = ({
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "saving", "saved", or ""
   const autoSaveIntervalRef = useRef(null);
+  const [documentMetadata, setDocumentMetadata] = useState({});
 
   const hexToRGBA = (hex, opacity) => {
     if (!hex) return "transparent";
@@ -64,6 +65,13 @@ const ProjectPageDocumentPanel = ({
     }
     setIsPdfPreviewCollapsed(false);
   }, [activeDocument?.id]);
+
+  useEffect(() => {
+    const nextMetadata = activeDocument && activeDocument.metadata && typeof activeDocument.metadata === "object"
+      ? activeDocument.metadata
+      : {};
+    setDocumentMetadata(nextMetadata);
+  }, [activeDocument?.id, activeDocument?.metadata]);
 
   const handleRightClickSegment = (e, segmentId) => {
     e.preventDefault();
@@ -709,6 +717,46 @@ const ProjectPageDocumentPanel = ({
           </label>
         </div>
       </div>
+
+      {activeDocument.id !== "NEW_DOC_PENDING" && (
+        <div style={{ marginBottom: "18px", padding: "14px", border: "1px solid #ddd", borderRadius: "8px", backgroundColor: "#fafafa" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
+            <div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color: "#222" }}>Document details</div>
+              <div style={{ fontSize: "12px", color: "#666" }}>These are simple labels like “Interview date” or “Location”.</div>
+            </div>
+            <div style={{ fontSize: "12px", color: "#666" }}>{Object.keys(documentMetadata).length} tag(s)</div>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+            {Object.keys(documentMetadata).length === 0 ? (
+              <div style={{ fontSize: "13px", color: "#777" }}>No details added yet.</div>
+            ) : (
+              Object.entries(documentMetadata)
+                .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
+                .map(([key, value]) => (
+                  <div
+                    key={key}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 10px",
+                      borderRadius: "999px",
+                      backgroundColor: "#eef2ff",
+                      border: "1px solid #c7d2fe",
+                      color: "#1e293b",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <strong>{key}:</strong>
+                    <span>{value}</span>
+                  </div>
+                ))
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "flex", position: "relative", gap: "16px", alignItems: "stretch" }}>
         <div style={{ flex: 1, minWidth: 0 }}>

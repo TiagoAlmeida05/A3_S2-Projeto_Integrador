@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from fastapi.responses import Response
 import os
+import json
 
 from database import get_db
 import schemas
@@ -21,17 +23,76 @@ def get_doc_repo(db: Session = Depends(get_db)):
 def get_proj_repo(db: Session = Depends(get_db)):
     return ProjectRepository(db)
 
+
+def document_to_dict(doc):
+    try:
+        metadata = json.loads(doc.metadata_json or "{}")
+        if not isinstance(metadata, dict):
+            metadata = {}
+    except (TypeError, ValueError):
+        metadata = {}
+
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "type": doc.type,
+        "order_index": doc.order_index,
+        "created_at": doc.created_at,
+        "folder_id": doc.folder_id,
+        "metadata": metadata,
+    }
+
 @router.get("/")
-def get_project_documents(project_id: int, repo: DocumentRepository = Depends(get_doc_repo)):
-    documents = repo.get_by_project(project_id)
-    return [{"id": doc.id, "filename": doc.filename, "type": doc.type, "created_at": doc.created_at, "folder_id": doc.folder_id} for doc in documents]
+def get_project_documents(
+    project_id: int,
+    sort_by: str = "custom",
+    sort_order: str = "asc",
+    metadata_key: Optional[str] = None,
+    metadata_value: Optional[str] = None,
+    repo: DocumentRepository = Depends(get_doc_repo),
+):
+    documents = repo.get_by_project(project_id, sort_by=sort_by, sort_order=sort_order, metadata_key=metadata_key, metadata_value=metadata_value)
+    return [document_to_dict(doc) for doc in documents]
+
+
+@router.put("/reorder")
+def reorder_documents(project_id: int, request: schemas.DocumentReorderRequest, repo: DocumentRepository = Depends(get_doc_repo)):
+    repo.reorder(project_id, request.documents)
+    return {"message": "Documents reordered"}
 
 @router.get("/{document_id}")
 def get_document(project_id: int, document_id: int, repo: DocumentRepository = Depends(get_doc_repo)):
     doc = repo.get_by_id(project_id, document_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    return {"id": doc.id, "filename": doc.filename, "type": doc.type, "content": doc.content}
+    document = document_to_dict(doc)
+    document["content"] = doc.content
+    return document
+
+
+@router.get("/{document_id}/file")
+def get_document_file(project_id: int, document_id: int, repo: DocumentRepository = Depends(get_doc_repo), proj_repo: ProjectRepository = Depends(get_proj_repo)):
+    doc = repo.get_by_id(project_id, document_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    project = proj_repo.get_by_id(project_id)
+    if not project or not project.local_path:
+        raise HTTPException(status_code=404, detail="No stored file found for this document")
+
+    file_path = os.path.join(project.local_path, doc.filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Stored file not found")
+
+    media_type = "application/pdf" if doc.filename.lower().endswith(".pdf") else "application/octet-stream"
+    # Serve PDFs inline so the browser can preview them instead of forcing a download.
+    # For non-PDFs we keep the attachment disposition.
+    headers = {}
+    if media_type == "application/pdf":
+        headers["Content-Disposition"] = f'inline; filename="{doc.filename}"'
+    else:
+        headers["Content-Disposition"] = f'attachment; filename="{doc.filename}"'
+    return FileResponse(file_path, media_type=media_type, headers=headers)
 
 @router.post("/")
 async def upload_documents(
@@ -122,7 +183,7 @@ def create_text_document(
         except Exception as e:
             print(f"Warning: Could not save physical file: {e}")
     
-    return {"id": new_doc.id, "filename": new_doc.filename, "type": new_doc.type}
+    return document_to_dict(new_doc)
 
 @router.delete("/{document_id}")
 def delete_document(project_id: int, document_id: int, repo: DocumentRepository = Depends(get_doc_repo)):
@@ -132,11 +193,25 @@ def delete_document(project_id: int, document_id: int, repo: DocumentRepository 
     return {"message": "Document deleted successfully"}
 
 @router.put("/{document_id}/move")
-def move_document(project_id: int, document_id: int, folder_id: Optional[int] = None, repo: DocumentRepository = Depends(get_doc_repo)):
-    doc = repo.move_to_folder(project_id, document_id, folder_id)
+def move_document(
+    project_id: int, 
+    document_id: int, 
+    folder_id: Optional[str] = None, # Accept string format temporarily for parsing compatibility
+    repo: DocumentRepository = Depends(get_doc_repo)
+):
+    # If the frontend passes an empty string folder_id='', turn it back into an actual Python None
+    parsed_folder_id = None
+    if folder_id and folder_id.strip() != "" and folder_id.lower() != "null":
+        try:
+            parsed_folder_id = int(folder_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid folder ID format")
+
+    doc = repo.move_to_folder(project_id, document_id, parsed_folder_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"message": "Moved successfully"}
+
 
 @router.put("/{document_id}/content")
 def update_document_content(
@@ -160,6 +235,14 @@ def update_document_content(
                 print(f"Warning: Could not update physical file on disk: {e}")
 
     return {"message": "Document updated successfully"}
+
+
+@router.put("/{document_id}/metadata")
+def update_document_metadata(project_id: int, document_id: int, metadata_update: schemas.DocumentMetadataUpdate, repo: DocumentRepository = Depends(get_doc_repo)):
+    doc = repo.update_metadata(project_id, document_id, metadata_update.metadata)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document_to_dict(doc)
 
 @router.get("/{document_id}/download")
 def download_document_raw(
