@@ -48,6 +48,7 @@ const ProjectPageView = ({ page }) => {
     handleExportREFI,
     setSegmentContextMenu,
     handleCreateTextDocument,
+    autoSyncToCloud,
     pushUndoAction,
   } = page;
 
@@ -68,6 +69,7 @@ const ProjectPageView = ({ page }) => {
         projectDetails={projectDetails}
         handleExportREFI={handleExportREFI}
         setIsSettingsOpen={setIsSettingsOpen}
+        autoSyncToCloud={autoSyncToCloud}
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>

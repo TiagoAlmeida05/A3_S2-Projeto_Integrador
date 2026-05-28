@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
+import { uploadProjectDataToDrive, uploadRawFileToDrive } from '../Utils/driveAPI';
 
 import axios from "axios";
 
@@ -318,6 +319,21 @@ function ProjectPage() {
   }, [id]);
 
   useEffect(() => {
+    const lockFileId = localStorage.getItem('current_project_lock_id');
+    const token = localStorage.getItem('google_drive_tokens');
+
+    if (lockFileId && token && window.electronAPI?.registerEmergencyLock) {
+      window.electronAPI.registerEmergencyLock(lockFileId, token);
+    }
+
+    return () => {
+      if(window.electronAPI?.clearEmergencyLock) {
+        window.electronAPI.clearEmergencyLock();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event) => {
       const isUndoShortcut = (event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z";
       if (!isUndoShortcut) return;
@@ -338,6 +354,60 @@ function ProjectPage() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undoStack, activeDocument, documents, projectCodes]);
+
+  const autoSyncToCloud = async () => {
+    const folderId = localStorage.getItem('current_project_folder_id');
+    const isConnected = localStorage.getItem('google_drive_tokens');
+
+    if(!isConnected || !folderId) return;
+
+    setUploadStatus("Saving to cloud... ☁️");
+
+    try {
+      const [docsList, codesRes, segmentsRes] = await Promise.all([
+        fetch(`${API_BASE}/projects/${id}/documents/`).then(res => res.json()),
+        fetch(`${API_BASE}/projects/${id}/codes`).then(res => res.json()),
+        fetch(`${API_BASE}/projects/${id}/segments`).then(res => res.json()),
+      ]);
+
+      const fullDocs = await Promise.all(docsList.map(doc => 
+          fetch(`${API_BASE}/projects/${id}/documents/${doc.id}`).then(res => res.json())
+      ));
+
+      const fullProjectData = {
+        details: projectDetails,
+        documents: fullDocs,
+        codes: codesRes,
+        segments: segmentsRes,
+        last_synced: new Date().toISOString()
+      };
+
+      await uploadProjectDataToDrive(folderId, fullProjectData);
+      setUploadStatus("Syncing source files... 📁");
+      for (const doc of docsList) {
+        try {
+          const fileResponse = await fetch(`${API_BASE}/projects/${id}/documents/${doc.id}/download`);
+
+          if(fileResponse.ok){
+            const fileBlob = await fileResponse.blob();
+            await uploadRawFileToDrive(folderId, doc.filename, fileBlob);
+          } else {
+            console.error(`Backend refused to download ${doc.filename}: HTTP ${fileResponse.status}`);     
+          }
+        } catch (fileErr) {
+          console.error(`Failed to sync file ${doc.filename}:`, fileErr);
+        }
+      }
+
+      console.log("Auto-sync successful!");
+      setUploadStatus("Cloud sync complete! ✅");
+      setTimeout(() => setUploadStatus(""), 3000);
+    } catch (err) {
+      console.error("Auto-sync failed:", err);
+      setUploadStatus("❌ Failed to sync to cloud.");
+      setTimeout(() => setUploadStatus(""), 4000);
+    }
+  };
 
   const handleDeleteCode = async (codeId) => {
     try {
@@ -701,6 +771,7 @@ function ProjectPage() {
     handleDeleteProject,
     handleExportREFI,
     handleCreateTextDocument,
+    autoSyncToCloud,
   };
 
   return <ProjectPageView page={page} />;
