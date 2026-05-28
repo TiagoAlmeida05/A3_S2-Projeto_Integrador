@@ -45,6 +45,24 @@ const ProjectPageDocumentPanel = ({
   const autoSaveIntervalRef = useRef(null);
   const [documentMetadata, setDocumentMetadata] = useState({});
 
+  useEffect(() => {
+    const handleCloseMenu = () => {
+      if (segmentContextMenu) {
+        setSegmentContextMenu(null);
+      }
+    };
+
+    // Listen for left-clicks or scrolling to dismiss the menu
+    window.addEventListener("click", handleCloseMenu);
+    window.addEventListener("scroll", handleCloseMenu, { passive: true });
+
+    // Cleanup the listeners
+    return () => {
+      window.removeEventListener("click", handleCloseMenu);
+      window.removeEventListener("scroll", handleCloseMenu);
+    };
+  }, [segmentContextMenu]);
+
   const hexToRGBA = (hex, opacity) => {
     if (!hex) return "transparent";
     hex = hex.replace("#", "");
@@ -177,8 +195,7 @@ const ProjectPageDocumentPanel = ({
           body: JSON.stringify({ 
             name: codeName, 
             color: quickCodeColor, 
-            description: "Created from selected text", 
-            parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null // 🔥 Fixed
+            parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null 
           }),
         });
         const createdCodeData = await codeResponse.json();
@@ -601,6 +618,32 @@ const ProjectPageDocumentPanel = ({
     return parts;
   };
 
+  const handleDeleteSegment = async (segmentId) => {
+    const segmentSnapshot = documentSegments.find((seg) => seg.id === segmentId);
+    try {
+      const res = await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`, { 
+        method: "DELETE" 
+      });
+      
+      if (res.ok) {
+        // Remove from the UI instantly
+        setDocumentSegments(prev => prev.filter(s => s.id !== segmentId));
+        
+        // Push it to your Ctrl+Z Undo Stack!
+        if (pushUndoAction && segmentSnapshot) {
+          pushUndoAction({ type: "delete-segment", segment: segmentSnapshot });
+        }
+        
+        setSegmentContextMenu(null);
+        fetchCodes(); // Refresh sidebar to update the frequency count
+      } else {
+        setUploadStatus("Failed to remove code.");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const documentShellStyle = {
     flex: 1, border: "1px solid #ccc", borderRadius: "8px", padding: "30px",
     backgroundColor: "#fff", color: "#333", overflowY: "auto", position: "relative",
@@ -833,15 +876,23 @@ const ProjectPageDocumentPanel = ({
           </div>
         )}
 
-        <MarginSidebar marginBars={marginBars} projectCodes={projectCodes} />
+        <MarginSidebar 
+          marginBars={marginBars} 
+          projectCodes={projectCodes} 
+          onRightClickBar={handleRightClickSegment}
+        />
       </div>
 
       {segmentContextMenu && (
         <div style={{ position: "fixed", top: segmentContextMenu.y, left: segmentContextMenu.x, zIndex: 2000, backgroundColor: "#23232a", border: "1px solid #444", borderRadius: "8px", padding: "6px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)", color: "white" }}>
           <button onClick={() => openMemoModal(segmentContextMenu.segmentId)} style={{ display: "block", width: "100%", padding: "8px 16px", backgroundColor: "transparent", border: "none", color: "white", textAlign: "left", cursor: "pointer", borderRadius: "4px" }} onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#3a3a44")} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}>
-            📝 Add Quote Memo
+            Add Quote Memo
+          </button>
+          <button onClick={() => handleDeleteSegment(segmentContextMenu.segmentId)} style={{ display: "block", width: "100%", marginTop: "4px", padding: "8px 16px", backgroundColor: "transparent", border: "none", color: "#ff6b6b", textAlign: "left", cursor: "pointer", borderRadius: "4px" }} onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#3a3a44")} onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}>
+            Unlink / Remove Code
           </button>
         </div>
+  
       )}
 
       {isMemoModalOpen && (
