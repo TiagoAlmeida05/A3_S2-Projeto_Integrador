@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 
-const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen }) => {
+const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen, handleExportExcel }) => {
 
   return (
     <>
@@ -18,6 +18,23 @@ const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen
       </div>
 
       <div style={{ display: "flex", gap: "10px" }}>
+         <button 
+          onClick={handleExportExcel}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#2a2a2a",
+            border: "1px solid #444",
+            color: "#e5e7eb",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px"
+          }}
+        >
+           Export Statistics (Excel)
+        </button>
         <button
           onClick={handleExportREFI}
           style={{
@@ -91,6 +108,7 @@ const ProjectPageTopBar = ({ projectDetails, handleExportREFI, setIsSettingsOpen
           </svg>
           Settings
         </button>
+        
       </div>
     </>
   );

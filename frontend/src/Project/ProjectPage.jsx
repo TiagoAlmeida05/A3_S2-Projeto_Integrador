@@ -747,6 +747,52 @@ function ProjectPage() {
     setTimeout(() => setUploadStatus(""), 4000);
   };
 
+  const handleExportExcel = async () => {
+    setUploadStatus("Generating Excel Statistics...");
+    try {
+      const response = await fetch(`${API_BASE}/projects/${id}/export/excel`);
+      if (!response.ok) throw new Error("Failed to export Excel file");
+      
+      const blob = await response.blob();
+      
+      if (window.showSaveFilePicker) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({
+            suggestedName: `${projectDetails.name.replace(/ /g, "_")}_Statistics.xlsx`,
+            types: [{
+              description: "Microsoft Excel Workbook",
+              accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
+            }],
+          });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          setUploadStatus("Excel export saved successfully!");
+        } catch (pickerError) {
+          if (pickerError.name === "AbortError") {
+            setUploadStatus("");
+            return;
+          }
+          throw pickerError;
+        }
+      } else {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = `${projectDetails.name.replace(/ /g, "_")}_Statistics.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        setUploadStatus("Excel export saved successfully!");
+      }
+    } catch (error) {
+      console.error(error);
+      setUploadStatus("Failed to export Excel file.");
+    }
+    setTimeout(() => setUploadStatus(""), 4000);
+  };
+
   const page = {
     id,
     API_BASE,
@@ -792,6 +838,7 @@ function ProjectPage() {
     handleExportREFI,
     handleCreateTextDocument,
     handleExportQuotesCSV,
+    handleExportExcel,
   };
 
   return (

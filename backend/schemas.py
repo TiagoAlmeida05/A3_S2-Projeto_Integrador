@@ -55,6 +55,7 @@ class SegmentCreate(BaseModel):
     start_char: int
     end_char: int
     content: str
+    
 
 
 class SegmentUpdate(BaseModel):
