@@ -130,10 +130,9 @@ def export_project_excel(project_id: int, db: Session = Depends(get_db)):
 
             text_segment = seg.content
             
-            # Safely grab the Document's created_at date!
-            timestamp = "N/A"
-            if seg.document and hasattr(seg.document, 'created_at') and seg.document.created_at:
-                timestamp = seg.document.created_at.strftime("%Y-%m-%d %H:%M")
+            timestamp = getattr(seg, 'created_at', getattr(seg.document, 'created_at', "N/A"))
+            if timestamp != "N/A" and hasattr(timestamp, "strftime"):
+                timestamp = timestamp.strftime("%Y-%m-%d %H:%M")
 
             ws.append([doc_name, code_name, parent_code_name, text_segment, timestamp])
 
