@@ -53,6 +53,11 @@ const ProjectPageView = ({ page }) => {
     handleExportQuotesCSV,
     handleExportExcel,
     setIsExportModalOpen,
+    searchResults,
+    currentSearchResult,
+    setSearchResults,
+    setCurrentSearchResult,
+    handleSearchResultClick,
     
   } = page;
 
@@ -75,6 +80,9 @@ const ProjectPageView = ({ page }) => {
         setIsSettingsOpen={setIsSettingsOpen}
         handleExportExcel={handleExportExcel}
         setIsExportModalOpen={setIsExportModalOpen}
+        projectId={id}
+        onSearchResults={setSearchResults}
+        onSearchResultClick={handleSearchResultClick}
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
@@ -131,6 +139,8 @@ const ProjectPageView = ({ page }) => {
           API_BASE={API_BASE}
           projectId={id}
           pushUndoAction={pushUndoAction}
+          currentSearchResult={currentSearchResult}
+          setCurrentSearchResult={setCurrentSearchResult}
         />
       </div>
 

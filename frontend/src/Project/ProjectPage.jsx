@@ -73,6 +73,10 @@ function ProjectPage() {
     resolve: null,
   });
 
+  // Search State
+  const [searchResults, setSearchResults] = useState([]);
+  const [currentSearchResult, setCurrentSearchResult] = useState(null);
+
   const fetchProjectDetails = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}`)
       .then((res) => res.json())
@@ -767,6 +771,19 @@ function ProjectPage() {
       setIsExportModalOpen(false);
   };
 
+  const handleSearchResultClick = (result) => {
+    // Set the active document to the one containing the search result
+    const targetDoc = documents.find((doc) => doc.id === result.document_id);
+    if (targetDoc) {
+      handleDocumentClick(result.document_id);
+      // Store the search result for highlighting
+      setCurrentSearchResult({
+        start_char: result.query_start_char,
+        end_char: result.query_end_char,
+      });
+    }
+  };
+
   const page = {
     id,
     API_BASE,
@@ -814,6 +831,11 @@ function ProjectPage() {
     handleExportQuotesCSV,
     handleExportExcel,
     setIsExportModalOpen,
+    searchResults,
+    currentSearchResult,
+    setSearchResults,
+    setCurrentSearchResult,
+    handleSearchResultClick,
   };
 
   return (

@@ -169,3 +169,56 @@ def export_project_excel(project_id: int,docs: Optional[str] = None,codes: Optio
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename*=utf-8''{safe_filename}"}
     )
+
+@router.get("/{project_id}/search")
+def search_documents(project_id: int, query: str, db: Session = Depends(get_db)):
+    """Search for text across all documents in a project"""
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not query or len(query.strip()) == 0:
+        return []
+    
+    query_lower = query.lower()
+    documents = db.query(models.Document).filter(
+        models.Document.project_id == project_id
+    ).all()
+    
+    results = []
+    for doc in documents:
+        if not doc.content:
+            continue
+        
+        content_lower = doc.content.lower()
+        start_pos = 0
+        
+        # Find all occurrences of the query in the document
+        while True:
+            pos = content_lower.find(query_lower, start_pos)
+            if pos == -1:
+                break
+            
+            # Extract context (50 chars before and after)
+            context_start = max(0, pos - 50)
+            context_end = min(len(doc.content), pos + len(query) + 50)
+            context = doc.content[context_start:context_end]
+            
+            # Clean up context display
+            if context_start > 0:
+                context = "..." + context
+            if context_end < len(doc.content):
+                context = context + "..."
+            
+            result = {
+                "document_id": doc.id,
+                "document_filename": doc.filename,
+                "query_start_char": pos,
+                "query_end_char": pos + len(query),
+                "context": context.strip(),
+                "position_label": f"Char {pos}"
+            }
+            results.append(result)
+            start_pos = pos + 1
+    
+    return results
