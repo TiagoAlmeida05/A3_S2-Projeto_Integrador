@@ -153,5 +153,3 @@ sudo apt install ffmpeg -y
 ```bash
 brew install ffmpeg
 ```
-
-If you want, I can pin versions for `faster-whisper` and `openpyxl` in `backend/requirements.txt` as well.
