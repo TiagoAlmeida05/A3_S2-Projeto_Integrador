@@ -9,22 +9,28 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
   const [showResults, setShowResults] = useState(false);
   const searchInputRef = useRef(null);
 
+  // HELPER FUNCTION: Splits the context by the search term and highlights it
   const highlightText = (text, highlight) => {
     if (!highlight.trim()) {
       return text;
     }
     
+    // Escape special characters in the query to avoid regex breaking
     const escapedHighlight = highlight.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    // Create a case-insensitive regex
     const regex = new RegExp(`(${escapedHighlight})`, "gi");
     const parts = text.split(regex);
 
-    return parts.map((part, index) =>
-      regex.test(part) ? (
+    return parts.map((part, index) => {
+      // Check if this part is the highlighted term by comparing case-insensitively
+      const isMatch = part.toLowerCase() === highlight.toLowerCase();
+      
+      return isMatch ? (
         <mark
           key={index}
           style={{
-            backgroundColor: "#ffd54f", 
-            color: "#1a1a24",          
+            backgroundColor: "#ffd54f", // Bright amber background
+            color: "#1a1a24",          // Dark text for contrast
             padding: "0 2px",
             borderRadius: "3px",
             fontWeight: "600",
@@ -34,8 +40,8 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
         </mark>
       ) : (
         part
-      )
-    );
+      );
+    });
   };
 
   const handleSearch = async (e) => {
@@ -93,7 +99,7 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search in documents"
+            placeholder="Search documents..."
             value={query}
             onChange={handleSearch}
             onFocus={() => query && setShowResults(true)}

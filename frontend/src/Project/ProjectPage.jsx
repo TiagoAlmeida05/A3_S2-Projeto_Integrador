@@ -778,8 +778,8 @@ function ProjectPage() {
       handleDocumentClick(result.document_id);
       // Store the search result for highlighting
       setCurrentSearchResult({
-        start_char: result.query_start_char,
-        end_char: result.query_end_char,
+        start_char: result.start_char,
+        end_char: result.end_char,
       });
     }
   };

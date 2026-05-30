@@ -125,8 +125,24 @@ async def upload_documents(
             elif ext.lower() == ".pdf":
                 from PyPDF2 import PdfReader
                 import io
+                import re
+                import unicodedata
                 pdf_reader = PdfReader(io.BytesIO(content))
-                text_content = "\n".join(page.extract_text() or "" for page in pdf_reader.pages)
+                # Extract text from all pages, normalize whitespace and Unicode, join with newlines
+                pages_text = []
+                for page in pdf_reader.pages:
+                    page_text = page.extract_text() or ""
+                    # Normalize Unicode: decompose fancy characters to ASCII equivalents
+                    # NFKD decomposes mathematical alphanumeric symbols to regular ASCII
+                    page_text = unicodedata.normalize('NFKD', page_text)
+                    # Encode to ASCII, ignore characters that can't be converted, decode back
+                    page_text = page_text.encode('ascii', 'ignore').decode('ascii')
+                    # Normalize whitespace: collapse multiple spaces/newlines to single space
+                    page_text = re.sub(r'\n\n+', '§PARA§', page_text)  # Mark paragraphs
+                    page_text = re.sub(r'\s+', ' ', page_text)  # Collapse all whitespace
+                    page_text = page_text.replace('§PARA§', '\n')  # Restore paragraphs as newlines
+                    pages_text.append(page_text.strip())
+                text_content = "\n".join(pages_text)
             elif ext.lower() == ".docx":
                 import io
                 from docx import Document as DocxDocument

@@ -173,6 +173,8 @@ def export_project_excel(project_id: int,docs: Optional[str] = None,codes: Optio
 @router.get("/{project_id}/search")
 def search_documents(project_id: int, query: str, db: Session = Depends(get_db)):
     """Search for text across all documents in a project"""
+    import re
+    
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -180,7 +182,7 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
     if not query or len(query.strip()) == 0:
         return []
     
-    query_lower = query.lower()
+    query_lower = query.lower().strip()
     documents = db.query(models.Document).filter(
         models.Document.project_id == project_id
     ).all()
@@ -190,33 +192,45 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
         if not doc.content:
             continue
         
+        is_pdf = doc.filename.lower().endswith('.pdf') or doc.type == 'pdf'
         content_lower = doc.content.lower()
         start_pos = 0
         
-        # Find all occurrences of the query in the document
+        # Find all occurrences of the query
         while True:
             pos = content_lower.find(query_lower, start_pos)
             if pos == -1:
                 break
             
-            # Extract context (50 chars before and after)
-            context_start = max(0, pos - 50)
-            context_end = min(len(doc.content), pos + len(query) + 50)
+            # Extract context (200 chars before and after for more unique matching)
+            context_start = max(0, pos - 200)
+            context_end = min(len(doc.content), pos + len(query) + 200)
             context = doc.content[context_start:context_end]
             
-            # Clean up context display
+            # Normalize whitespace in context for cleaner display
+            context_display = re.sub(r'\s+', ' ', context).strip()
+            
+            # Add ellipsis if needed
             if context_start > 0:
-                context = "..." + context
+                context_display = "..." + context_display
             if context_end < len(doc.content):
-                context = context + "..."
+                context_display = context_display + "..."
+            
+            # Calculate page for PDFs
+            if is_pdf:
+                page_num = max(1, (pos // 2000) + 1)
+                position_label = f"Page {page_num}"
+            else:
+                position_label = f"Char {pos}"
             
             result = {
                 "document_id": doc.id,
                 "document_filename": doc.filename,
-                "query_start_char": pos,
-                "query_end_char": pos + len(query),
-                "context": context.strip(),
-                "position_label": f"Char {pos}"
+                "start_char": pos,
+                "end_char": pos + len(query),
+                "context": context_display,
+                "position_label": position_label,
+                "is_pdf": is_pdf
             }
             results.append(result)
             start_pos = pos + 1
