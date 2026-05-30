@@ -9,39 +9,60 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
   const [showResults, setShowResults] = useState(false);
   const searchInputRef = useRef(null);
 
-  // HELPER FUNCTION: Splits the context by the search term and highlights it
-  const highlightText = (text, highlight) => {
+  const highlightText = (text, highlight, matchOffset, queryLength) => {
     if (!highlight.trim()) {
       return text;
     }
     
-    // Escape special characters in the query to avoid regex breaking
-    const escapedHighlight = highlight.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    // Create a case-insensitive regex
-    const regex = new RegExp(`(${escapedHighlight})`, "gi");
-    const parts = text.split(regex);
-
-    return parts.map((part, index) => {
-      // Check if this part is the highlighted term by comparing case-insensitively
-      const isMatch = part.toLowerCase() === highlight.toLowerCase();
+    // If we have offset information, use it to highlight the exact match
+    if (matchOffset !== undefined && queryLength !== undefined) {
+      const before = text.slice(0, matchOffset);
+      const matched = text.slice(matchOffset, matchOffset + queryLength);
+      const after = text.slice(matchOffset + queryLength);
       
-      return isMatch ? (
+      return (
+        <>
+          {before}
+          <mark
+            style={{
+              backgroundColor: "#ffd54f",
+              borderRadius: "3px",
+              fontWeight: "normal",
+            }}
+          >
+            {matched}
+          </mark>
+          {after}
+        </>
+      );
+    }
+    
+    const lowerText = text.toLowerCase();
+    const lowerHighlight = highlight.toLowerCase();
+    const index = lowerText.indexOf(lowerHighlight);
+    
+    if (index === -1) {
+      return text;
+    }
+    
+    const before = text.slice(0, index);
+    const matched = text.slice(index, index + highlight.length);
+    const after = text.slice(index + highlight.length);
+    
+    return (
+      <>
+        {before}
         <mark
-          key={index}
           style={{
-            backgroundColor: "#ffd54f", // Bright amber background
-            color: "#1a1a24",          // Dark text for contrast
-            padding: "0 2px",
-            borderRadius: "3px",
-            fontWeight: "600",
+            backgroundColor: "#ffd54f",
+            fontWeight: "normal",
           }}
         >
-          {part}
+          {matched}
         </mark>
-      ) : (
-        part
-      );
-    });
+        {after}
+      </>
+    );
   };
 
   const handleSearch = async (e) => {
@@ -194,7 +215,7 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
                   wordBreak: "break-word",
                 }}
               >
-                {highlightText(result.context, query)}
+                {highlightText(result.context, query, result.match_offset, result.query_length)}
               </div>
             </div>
           ))}

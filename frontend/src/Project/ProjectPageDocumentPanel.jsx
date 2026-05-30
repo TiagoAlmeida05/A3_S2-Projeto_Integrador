@@ -53,11 +53,10 @@ const ProjectPageDocumentPanel = ({
       const elements = viewerRef.current.querySelectorAll('[data-search-result]');
       if (elements.length > 0) {
         elements[0].scrollIntoView({ behavior: "smooth", block: "center" });
-        // Clear the search result after scrolling
-        setTimeout(() => setCurrentSearchResult(null), 2000);
+        //setTimeout(() => setCurrentSearchResult(null), 2000); 
       }
     }
-  }, [currentSearchResult, viewerRef, setCurrentSearchResult]);
+  }, [currentSearchResult, viewerRef, activeDocument?.content]);
 
   useEffect(() => {
     const handleCloseMenu = () => {
@@ -613,10 +612,7 @@ const ProjectPageDocumentPanel = ({
             style={{
               backgroundColor: "#FFD700",
               color: "#000",
-              fontWeight: "bold",
-              padding: "2px 4px",
-              borderRadius: "3px",
-              animation: "pulse 1s ease-in-out infinite",
+              //borderRadius: "3px"
             }}
           >
             {content.slice(start_char, end_char)}

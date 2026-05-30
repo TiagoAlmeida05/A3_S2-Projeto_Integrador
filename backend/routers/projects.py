@@ -202,17 +202,35 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
             if pos == -1:
                 break
             
-            # Extract context (200 chars before and after for more unique matching)
-            context_start = max(0, pos - 200)
-            context_end = min(len(doc.content), pos + len(query) + 200)
+            # Extract context (100 chars before and after)
+            context_start = max(0, pos - 100)
+            context_end = min(len(doc.content), pos + len(query) + 100)
             context = doc.content[context_start:context_end]
+            
+            # Extract the exact matched text from original content (before normalization)
+            exact_match = doc.content[pos:pos + len(query)]
             
             # Normalize whitespace in context for cleaner display
             context_display = re.sub(r'\s+', ' ', context).strip()
             
-            # Add ellipsis if needed
+            # Find where the exact match appears in the normalized context
+            # We search for the normalized version of the matched text
+            exact_match_normalized = re.sub(r'\s+', ' ', exact_match)
+            match_offset_in_display = context_display.find(exact_match_normalized)
+            
+            # If not found, try to find using case-insensitive search
+            if match_offset_in_display == -1:
+                match_offset_in_display = context_display.lower().find(exact_match_normalized.lower())
+            
+            # Add ellipsis if needed - this shifts the offset
+            ellipsis_prefix = ""
             if context_start > 0:
-                context_display = "..." + context_display
+                ellipsis_prefix = "..."
+                if match_offset_in_display != -1:
+                    match_offset_in_display += 3
+            
+            context_display = ellipsis_prefix + context_display
+            
             if context_end < len(doc.content):
                 context_display = context_display + "..."
             
@@ -229,6 +247,8 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
                 "start_char": pos,
                 "end_char": pos + len(query),
                 "context": context_display,
+                "match_offset": max(0, match_offset_in_display),
+                "query_length": len(query),
                 "position_label": position_label,
                 "is_pdf": is_pdf
             }
