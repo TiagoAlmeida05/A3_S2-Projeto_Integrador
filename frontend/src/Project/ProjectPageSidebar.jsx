@@ -25,7 +25,13 @@ const ProjectPageSidebar = ({
 }) => {
 
   return (
-    <>
+    <div
+      style={{
+        display: "flex",
+        width: "100%",
+        height: "100%",
+      }}
+    >
       <div
         style={{
           width: "60px",
@@ -103,7 +109,8 @@ const ProjectPageSidebar = ({
 
       <div
         style={{
-          width: "300px",
+          flex: 1,
+          minWidth: 0,
           display: "flex",
           flexDirection: "column",
           padding: "20px",
@@ -139,7 +146,7 @@ const ProjectPageSidebar = ({
         )}
         {activeTab === "memos" && <MemosTab projectId={id} codes={projectCodes} />}
       </div>
-    </>
+    </div>
   );
 };
 
