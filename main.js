@@ -31,6 +31,12 @@ ipcMain.handle('dialog:openDirectory', async () => {
   }
 });
 
+ipcMain.handle('system:getDefaultPath', () => {
+  // Automatically gets the user's "Documents" folder
+  const docsPath = app.getPath('documents'); 
+  return path.join(docsPath, 'jUPiter_Projects');
+});
+
 app.whenReady().then(() => {
   createWindow()
 
