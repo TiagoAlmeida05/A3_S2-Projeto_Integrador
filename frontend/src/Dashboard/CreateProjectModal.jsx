@@ -11,13 +11,18 @@ function CreateProjectModal({ isOpen, onClose, onCreate }) {
   const handleBrowseFolder = async () => {
     try {
       setFolderError("");
-      const res = await fetch("http://127.0.0.1:8000/system/choose-folder");
-      if (res.ok) {
-        const data = await res.json();
-        setLocalPath(data.path);
+      if (window.electronAPI && window.electronAPI.selectFolder) {
+        const selectedPath = await window.electronAPI.selectFolder();
+        if (selectedPath) {
+          setLocalPath(selectedPath);
+        }
+      } else {
+        setFolderError("Electron bridge not found. Make sure you are running the Electron app, not a web browser.");
       }
+      
     } catch (err) {
       console.error("Failed to open folder picker", err);
+      setFolderError("Failed to open native folder dialog.");
     }
   };
 
