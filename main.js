@@ -5,10 +5,9 @@ function createWindow () {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: path.join(__dirname, 'frontend', 'public', 'gemini-svg.png'),
     webPreferences: {
       nodeIntegration: true,
-      contextIsolation: true, 
-      preload: path.join(__dirname, 'preload.js')
     }
   })
 
