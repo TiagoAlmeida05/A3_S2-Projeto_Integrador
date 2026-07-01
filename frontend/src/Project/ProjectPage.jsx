@@ -563,7 +563,6 @@ function ProjectPage() {
   };
 
   const handleDeleteDocument = async (docId, docName) => {
-    
     try {
       const response = await fetch(
         `${API_BASE}/projects/${id}/documents/${docId}`,
@@ -576,6 +575,8 @@ function ProjectPage() {
           setActiveDocument(null);
           setDocumentSegments([]);
         }
+
+        fetchCodes(); 
 
         setUploadStatus(`Deleted ${docName}`);
         setTimeout(() => setUploadStatus(""), 3000);
