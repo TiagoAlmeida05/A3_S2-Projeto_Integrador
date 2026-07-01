@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 function CreateProjectModal({ isOpen, onClose, onCreate }) {
   const [name, setName] = useState("");
@@ -6,18 +6,35 @@ function CreateProjectModal({ isOpen, onClose, onCreate }) {
   const [localPath, setLocalPath] = useState("");
   const [folderError, setFolderError] = useState("");
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    const fetchDefaultPath = async () => {
+      try {
+        // Check if the API and the specific function actually exist before calling it
+        if (isOpen && window.electronAPI && typeof window.electronAPI.getDefaultPath === 'function' && !localPath) {
+          const defaultLocation = await window.electronAPI.getDefaultPath();
+          setLocalPath(defaultLocation);
+        }
+      } catch (err) {
+        console.error("Could not fetch default path:", err);
+      }
+    };
+    fetchDefaultPath();
+  }, [isOpen]);
 
   const handleBrowseFolder = async () => {
     try {
       setFolderError("");
-      const res = await fetch("http://127.0.0.1:8000/system/choose-folder");
-      if (res.ok) {
-        const data = await res.json();
-        setLocalPath(data.path);
+      if (window.electronAPI && window.electronAPI.selectFolder) {
+        const selectedPath = await window.electronAPI.selectFolder();
+        if (selectedPath) {
+          setLocalPath(selectedPath);
+        }
+      } else {
+        setFolderError("Electron bridge not found. Make sure you are running the Electron app, not a web browser.");
       }
     } catch (err) {
       console.error("Failed to open folder picker", err);
+      setFolderError("Failed to open native folder dialog.");
     }
   };
 
@@ -45,6 +62,8 @@ function CreateProjectModal({ isOpen, onClose, onCreate }) {
     onClose();
   };
 
+  if (!isOpen) return null;
+
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div style={{ backgroundColor: '#242424', padding: '30px', borderRadius: '8px', border: '1px solid #444', width: '450px', color: 'white' }}>
@@ -70,11 +89,6 @@ function CreateProjectModal({ isOpen, onClose, onCreate }) {
                 📂 Browse...
               </button>
             </div>
-            {!localPath && (
-              <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#f0c36d', lineHeight: 1.4 }}>
-                ⚠️ If you do not choose a local folder, PDF previews may not always show correctly. The text content will still be saved.
-              </p>
-            )}
             {folderError ? (
               <p style={{ margin: '5px 0 0 0', fontSize: '13px', color: '#ff4444', fontWeight: 'bold' }}>
                 ⚠️ {folderError}

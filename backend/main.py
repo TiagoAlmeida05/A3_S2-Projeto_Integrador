@@ -4,11 +4,6 @@ import models
 from database import engine
 
 from routers import projects, documents, codes, segments, folders, memos, audio
-
-
-# Import any custom standalone tools you have
-import tkinter as tk
-from tkinter import filedialog
 from refi_service import export_refi_xml, import_refi_xml
 
 
@@ -37,16 +32,4 @@ app.include_router(folders.router)
 app.include_router(memos.router)
 app.include_router(audio.router)
 
-# --- LEAVE SYSTEM/MISC ENDPOINTS HERE ---
-@app.get("/system/choose-folder")
-def choose_folder():
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes('-topmost', True) 
-    folder_path = filedialog.askdirectory(title="Select Project Destination")
-    root.destroy()
-    if folder_path:
-        return {"path": folder_path}
-    else:
-        raise HTTPException(status_code=400, detail="No folder selected")
 

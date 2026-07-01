@@ -1,6 +1,16 @@
 import { useEffect, useState, useRef } from "react";
 import MarginSidebar from "./MarginSidebar";
 
+  const getRandomColor = () => {
+    const chars = '6789ABCDEF'; 
+    let color = '#';
+    for (let i = 0; i < 6; i++) {
+      color += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return color;
+  };
+
+
 const ProjectPageDocumentPanel = ({
   viewerRef,
   activeDocument,
@@ -30,7 +40,7 @@ const ProjectPageDocumentPanel = ({
   const [autoUpcode, setAutoUpcode] = useState(false);
   const [quickCodeName, setQuickCodeName] = useState("");
   const [quickCodeParentId, setQuickCodeParentId] = useState("");
-  const [quickCodeColor, setQuickCodeColor] = useState("#646cff");
+  const [quickCodeColor, setQuickCodeColor] = useState(getRandomColor());
   const [isPdfPreviewCollapsed, setIsPdfPreviewCollapsed] = useState(false);
   
   // Edit Mode & Real-Time Segment State
@@ -133,18 +143,23 @@ const ProjectPageDocumentPanel = ({
     setSelectionOffsets(null);
     setQuickMenuOpen(false);
     setQuickCodeName("");
-    setQuickCodeColor("#646cff");
+    setQuickCodeColor(getRandomColor());
     setQuickCodeParentId("");
   };
 
   const handleTextSelection = (e) => {
+    if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      return;
+    }
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return clearTextSelection();
     const selectedText = selection.toString();
     if (!selectedText.trim() || !viewerRef.current) return clearTextSelection();
     const range = selection.getRangeAt(0);
-    if (!viewerRef.current.contains(range.commonAncestorContainer)) return clearTextSelection();
-    
+
+    if (!viewerRef.current.contains(range.commonAncestorContainer)) {
+      return; 
+    }    
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) return clearTextSelection();
     
@@ -182,7 +197,7 @@ const ProjectPageDocumentPanel = ({
     }
 
     setQuickCodeName(selectedText.length > 30 ? `${selectedText.slice(0, 27)}...` : selectedText);
-    setQuickCodeColor("#646cff");
+    setQuickCodeColor(getRandomColor());
     setQuickMenuOpen(true);
   };
 
