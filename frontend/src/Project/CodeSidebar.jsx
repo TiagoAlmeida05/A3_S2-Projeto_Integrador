@@ -3,12 +3,21 @@ import CodeMemoModal from './CodeMemoModal';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
 import axios from 'axios';
 
+const getRandomColor = () => {
+  const chars = '6789ABCDEF'; 
+  let color = '#';
+  for (let i = 0; i < 6; i++) {
+    color += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return color;
+};
+
 function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV }) {
   const [memoModalOpen, setMemoModalOpen] = useState(false);
   const [memoTargetCode, setMemoTargetCode] = useState(null);
   const [memoError, setMemoError] = useState(null);
   const [newCodeName, setNewCodeName] = useState("");
-  const [newCodeColor, setNewCodeColor] = useState("#646cff");
+  const [newCodeColor, setNewCodeColor] = useState(getRandomColor());
 
   const [editingCodeId, setEditingCodeId] = useState(null);
   const [editName, setEditName] = useState("");
@@ -17,7 +26,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   const [contextMenu, setContextMenu] = useState(null);
   const [addingSubCodeTo, setAddingSubCodeTo] = useState(null);
   const [subCodeName, setSubCodeName] = useState("");
-  const [subCodeColor, setSubCodeColor] = useState("#4CAF50");
+  const [subCodeColor, setSubCodeColor] = useState(getRandomColor());
 
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
@@ -56,7 +65,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       if (response.ok) {
         setNewCodeName(""); // Clear the input
         setAddingSubCodeTo(null);
-        setNewCodeColor("#646cff"); // Reset color to default
+        setNewCodeColor(getRandomColor()); // Reset color to default
         
         if(onRefreshCodes) onRefreshCodes();
       }
@@ -82,6 +91,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
 
       if (response.ok) {
         setSubCodeName("");
+        setSubCodeColor(getRandomColor());
         setAddingSubCodeTo(null);
         if(onRefreshCodes) onRefreshCodes();
       }
@@ -446,7 +456,6 @@ return (
                 style={{ 
                   marginBottom: '5px',
                   opacity: draggedId === code.id ? 0.3 : 1,
-                  marginLeft: `${code.depth * 20}px`,                  
                   transition: 'all 0.2s ease',
                   borderTop: isDraggingOver && dragPosition === 'before' ? '2px solid #646cff' : '2px solid transparent',
                   borderBottom: isDraggingOver && dragPosition === 'after' ? '2px solid #646cff' : '2px solid transparent',
@@ -491,6 +500,7 @@ return (
                     title={isSubCode ? "Double-click to open quotes" : "Right-click to add Sub-Code. Double-click to open quotes."}
                     style={{ 
                       padding: '8px 12px', 
+                      paddingLeft: `${12 + (code.depth * 20)}px`,
                       backgroundColor: '#2a2a2a', 
                       color: 'white', 
                       borderRadius: '4px', 
