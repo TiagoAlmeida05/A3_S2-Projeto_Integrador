@@ -25,6 +25,11 @@ function CreateProjectModal({ isOpen, onClose, onCreate }) {
     e.preventDefault();
     setFolderError("");
     if (!name.trim()) return;
+
+    if (!localPath) {
+      setFolderError("Please select a local destination folder.");
+      return;
+    }
     
     try {
 

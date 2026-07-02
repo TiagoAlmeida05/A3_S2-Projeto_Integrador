@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-export default function MemosTab({ projectId, codes = [] }) {
+export default function MemosTab({ projectId, codes = [], pushUndoAction }) {
   const [memos, setMemos] = useState([]);
   const [editingMemo, setEditingMemo] = useState(null);
   const [newMemoText, setNewMemoText] = useState("");
@@ -46,6 +46,12 @@ export default function MemosTab({ projectId, codes = [] }) {
     try {
       await axios.delete(`http://127.0.0.1:8000/memos/${id}`);
       setMemos((prev) => prev.filter((m) => m.id !== id));
+      if (pushUndoAction && memoSnapshot) {
+        pushUndoAction({
+          type: "delete-memo",
+          memo: memoSnapshot
+        });
+      }
     } catch {
       setError("Failed to delete memo");
     }

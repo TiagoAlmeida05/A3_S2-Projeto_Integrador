@@ -56,7 +56,7 @@ const ProjectPageDocumentPanel = ({
         //setTimeout(() => setCurrentSearchResult(null), 2000); 
       }
     }
-  }, [currentSearchResult, viewerRef, activeDocument?.content]);
+  }, [currentSearchResult, viewerRef, activeDocument?.id, activeDocument?.content]);
 
   useEffect(() => {
     const handleCloseMenu = () => {
