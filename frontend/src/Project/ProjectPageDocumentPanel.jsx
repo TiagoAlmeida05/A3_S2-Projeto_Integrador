@@ -532,7 +532,9 @@ const ProjectPageDocumentPanel = ({
       return;
     }
 
-    const measureTimer = setTimeout(() => {
+    const measureMargins = () => {
+      if (!targetRef.current) return;
+
       const containerBounds = targetRef.current.getBoundingClientRect();
       const chunks = targetRef.current.querySelectorAll(".highlight-chunk");
       const segmentBounds = {};
@@ -556,31 +558,31 @@ const ProjectPageDocumentPanel = ({
       });
 
       const rawBars = targetSegments.map((seg) => {
-          const bounds = segmentBounds[seg.id];
-          if (!bounds) return null;
-          const code = projectCodes.find((currentCode) => currentCode.id === seg.code_id);
-          let displayColor = code ? code.color : "#ccc";
-          let displayName = code ? code.name : "Unknown";
+        const bounds = segmentBounds[seg.id];
+        if (!bounds) return null;
+        const code = projectCodes.find((currentCode) => currentCode.id === seg.code_id);
+        let displayColor = code ? code.color : "#ccc";
+        let displayName = code ? code.name : "Unknown";
 
-          if (showParentInMargin && code && code.parent_id) {
-            let currentIter = code;
-            const pathArray = [currentIter.name];
-            while (currentIter.parent_id) {
-              const parent = projectCodes.find((cc) => Number(cc.id) === Number(currentIter.parent_id));
-              if (parent) {
-                pathArray.unshift(parent.name);
-                currentIter = parent;
-              } else break; 
-            }
-            displayColor = currentIter.color;
-            displayName = pathArray.join(" > ");
+        if (showParentInMargin && code && code.parent_id) {
+          let currentIter = code;
+          const pathArray = [currentIter.name];
+          while (currentIter.parent_id) {
+            const parent = projectCodes.find((cc) => Number(cc.id) === Number(currentIter.parent_id));
+            if (parent) {
+              pathArray.unshift(parent.name);
+              currentIter = parent;
+            } else break; 
           }
+          displayColor = currentIter.color;
+          displayName = pathArray.join(" > ");
+        }
 
-          return {
-            id: seg.id, code_id: seg.code_id, codeName: displayName,
-            color: displayColor, top: bounds.top, height: bounds.bottom - bounds.top, track: 0,
-          };
-        }).filter(Boolean);
+        return {
+          id: seg.id, code_id: seg.code_id, codeName: displayName,
+          color: displayColor, top: bounds.top, height: bounds.bottom - bounds.top, track: 0,
+        };
+      }).filter(Boolean);
 
       rawBars.sort((a, b) => {
         if (Math.abs(b.height - a.height) > 10) return b.height - a.height;
@@ -600,11 +602,25 @@ const ProjectPageDocumentPanel = ({
         }
         bar.track = currentTrack;
       });
+      
       setContentHeight(targetRef.current.scrollHeight);
       setMarginBars(rawBars);
-    }, 50);
+    };
 
-    return () => clearTimeout(measureTimer);
+    const measureTimer = setTimeout(measureMargins, 50);
+
+    //resize observer
+    const resizeObserver = new ResizeObserver(() => {
+      // Use requestAnimationFrame to prevent layout thrashing
+      requestAnimationFrame(measureMargins);
+    });
+
+    resizeObserver.observe(targetRef.current);
+
+    return () => {
+      clearTimeout(measureTimer);
+      resizeObserver.disconnect();
+    };
   }, [activeDocument, documentSegments, localSegments, projectCodes, showParentInMargin, isEditing]);
 
   const renderHighlightedContent = (content, segments, codes) => {
