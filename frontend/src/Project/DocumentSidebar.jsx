@@ -278,9 +278,13 @@ function DocumentSidebar({
   const handleContextMenu = (e, targetType, targetId = null, filename = null) => {
     e.preventDefault();
     e.stopPropagation();
+    const menuHeight = 140; 
+    const safeY = (e.clientY + menuHeight > window.innerHeight) 
+      ? e.pageY - menuHeight 
+      : e.pageY;
     setContextMenu({
-      x: e.pageX,
-      y: e.pageY,
+      x: e.clientX,
+      y: safeY,
       type: targetType,
       id: targetId,
       name: filename
@@ -619,9 +623,17 @@ function DocumentSidebar({
         <div style={{ display: 'flex', gap: '8px' }}>
           <label 
             htmlFor="file-upload" 
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#45a049";
+              e.currentTarget.style.borderColor = "#45a049";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "#4CAF50";
+              e.currentTarget.style.borderColor = "#4CAF50";
+            }}
             style={{ 
               flex: 1, padding: '10px', backgroundColor: '#4CAF50', color: 'white', borderRadius: '4px', cursor: 'pointer', 
-              textAlign: 'center', fontSize: '14px', fontWeight: 'bold', display: 'flex',alignItems: 'center',justifyContent: 'center',gap: '8px'
+              textAlign: 'center', fontSize: '14px', fontWeight: 'bold', display: 'flex',alignItems: 'center',justifyContent: 'center',gap: '8px', transition: 'all 0.2s ease'
             }}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" className="icon line">
@@ -634,6 +646,14 @@ function DocumentSidebar({
           
           <button 
             onClick={onWriteDocument}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#7a82ff";
+              e.currentTarget.style.borderColor = "#7a82ff";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "#646cff";
+              e.currentTarget.style.borderColor = "#646cff";
+            }}
             style={{ 
               flex: 1, padding: '10px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '4px', 
               cursor: 'pointer', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', display: 'flex',alignItems: 'center',justifyContent: 'center',gap: '8px'
@@ -694,7 +714,17 @@ function DocumentSidebar({
           <button
             type="button"
             onClick={() => setMetadataFilterKey("")}
-            style={{ padding: '6px 10px', backgroundColor: 'transparent', border: '1px solid #444', color: '#ddd', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+              e.currentTarget.style.borderColor = "#aaa";
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.borderColor = "#555";
+              e.currentTarget.style.color = "#ccc";
+            }}
+            style={{ padding: '6px 10px', backgroundColor: 'transparent', border: '1px solid #444', color: '#ddd', borderRadius: '6px', cursor: 'pointer', fontSize: '12px',transition: 'all 0.2s ease' }}
           >
             Clear filters
           </button>

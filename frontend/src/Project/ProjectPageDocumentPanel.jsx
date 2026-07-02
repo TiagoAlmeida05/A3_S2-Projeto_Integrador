@@ -767,29 +767,52 @@ const ProjectPageDocumentPanel = ({
                    border: "1px solid transparent",
                  }}
                >
-                 {autoSaveStatus === 'saving' ? '⏳ Saving...' : '✓ Saved'}
+                 {autoSaveStatus === 'saving' ? 'Saving...' : 'Saved'}
                </div>
             )}
               <button 
                 onClick={handleSaveEdit} 
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = "#4CAF50";
+                  e.currentTarget.style.color = "white";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = "white";
+                  e.currentTarget.style.color = "#4CAF50";
+                }}
                 style={{ 
                   height: "36px",        // Match height
                   padding: '0 16px', 
-                  background: '#4CAF50', 
-                  color: 'white', 
+                  backgroundColor: 'white', 
+                  color: '#4CAF50', 
                   borderRadius: '4px', 
-                  border: 'none', 
+                  border: '1px solid #4CAF50',
                   cursor: 'pointer', 
                   fontWeight: 'bold',
                   display: 'flex',       // Center the text/icon
-                  alignItems: 'center' 
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                💾 Save
+                <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" fill="none">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M18.1716 1C18.702 1 19.2107 1.21071 19.5858 1.58579L22.4142 4.41421C22.7893 4.78929 23 5.29799 23 5.82843V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V4C1 2.34315 2.34315 1 4 1H18.1716ZM4 3C3.44772 3 3 3.44772 3 4V20C3 20.5523 3.44772 21 4 21L5 21L5 15C5 13.3431 6.34315 12 8 12L16 12C17.6569 12 19 13.3431 19 15V21H20C20.5523 21 21 20.5523 21 20V6.82843C21 6.29799 20.7893 5.78929 20.4142 5.41421L18.5858 3.58579C18.2107 3.21071 17.702 3 17.1716 3H17V5C17 6.65685 15.6569 8 14 8H10C8.34315 8 7 6.65685 7 5V3H4ZM17 21V15C17 14.4477 16.5523 14 16 14L8 14C7.44772 14 7 14.4477 7 15L7 21L17 21ZM9 3H15V5C15 5.55228 14.5523 6 14 6H10C9.44772 6 9 5.55228 9 5V3Z" fill="currentColor"/>
+                </svg>
+                Save
               </button>
               
               <button 
                 onClick={handleToggleEdit} 
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)";
+                  e.currentTarget.style.borderColor = "#666";
+                  e.currentTarget.style.color = "#333";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.borderColor = "#999";
+                  e.currentTarget.style.color = "#555";
+                }}
                 style={{ 
                   height: "36px",        // Match height
                   padding: '0 16px', 
@@ -799,22 +822,45 @@ const ProjectPageDocumentPanel = ({
                   borderRadius: '4px', 
                   cursor: 'pointer',
                   display: 'flex',       // Center the text
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 Cancel
               </button>
             </div>
           ) : (
-            <button onClick={handleToggleEdit} style={{ padding: '6px 12px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}>
-              ✏️ {isPDF ? "Edit PDF Text (Not Recommended)" : "Edit Text"}
+            <button onClick={handleToggleEdit} 
+
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "#e8e8e8";
+                e.currentTarget.style.borderColor = "#999";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "#f0f0f0";
+                e.currentTarget.style.borderColor = "#ccc";
+              }}
+              style={{ display:'flex',alignItems:'center',padding: '6px 12px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', gap:'6px',transition: 'all 0.2s ease' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" fill="none" style={{transform: 'translateY(-1px)'}}>
+                  <path d="M20.1497 7.93997L8.27971 19.81C7.21971 20.88 4.04971 21.3699 3.27971 20.6599C2.50971 19.9499 3.06969 16.78 4.12969 15.71L15.9997 3.84C16.5478 3.31801 17.2783 3.03097 18.0351 3.04019C18.7919 3.04942 19.5151 3.35418 20.0503 3.88938C20.5855 4.42457 20.8903 5.14781 20.8995 5.90463C20.9088 6.66146 20.6217 7.39189 20.0997 7.93997H20.1497Z" stroke="#000000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M21 21H12" stroke="#000000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {isPDF ? "Edit PDF Text (Not Recommended)" : "Edit Text"}
             </button>
           )}
 
           {isPDF && (
             <button
               onClick={() => setIsPdfPreviewCollapsed((prev) => !prev)}
-              style={{ padding: '6px 12px', background: '#1f1f28', color: '#fff', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer' }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "#2a2a35";
+                e.currentTarget.style.borderColor = "#777";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "#1f1f28";
+                e.currentTarget.style.borderColor = "#555";
+              }}
+              style={{ padding: '6px 12px', background: '#1f1f28', color: '#fff', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s ease' }}
               title={isPdfPreviewCollapsed ? 'Show the PDF preview' : 'Hide the PDF preview'}
             >
               {isPdfPreviewCollapsed ? 'Show PDF Preview' : 'Hide PDF Preview'}

@@ -275,9 +275,13 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
 
   const handleContextMenu = (e, codeId) => {
     e.preventDefault();
+    const menuHeight = 100; 
+    const safeY = (e.clientY + menuHeight > window.innerHeight) 
+      ? e.pageY - menuHeight 
+      : e.pageY;
     setContextMenu({
       x: e.pageX, 
-      y: e.pageY,
+      y: safeY,
       codeId: codeId
     }); 
     setMemoTargetCode(codeId);
@@ -407,7 +411,16 @@ return (
           onChange={(e) => setNewCodeName(e.target.value)}
           style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white' }}
         />
-        <button type="submit" style={{ padding: '8px 12px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+        <button type="submit" 
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = "#45a049";
+            e.currentTarget.style.borderColor = "#45a049";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = "#4CAF50";
+            e.currentTarget.style.borderColor = "#4CAF50";
+          }}
+          style={{ padding: '8px 12px', backgroundColor: '#4CAF50', color: 'white', border: '1px solid #4CAF50', borderRadius: '4px', cursor: 'pointer',transition: 'all 0.2s ease' }}>
           Add
         </button>
       </form>
@@ -489,10 +502,30 @@ return (
                       </div>
         
                       <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
-                        <button type="submit" style={{ flex: 1, padding: '6px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+                        <button type="submit" 
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = "#7a82ff";
+                            e.currentTarget.style.borderColor = "#7a82ff";
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = "#646cff";
+                            e.currentTarget.style.borderColor = "#646cff";
+                          }}
+                        style={{ flex: 1, padding: '6px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s ease' }}>
                           Save
                         </button>
-                        <button type="button" onClick={() => setEditingCodeId(null)} style={{ flex: 1, padding: '6px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+                        <button type="button" onClick={() => setEditingCodeId(null)} 
+                          onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+                              e.currentTarget.style.borderColor = "#aaa";
+                              e.currentTarget.style.color = "#fff";
+                            }}
+                          onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = "transparent";
+                              e.currentTarget.style.borderColor = "#555";
+                              e.currentTarget.style.color = "#ccc";
+                            }}
+                          style={{ flex: 1, padding: '6px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
                           Cancel
                         </button>
                       </div>

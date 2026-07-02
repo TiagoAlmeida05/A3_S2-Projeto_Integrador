@@ -88,7 +88,7 @@ const ProjectPageView = ({ page }) => {
         {/* V4 syntax: Group and orientation */}
         <Group orientation="horizontal" autoSaveId="project-page-layout">
           
-          <Panel defaultSize={20} minSize={15}>
+          <Panel defaultSize={28} minSize={20}>
             <ProjectPageSidebar
               id={id}
               activeTab={activeTab}
@@ -118,7 +118,7 @@ const ProjectPageView = ({ page }) => {
 
           {codePanelOpen && (
             <>
-              <Panel defaultSize={25} minSize={15} style={{ minWidth: 0 }}>
+              <Panel defaultSize={30} minSize={20} style={{ minWidth: 0 }}>
                 <ProjectPageCodePanel
                   API_BASE={API_BASE}
                   projectId={id}
@@ -142,7 +142,7 @@ const ProjectPageView = ({ page }) => {
             </>
           )}
 
-          <Panel defaultSize={codePanelOpen ? 55 : 80} minSize={30}>
+          <Panel defaultSize={codePanelOpen ? 42 : 72} minSize={30}>
             <ProjectPageDocumentPanel
               viewerRef={viewerRef}
               activeDocument={activeDocument}
