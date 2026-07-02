@@ -188,6 +188,13 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     setDragPosition(null);
   }
 
+  const handleDragEnd = () => {
+    setDraggedId(null);
+    setDragOverId(null);
+    setDragPosition(null);
+    setPendingDropAction(null);
+  };
+
   const executeReorder = async (sourceId, targetCode, position) => {
     const draggedCode = codes.find(c => c.id === sourceId);
 
@@ -453,6 +460,7 @@ return (
                 onDragOver={(e) => handleDragOver(e, code)}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDrop(e, code)}
+                onDragEnd={handleDragEnd}
                 style={{ 
                   marginBottom: '5px',
                   opacity: draggedId === code.id ? 0.3 : 1,
