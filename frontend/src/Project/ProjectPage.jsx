@@ -290,6 +290,8 @@ function ProjectPage() {
             target_id: memo.target_id
           }),
         });
+
+        window.dispatchEvent(new CustomEvent('memos-updated'));
       }
 
       setUploadStatus("Undo complete.");

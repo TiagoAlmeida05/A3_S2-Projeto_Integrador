@@ -8,13 +8,15 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const searchInputRef = useRef(null);
+  
+  // Track the absolute latest query to prevent race conditions
+  const latestQuery = useRef(""); 
 
   const highlightText = (text, highlight, matchOffset, queryLength) => {
     if (!highlight.trim()) {
       return text;
     }
     
-    // If we have offset information, use it to highlight the exact match
     if (matchOffset !== undefined && queryLength !== undefined) {
       const before = text.slice(0, matchOffset);
       const matched = text.slice(matchOffset, matchOffset + queryLength);
@@ -68,10 +70,20 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
   const handleSearch = async (e) => {
     const searchQuery = e.target.value;
     setQuery(searchQuery);
+    
+    // Update our tracker with the exact keystroke
+    latestQuery.current = searchQuery; 
 
+    // If the box is empty, clear everything and instantly stop loading
     if (searchQuery.trim().length === 0) {
       setResults([]);
       setShowResults(false);
+      setIsLoading(false);
+      
+      // Tell the parent component the search is cleared
+      if (onSearchResults) {
+        onSearchResults([]);
+      }
       return;
     }
 
@@ -82,16 +94,23 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
       );
       if (response.ok) {
         const data = await response.json();
-        setResults(data);
-        setShowResults(true);
-        if (onSearchResults) {
-          onSearchResults(data);
+        
+        // ONLY update the UI if the user hasn't typed something else in the meantime!
+        if (latestQuery.current === searchQuery) {
+          setResults(data);
+          setShowResults(true);
+          if (onSearchResults) {
+            onSearchResults(data);
+          }
         }
       }
     } catch (error) {
       console.error("Search error:", error);
     } finally {
-      setIsLoading(false);
+      // Only stop the loading spinner if this is still the active query
+      if (latestQuery.current === searchQuery) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -102,12 +121,18 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
     setShowResults(false);
     setQuery("");
     setResults([]);
+    latestQuery.current = ""; // Reset tracker
   };
 
   const handleClear = () => {
     setQuery("");
     setResults([]);
     setShowResults(false);
+    latestQuery.current = ""; // Reset tracker
+    
+    if (onSearchResults) {
+      onSearchResults([]);
+    }
     if (searchInputRef.current) {
       searchInputRef.current.focus();
     }
@@ -200,12 +225,10 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
               onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "#222230")}
               onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "#1a1a24")}
             >
-              {/* Header: Filename */}
               <div style={{ fontSize: "11px", color: "#888", marginBottom: "6px", fontWeight: "500" }}>
                 📄 {result.document_filename}
               </div>
               
-              {/* Context: Now passing through the highlight function */}
               <div
                 style={{
                   fontSize: "14px",
