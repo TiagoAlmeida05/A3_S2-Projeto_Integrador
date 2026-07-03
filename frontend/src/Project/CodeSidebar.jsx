@@ -153,11 +153,13 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       });
       setMemoModalOpen(false);
       setMemoTargetCode(null);
+
+      window.dispatchEvent(new CustomEvent('memos-updated'));
+      
     } catch (err) {
       setMemoError('Failed to save memo');
     }
   };
-
 
 
   const handleDragStart = (e, codeId) => {

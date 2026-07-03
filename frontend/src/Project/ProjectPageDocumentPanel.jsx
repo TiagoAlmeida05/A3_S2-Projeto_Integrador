@@ -321,6 +321,9 @@ const ProjectPageDocumentPanel = ({
       });
       setIsMemoModalOpen(false);
       setMemoText("");
+
+      window.dispatchEvent(new CustomEvent('memos-updated'));
+      
     } catch (error) {
       alert("Failed to save memo");
     }
