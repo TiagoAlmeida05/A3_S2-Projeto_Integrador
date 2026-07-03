@@ -22,6 +22,7 @@ const ProjectPageSidebar = ({
   setProjectCodes,
   handleCreateTextDocument,
   handleExportQuotesCSV,
+  pushUndoAction,
 }) => {
 
   return (
@@ -169,6 +170,7 @@ const ProjectPageSidebar = ({
             projectId={id}
             onWriteDocument={handleCreateTextDocument}
             fetchDocuments={fetchDocuments}
+            pushUndoAction={pushUndoAction}
           />
         )}
         {activeTab === "codes" && (
@@ -180,9 +182,10 @@ const ProjectPageSidebar = ({
             onOpenCodePanel={openCodePanel}
             onReorderCodes={setProjectCodes}
             onExportQuotesCSV={handleExportQuotesCSV}
+            pushUndoAction={pushUndoAction}
           />
         )}
-        {activeTab === "memos" && <MemosTab projectId={id} codes={projectCodes} />}
+        {activeTab === "memos" && <MemosTab projectId={id} codes={projectCodes} pushUndoAction={pushUndoAction}/>}
       </div>
     </div>
   );

@@ -73,6 +73,10 @@ function ProjectPage() {
     resolve: null,
   });
 
+  // Search State
+  const [searchResults, setSearchResults] = useState([]);
+  const [currentSearchResult, setCurrentSearchResult] = useState(null);
+
   const fetchProjectDetails = () => {
     fetch(`http://127.0.0.1:8000/projects/${id}`)
       .then((res) => res.json())
@@ -103,6 +107,7 @@ function ProjectPage() {
   };
 
   const pushUndoAction = (action) => {
+    const actionWithTime = { ...action, timestamp: Date.now() };
     setUndoStack((prev) => [action, ...prev].slice(0, 20));
   };
 
@@ -150,6 +155,14 @@ function ProjectPage() {
     }
 
     const [lastAction, ...remainingActions] = undoStack;
+
+    if (Date.now() - lastAction.timestamp > 300000) {
+      setUploadStatus("Action is too old to undo (over 5 minutes).");
+      setUndoStack([]); 
+      setTimeout(() => setUploadStatus(""), 4000);
+      return;
+    }
+
     setUndoStack(remainingActions);
     setUploadStatus("Undoing last action...");
 
@@ -157,106 +170,126 @@ function ProjectPage() {
       if (lastAction.type === "create-segment" || lastAction.type === "create-quick-code") {
         for (const segment of lastAction.segments || []) {
           await fetch(`${API_BASE}/projects/${id}/segments/${segment.id}`, { method: "DELETE" });
-          await refreshSegmentsForDocument(segment.document_id);
         }
-
+        if (lastAction.segments?.length > 0) await refreshSegmentsForDocument(lastAction.segments[0].document_id);
         if (lastAction.type === "create-quick-code" && lastAction.code?.id) {
           await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.code.id}`, { method: "DELETE" });
         }
-
         fetchCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
+
       } else if (lastAction.type === "delete-segment") {
         const segment = lastAction.segment;
-        const restoreResponse = await fetch(`${API_BASE}/projects/${id}/segments`, {
+        await fetch(`${API_BASE}/projects/${id}/segments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            document_id: segment.document_id,
-            code_id: segment.code_id,
-            start_char: segment.start_char,
-            end_char: segment.end_char,
-            content: segment.content,
+            document_id: segment.document_id, code_id: segment.code_id,
+            start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
           }),
         });
-
-        if (!restoreResponse.ok) {
-          throw new Error("Failed to restore segment");
-        }
-
         await refreshSegmentsForDocument(segment.document_id);
         fetchCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
+
       } else if (lastAction.type === "delete-code") {
         const restoredCodeIds = new Map();
-        const orderedCodes = [...(lastAction.codes || [])].sort(
-          (a, b) => (a._undoDepth ?? 0) - (b._undoDepth ?? 0),
-        );
+        const orderedCodes = [...(lastAction.codes || [])].sort((a, b) => (a._undoDepth ?? 0) - (b._undoDepth ?? 0));
 
         for (const code of orderedCodes) {
-          const restoredParentId = code.parent_id && restoredCodeIds.has(Number(code.parent_id))
-            ? restoredCodeIds.get(Number(code.parent_id))
-            : code.parent_id;
-
+          const restoredParentId = code.parent_id && restoredCodeIds.has(Number(code.parent_id)) ? restoredCodeIds.get(Number(code.parent_id)) : code.parent_id;
           const restoreResponse = await fetch(`${API_BASE}/projects/${id}/codes`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: code.name,
-              color: code.color,
-              parent_id: restoredParentId,
-            }),
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: code.name, color: code.color, parent_id: restoredParentId }),
           });
-
-          if (!restoreResponse.ok) {
-            throw new Error(`Failed to restore code ${code.name}`);
-          }
-
           const restoredCode = await restoreResponse.json();
           restoredCodeIds.set(Number(code.id), restoredCode.id);
         }
 
         if (lastAction.codes?.length > 0) {
-          const reorderPayload = orderedCodes
-            .map((code, index) => ({
-              id: restoredCodeIds.get(Number(code.id)),
-              parent_id: code.parent_id && restoredCodeIds.has(Number(code.parent_id))
-                ? restoredCodeIds.get(Number(code.parent_id))
-                : code.parent_id,
-              order_index: code.order_index ?? index,
-            }))
-            .filter((item) => item.id);
-
+          const reorderPayload = orderedCodes.map((code, index) => ({
+            id: restoredCodeIds.get(Number(code.id)),
+            parent_id: code.parent_id && restoredCodeIds.has(Number(code.parent_id)) ? restoredCodeIds.get(Number(code.parent_id)) : code.parent_id,
+            order_index: code.order_index ?? index,
+          })).filter((item) => item.id);
           await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            method: "PUT", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ codes: reorderPayload }),
           });
         }
 
         for (const segment of lastAction.segments || []) {
           const restoredCodeId = restoredCodeIds.get(Number(segment.code_id)) || segment.code_id;
-          const restoreResponse = await fetch(`${API_BASE}/projects/${id}/segments`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+          await fetch(`${API_BASE}/projects/${id}/segments`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              document_id: segment.document_id,
-              code_id: restoredCodeId,
-              start_char: segment.start_char,
-              end_char: segment.end_char,
-              content: segment.content,
+              document_id: segment.document_id, code_id: restoredCodeId,
+              start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
             }),
           });
-
-          if (!restoreResponse.ok) {
-            throw new Error("Failed to restore segment");
-          }
-
           await refreshSegmentsForDocument(segment.document_id);
         }
 
+        for (const memo of lastAction.memos || []) {
+          const restoredCodeId = restoredCodeIds.get(Number(memo.target_id)) || memo.target_id;
+          await fetch(`${API_BASE}/memos`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: memo.text, target_type: "code", target_id: restoredCodeId }),
+          });
+        }
         fetchCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
+
+      } else if (lastAction.type === "edit-code") {
+        await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.codeId}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(lastAction.previousState),
+        });
+        fetchCodes();
+
+      } else if (lastAction.type === "reorder-codes") {
+        await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codes: lastAction.previousState }),
+        });
+        fetchCodes();
+
+      } else if (lastAction.type === "delete-document") {
+        const doc = lastAction.document;
+        const docRes = await fetch(`${API_BASE}/projects/${id}/documents/create`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: doc.filename, content: doc.content || "Restored content..." })
+        });
+        const restoredDoc = await docRes.json();
+
+        if (doc.metadata && Object.keys(doc.metadata).length > 0) {
+           await fetch(`${API_BASE}/projects/${id}/documents/${restoredDoc.id}/metadata`, {
+             method: 'PUT', headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ metadata: doc.metadata }),
+           });
+        }
+
+        for (const segment of lastAction.segments || []) {
+          await fetch(`${API_BASE}/projects/${id}/segments`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              document_id: restoredDoc.id, code_id: segment.code_id,
+              start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
+            }),
+          });
+        }
+        fetchDocuments();
+      } else if (lastAction.type === "delete-memo") {
+        const memo = lastAction.memo;
+        await fetch(`${API_BASE}/memos`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: memo.text,
+            target_type: memo.target_type,
+            target_id: memo.target_id
+          }),
+        });
       }
 
       setUploadStatus("Undo complete.");
@@ -289,6 +322,10 @@ function ProjectPage() {
     }
   };
   const handleDocumentClick = (docId) => {
+    if (currentSearchResult && currentSearchResult.document_id !== docId) {
+      setCurrentSearchResult(null);
+    }
+
     fetch(`${API_BASE}/projects/${id}/documents/${docId}`)
       .then((res) => res.json())
       .then((data) => setActiveDocument(data))
@@ -373,10 +410,17 @@ function ProjectPage() {
         ? (await fetchAllDocumentSegments()).filter((segment) => codeIdsToDelete.has(Number(segment.code_id)))
         : [];
 
+      const memosRes = await fetch(`${API_BASE}/projects/${id}/memos`);
+      const allMemos = await memosRes.ok ? await memosRes.json() : [];
+      const memosSnapshot = allMemos.filter(m => 
+        m.target_type === 'code' && codeIdsToDelete.has(Number(m.target_id))
+      );
+
       const response = await fetch(
         `${API_BASE}/projects/${id}/codes/${codeId}`,
         { method: "DELETE" },
       );
+      
       if (response.ok) {
         setProjectCodes((prev) => prev.filter((c) => c.id !== codeId));
         setDocumentSegments((prev) => prev.filter((s) => s.code_id !== codeId));
@@ -385,6 +429,7 @@ function ProjectPage() {
             type: "delete-code",
             codes: codeSnapshot,
             segments: segmentsSnapshot,
+            memos: memosSnapshot, 
           });
         }
         setCodePanelRefreshTick((tick) => tick + 1);
@@ -564,6 +609,13 @@ function ProjectPage() {
 
   const handleDeleteDocument = async (docId, docName) => {
     try {
+      const docToSnapshot = documents.find(d => d.id === docId);
+      const docContentRes = await fetch(`${API_BASE}/projects/${id}/documents/${docId}`);
+      const docContentData = docContentRes.ok ? await docContentRes.json() : docToSnapshot;
+      
+      const segmentsRes = await fetch(`${API_BASE}/projects/${id}/segments?document_id=${docId}`);
+      const segmentsData = segmentsRes.ok ? await segmentsRes.json() : [];
+
       const response = await fetch(
         `${API_BASE}/projects/${id}/documents/${docId}`,
         { method: "DELETE" },
@@ -577,6 +629,12 @@ function ProjectPage() {
         }
 
         fetchCodes(); 
+
+        pushUndoAction({
+          type: "delete-document",
+          document: docContentData,
+          segments: segmentsData
+        });
 
         setUploadStatus(`Deleted ${docName}`);
         setTimeout(() => setUploadStatus(""), 3000);
@@ -783,6 +841,20 @@ function ProjectPage() {
       setIsExportModalOpen(false);
   };
 
+  const handleSearchResultClick = (result) => {
+    // Set the active document to the one containing the search result
+    const targetDoc = documents.find((doc) => doc.id === result.document_id);
+    if (targetDoc) {
+      handleDocumentClick(result.document_id);
+      // Store the search result for highlighting
+      setCurrentSearchResult({
+        document_id: result.document_id,
+        start_char: result.start_char,
+        end_char: result.end_char,
+      });
+    }
+  };
+
   const page = {
     id,
     API_BASE,
@@ -830,6 +902,11 @@ function ProjectPage() {
     handleExportQuotesCSV,
     handleExportExcel,
     setIsExportModalOpen,
+    searchResults,
+    currentSearchResult,
+    setSearchResults,
+    setCurrentSearchResult,
+    handleSearchResultClick,
   };
 
   return (

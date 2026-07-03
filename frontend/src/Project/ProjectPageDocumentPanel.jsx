@@ -25,6 +25,8 @@ const ProjectPageDocumentPanel = ({
   pushUndoAction,
   API_BASE,
   projectId,
+  currentSearchResult,
+  setCurrentSearchResult,
 }) => {
   const [showParentInMargin, setShowParentInMargin] = useState(false);
   const [marginBars, setMarginBars] = useState([]);
@@ -55,9 +57,36 @@ const ProjectPageDocumentPanel = ({
   
   // Auto-save state
   const [lastSavedContent, setLastSavedContent] = useState("");
-  const [autoSaveStatus, setAutoSaveStatus] = useState(""); // "saving", "saved", or ""
+  const [autoSaveStatus, setAutoSaveStatus] = useState(""); 
   const autoSaveIntervalRef = useRef(null);
   const [documentMetadata, setDocumentMetadata] = useState({});
+
+  useEffect(() => {
+    if (currentSearchResult && viewerRef.current) {
+      // Find the element containing the search result text and scroll to it
+      const elements = viewerRef.current.querySelectorAll('[data-search-result]');
+      if (elements.length > 0) {
+        elements[0].scrollIntoView({ behavior: "smooth", block: "center" });
+        //setTimeout(() => setCurrentSearchResult(null), 2000); 
+      }
+    }
+  }, [currentSearchResult, viewerRef, activeDocument?.id, activeDocument?.content]);
+
+  useEffect(() => {
+    if (!currentSearchResult) return;
+
+    const handleClearHighlight = () => {
+      setCurrentSearchResult(null);
+    };
+    const timer = setTimeout(() => {
+      window.addEventListener("click", handleClearHighlight);
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("click", handleClearHighlight);
+    };
+  }, [currentSearchResult, setCurrentSearchResult]);
 
   useEffect(() => {
     const handleCloseMenu = () => {
@@ -623,15 +652,44 @@ const ProjectPageDocumentPanel = ({
     };
   }, [activeDocument, documentSegments, localSegments, projectCodes, showParentInMargin, isEditing]);
 
-  const renderHighlightedContent = (content, segments, codes) => {
+  const renderHighlightedContent = (content, segments, codes, searchResult) => {
     if(!content) return "";
     
-    if (!segments || segments.length === 0) return content;
+    if (!segments || segments.length === 0) {
+      // If no segments but there's a search result, highlight it
+      if (searchResult) {
+        const { start_char, end_char } = searchResult;
+        return [
+          <span key="before">{content.slice(0, start_char)}</span>,
+          <span
+            key="search"
+            data-search-result="true"
+            style={{
+              backgroundColor: "#FFD700",
+              color: "#000",
+              //borderRadius: "3px"
+            }}
+          >
+            {content.slice(start_char, end_char)}
+          </span>,
+          <span key="after">{content.slice(end_char)}</span>,
+        ];
+      }
+      return content;
+    }
+    
     let boundaries = new Set([0, content.length]);
     segments.forEach((seg) => {
       boundaries.add(seg.start_char);
       boundaries.add(seg.end_char);
     });
+    
+    // Add search result boundaries
+    if (searchResult) {
+      boundaries.add(searchResult.start_char);
+      boundaries.add(searchResult.end_char);
+    }
+    
     const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
     const parts = [];
 
@@ -642,7 +700,29 @@ const ProjectPageDocumentPanel = ({
       const chunkText = content.slice(start, end);
       const coveringSegments = segments.filter((seg) => seg.start_char <= start && seg.end_char >= end);
 
-      if (coveringSegments.length > 0) {
+      // Check if this chunk is part of the search result
+      const isSearchResult = searchResult && 
+        searchResult.start_char <= start && 
+        searchResult.end_char >= end;
+
+      if (isSearchResult) {
+        parts.push(
+          <span
+            key={`${start}-${end}-search`}
+            data-search-result="true"
+            style={{
+              backgroundColor: "#FFD700",
+              color: "#000",
+              fontWeight: "bold",
+              padding: "2px 4px",
+              borderRadius: "3px",
+              animation: "pulse 1s ease-in-out infinite",
+            }}
+          >
+            {chunkText}
+          </span>
+        );
+      } else if (coveringSegments.length > 0) {
         coveringSegments.sort((a, b) => {
           const idxA = codes.findIndex(c => c.id === a.code_id);
           const idxB = codes.findIndex(c => c.id === b.code_id);
@@ -931,7 +1011,7 @@ const ProjectPageDocumentPanel = ({
                     whiteSpace: "pre-wrap", overflowY: "auto", pointerEvents: "none", zIndex: 1
                   }}
                 >
-                  {renderHighlightedContent(editContent, localSegments, projectCodes)}
+                  {renderHighlightedContent(editContent, localSegments, projectCodes, currentSearchResult)}
                 </div>
                 
                 <textarea 
@@ -1129,4 +1209,24 @@ const ProjectPageDocumentPanel = ({
     </div>
   );
 };
+
+// Add CSS for search result highlighting animation
+const searchResultStyles = `
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = searchResultStyles;
+  document.head.appendChild(styleSheet);
+}
+
 export default ProjectPageDocumentPanel;
