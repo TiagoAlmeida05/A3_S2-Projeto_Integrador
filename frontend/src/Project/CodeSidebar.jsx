@@ -302,9 +302,13 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
 
   const handleContextMenu = (e, codeId) => {
     e.preventDefault();
+    const menuHeight = 100; 
+    const safeY = (e.clientY + menuHeight > window.innerHeight) 
+      ? e.pageY - menuHeight 
+      : e.pageY;
     setContextMenu({
       x: e.pageX, 
-      y: e.pageY,
+      y: safeY,
       codeId: codeId
     }); 
     setMemoTargetCode(codeId);
@@ -418,13 +422,15 @@ return (
       <h3 style={{ marginTop: 0 }}>Code Hierarchy</h3>
       
       <form onSubmit={handleCreateCode} style={{ marginBottom: '20px', display: 'flex', gap: '8px' }}>
-        <input 
-          type="color" 
-          value={newCodeColor}
-          onChange={(e) => setNewCodeColor(e.target.value)}
-          style={{ width: '40px', height: '36px', padding: '0', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
-          title="Choose code color"
-        />
+        <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: newCodeColor, border: '2px solid #444', position: 'relative', overflow: 'hidden', flexShrink: 0, cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+          <input 
+            type="color" 
+            value={newCodeColor}
+            onChange={(e) => setNewCodeColor(e.target.value)}
+            style={{ position: 'absolute', top: '-10px', left: '-10px', width: '60px', height: '60px', cursor: 'pointer', opacity: 0 }}
+            title="Choose code color"
+          />
+        </div>
         <input 
           type="text" 
           placeholder="New master code..." 
@@ -432,7 +438,16 @@ return (
           onChange={(e) => setNewCodeName(e.target.value)}
           style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#111', color: 'white' }}
         />
-        <button type="submit" style={{ padding: '8px 12px', backgroundColor: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+        <button type="submit" 
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = "#45a049";
+            e.currentTarget.style.borderColor = "#45a049";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = "#4CAF50";
+            e.currentTarget.style.borderColor = "#4CAF50";
+          }}
+          style={{ padding: '8px 12px', backgroundColor: '#4CAF50', color: 'white', border: '1px solid #4CAF50', borderRadius: '4px', cursor: 'pointer',transition: 'all 0.2s ease' }}>
           Add
         </button>
       </form>
@@ -502,20 +517,43 @@ return (
                         required
                         style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #555', backgroundColor: '#1f1f28', color: 'white', boxSizing: 'border-box' }}
                       />
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <label style={{ color: '#b0b0c3', fontSize: '13px' }}>Color:</label>
-                        <input
-                          type="color"
-                          value={editColor}
-                          onChange={(e) => setEditColor(e.target.value)}
-                          style={{ width: '30px', height: '30px', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
-                        />
+                        <div style={{ width: '26px', height: '26px', borderRadius: '50%', backgroundColor: editColor, border: '2px solid #555', position: 'relative', overflow: 'hidden', flexShrink: 0, cursor: 'pointer' }}>
+                          <input
+                            type="color"
+                            value={editColor}
+                            onChange={(e) => setEditColor(e.target.value)}
+                            style={{ position: 'absolute', top: '-10px', left: '-10px', width: '50px', height: '50px', cursor: 'pointer', opacity: 0 }}
+                          />
+                        </div>
                       </div>
+        
                       <div style={{ display: 'flex', gap: '5px', marginTop: '4px' }}>
-                        <button type="submit" style={{ flex: 1, padding: '6px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+                        <button type="submit" 
+                        onMouseOver={(e) => {
+                            e.currentTarget.style.backgroundColor = "#7a82ff";
+                            e.currentTarget.style.borderColor = "#7a82ff";
+                          }}
+                          onMouseOut={(e) => {
+                            e.currentTarget.style.backgroundColor = "#646cff";
+                            e.currentTarget.style.borderColor = "#646cff";
+                          }}
+                        style={{ flex: 1, padding: '6px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', transition: 'all 0.2s ease' }}>
                           Save
                         </button>
-                        <button type="button" onClick={() => setEditingCodeId(null)} style={{ flex: 1, padding: '6px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
+                        <button type="button" onClick={() => setEditingCodeId(null)} 
+                          onMouseOver={(e) => {
+                              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+                              e.currentTarget.style.borderColor = "#aaa";
+                              e.currentTarget.style.color = "#fff";
+                            }}
+                          onMouseOut={(e) => {
+                              e.currentTarget.style.backgroundColor = "transparent";
+                              e.currentTarget.style.borderColor = "#555";
+                              e.currentTarget.style.color = "#ccc";
+                            }}
+                          style={{ flex: 1, padding: '6px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
                           Cancel
                         </button>
                       </div>
@@ -527,23 +565,26 @@ return (
                     onContextMenu={(e) => handleContextMenu(e, code.id)}
                     title={isSubCode ? "Double-click to open quotes" : "Right-click to add Sub-Code. Double-click to open quotes."}
                     style={{ 
+                      width: '100%',
+                      boxSizing: 'border-box',
                       padding: '8px 12px', 
                       paddingLeft: `${12 + (code.depth * 20)}px`,
                       backgroundColor: '#2a2a2a', 
                       color: 'white', 
                       borderRadius: '4px', 
                       display: 'flex', 
+                      flexWrap: 'nowrap', // Force a single line, NO dropping
                       alignItems: 'center', 
                       justifyContent: 'space-between', 
-                      gap: '10px', 
+                      gap: '8px',
                       cursor: 'grab' 
                     }}
                   >
-                    {/* LEFT SIDE: Icons & Name */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                      <div style={{ color: '#666', fontSize: '14px', cursor: 'grab' }}>⋮⋮</div>
+                    {/* LEFT SIDE: Flexible text with STRICT overflow hiding */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ color: '#666', fontSize: '14px', flexShrink: 0 }}>⋮⋮</div>
                       
-                      <div style={{ width: '16px', textAlign: 'center', display: 'flex', justifyContent: 'center' }}>
+                      <div style={{ width: '16px', textAlign: 'center', display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
                         {hasChildren ? (
                           <div 
                             onClick={(e) => toggleExpand(e, code.id)}
@@ -559,18 +600,21 @@ return (
                       <div style={{ width: '14px', height: '14px', borderRadius: '50%', backgroundColor: code.color, flexShrink: 0 }}></div>
                       
                       <span style={{ 
-                        fontSize: isSubCode ? '13px' : '15px', 
-                        whiteSpace: 'nowrap', 
+                        display: 'block',
                         overflow: 'hidden', 
-                        textOverflow: 'ellipsis',
+                        textOverflow: 'ellipsis', 
+                        whiteSpace: 'nowrap',
+                        minWidth: 0,
+                        fontSize: isSubCode ? '13px' : '15px', 
                         fontWeight: (!isSubCode) ? 'bold' : 'normal'
                       }}>
                         {code.name}
                       </span>
                     </div>
 
-                    {/* RIGHT SIDE: Badges & Buttons */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    {/* RIGHT SIDE: Rigid buttons that refuse to shrink or disappear */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                      
                       {getAggregatedFrequency(code.id) > 0 && (
                         <span style={{ 
                           backgroundColor: '#111', 
@@ -586,25 +630,30 @@ return (
                       
                       <button 
                         onClick={(e) => { e.stopPropagation(); startEditing(code); }}
-                        style={{ backgroundColor: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
+                        style={{ backgroundColor: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '14px', padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px' }}
                         title="Edit Code"
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" fill="none">
-                          <path d="M20.1497 7.93997L8.27971 19.81C7.21971 20.88 4.04971 21.3699 3.27971 20.6599C2.50971 19.9499 3.06969 16.78 4.12969 15.71L15.9997 3.84C16.5478 3.31801 17.2783 3.03097 18.0351 3.04019C18.7919 3.04942 19.5151 3.35418 20.0503 3.88938C20.5855 4.42457 20.8903 5.14781 20.8995 5.90463C20.9088 6.66146 20.6217 7.39189 20.0997 7.93997H20.1497Z" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M21 21H12" stroke="#ccc" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M20.1497 7.93997L8.27971 19.81C7.21971 20.88 4.04971 21.3699 3.27971 20.6599C2.50971 19.9499 3.06969 16.78 4.12969 15.71L15.9997 3.84C16.5478 3.31801 17.2783 3.03097 18.0351 3.04019C18.7919 3.04942 19.5151 3.35418 20.0503 3.88938C20.5855 4.42457 20.8903 5.14781 20.8995 5.90463C20.9088 6.66146 20.6217 7.39189 20.0997 7.93997H20.1497Z" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M21 21H12" stroke="#ccc" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
                       </button>  
+
                       <button 
                         onClick={(e) => { e.stopPropagation(); setCodeToDelete(code); }}
-                        style={{ backgroundColor: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
+                        style={{ backgroundColor: 'transparent', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: '14px', padding: '4px', display: 'flex', alignItems: 'center', borderRadius: '4px' }}
                         title="Delete Code"
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,107,107,0.1)'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" fill="none">
-                          <path d="M10 11V17" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M14 11V17" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M4 7H20" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M6 7H12H18V18C18 19.6569 16.6569 21 15 21H9C7.34315 21 6 19.6569 6 18V7Z" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          <path d="M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7H9V5Z" stroke="#ccc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M10 11V17" stroke="#ccc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M14 11V17" stroke="#ccc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M4 7H20" stroke="#ccc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M6 7H12H18V18C18 19.6569 16.6569 21 15 21H9C7.34315 21 6 19.6569 6 18V7Z" stroke="#ccc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M9 5C9 3.89543 9.89543 3 11 3H13C14.1046 3 15 3.89543 15 5V7H9V5Z" stroke="#ccc" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
                       </button>    
                     </div>
@@ -613,12 +662,14 @@ return (
 
                 {addingSubCodeTo === code.id && (
                   <form onSubmit={(e) => handleCreateSubCode(e, code.id)} style={{ display: 'flex', gap: '6px', marginTop: '6px', padding: '8px', backgroundColor: '#1a1a1a', borderLeft: `2px solid ${code.color}`, borderRadius: '4px' }}>
-                    <input 
-                      type="color" 
-                      value={subCodeColor}
-                      onChange={(e) => setSubCodeColor(e.target.value)}
-                      style={{ width: '28px', height: '28px', padding: '0', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
-                    />
+                   <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: subCodeColor, border: '2px solid #444', position: 'relative', overflow: 'hidden', flexShrink: 0, cursor: 'pointer' }}>
+                      <input 
+                        type="color" 
+                        value={subCodeColor}
+                        onChange={(e) => setSubCodeColor(e.target.value)}
+                        style={{ position: 'absolute', top: '-10px', left: '-10px', width: '50px', height: '50px', cursor: 'pointer', opacity: 0 }}
+                      />
+                    </div>
                     <input 
                       type="text" 
                       autoFocus 
@@ -676,7 +727,7 @@ return (
             onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
             onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
-            ✨ Create Sub-Code
+            Create Sub-Code
           </button>
           <button 
             onClick={(e) => { 
@@ -689,7 +740,7 @@ return (
             onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
             onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
-            ✨ Create Code Memo
+            Create Code Memo
           </button>
         </div>
       )}
@@ -795,15 +846,30 @@ return (
               />
             </div>
 
-            <div style={{ marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <label style={{ fontSize: '12px', color: '#aaa' }}>Final Color:</label>
-              <input 
-                type="color" 
-                value={mergeModalConfig.newColor}
-                onChange={(e) => setMergeModalConfig(prev => ({ ...prev, newColor: e.target.value }))}
-                style={{ width: '36px', height: '36px', padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' }}
-              />
+            <div style={{ marginBottom: '25px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <label style={{ fontSize: '12px', color: '#aaa', fontWeight: '500' }}>Final Color:</label>
+              
+              {/* Circular Color Swatch Wrapper */}
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: mergeModalConfig.newColor, border: '2px solid #555', position: 'relative', overflow: 'hidden', cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+              }}>
+                <input 
+                  type="color" 
+                  value={mergeModalConfig.newColor}
+                  onChange={(e) => setMergeModalConfig(prev => ({ ...prev, newColor: e.target.value }))}
+                  style={{ 
+                    position: 'absolute', 
+                    top: '-10px', 
+                    left: '-10px', 
+                    width: '52px', 
+                    height: '52px', 
+                    cursor: 'pointer', 
+                    opacity: 0 
+                  }}
+                />
+              </div>
             </div>
+
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
