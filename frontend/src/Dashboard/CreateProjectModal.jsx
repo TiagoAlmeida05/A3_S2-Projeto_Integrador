@@ -73,7 +73,7 @@ function CreateProjectModal({ isOpen, onClose, onCreate }) {
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div style={{ backgroundColor: '#242424', padding: '30px', borderRadius: '8px', border: '1px solid #444', width: '450px', color: 'white' }}>
         
-        <h2 style={{ marginTop: 0 }}>Create New Workspace</h2>
+        <h2 style={{ marginTop: 0, color: "#fff" }}>Create New Workspace</h2>
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '15px' }}>
