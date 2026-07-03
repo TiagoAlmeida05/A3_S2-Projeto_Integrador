@@ -31,14 +31,36 @@ function CollisionModal({ dialog, resolve }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
           <button 
             onClick={() => resolve({ action: 'skip' })}
-            style={{ flex: 1, padding: '10px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer' }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+              e.currentTarget.style.borderColor = "#aaa";
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.borderColor = "#666";
+              e.currentTarget.style.color = "#ccc";
+            }}
+            style={{ 
+              flex: 1, padding: '10px', backgroundColor: 'transparent', border: '1px solid #666', 
+              color: '#ccc', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s ease' 
+            }}
           >
             Skip File
           </button>
           
           <button 
             onClick={() => resolve({ action: 'replace' })}
-            style={{ flex: 1, padding: '10px', backgroundColor: '#8b0000', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer' }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#a60000";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "#8b0000";
+            }}
+            style={{ 
+              flex: 1, padding: '10px', backgroundColor: '#8b0000', border: 'none', 
+              color: 'white', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s ease' 
+            }}
           >
             Replace Old
           </button>
@@ -48,7 +70,16 @@ function CollisionModal({ dialog, resolve }) {
               const newName = document.getElementById('rename-input').value;
               resolve({ action: 'rename', value: newName });
             }}
-            style={{ flex: 1.5, padding: '10px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#5cd661";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "#4CAF50";
+            }}
+            style={{ 
+              flex: 1.5, padding: '10px', backgroundColor: '#4CAF50', border: 'none', 
+              color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s ease' 
+            }}
           >
             Rename
           </button>
