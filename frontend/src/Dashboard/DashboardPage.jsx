@@ -11,6 +11,7 @@ function Dashboard() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState({ isOpen: false, project: null });
+  const [theme, setTheme] = useState(localStorage.getItem('app-theme') || 'dark');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -105,7 +106,7 @@ function Dashboard() {
         {/* HEADER SECTION */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #333", paddingBottom: "20px", marginBottom: "30px" }}>
           <div>
-            <h1 style={{ margin: 0, fontSize: "28px", fontWeight: "600" }}>jUPiter QDA</h1>
+            <h1 style={{ margin: 0, fontSize: "28px", fontWeight: "600", color: "#fff" }}>jUPiter QDA</h1>
             <p style={{ margin: "5px 0 0 0", color: "#888", fontSize: "15px" }}>Qualitative Data Analysis Workspace</p>
           </div>
           
