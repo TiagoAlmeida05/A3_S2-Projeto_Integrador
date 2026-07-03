@@ -94,6 +94,13 @@ class MemoResponse(MemoBase):
 
 class FolderCreate(BaseModel):
     name: str
+    parent_id: Optional[int] = None
+
+class FolderMoveRequest(BaseModel):
+    parent_id: Optional[int] = None
+
+class FolderRename(BaseModel):
+    name: str
 
 class FolderReorderItem(BaseModel):
     id: int
