@@ -355,6 +355,12 @@ function DocumentSidebar({
     setDragPosition(null);
   };
 
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverId(null);
+    setDragPosition(null);
+  };
+
   const handleImportDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -467,6 +473,7 @@ function DocumentSidebar({
         onContextMenu={(e) => handleContextMenu(e, 'doc', doc.id, doc.filename)}
         onDragOver={(e) => handleDragOver(e, 'doc', doc.id)}
         onDragLeave={handleDragLeave}
+        onDragEnd={handleDragEnd}
         onDrop={(e) => handleDrop(e, 'doc', doc.id)}
         style={{ 
           marginBottom: '5px',
@@ -740,6 +747,7 @@ function DocumentSidebar({
               onDragOver={(e) => handleDragOver(e, 'folder', folder.id)}
               onDragLeave={handleDragLeave}
               onDrop={(e) => handleDrop(e, 'folder', folder.id)}
+              onDragEnd={handleDragEnd}
               style={{ 
                 marginBottom: '5px', opacity: isBeingDragged ? 0.3 : 1, transition: 'all 0.2s ease',
                 borderTop: isDraggingOver && dragPosition === 'before' ? '2px solid #646cff' : '2px solid transparent',
@@ -793,7 +801,7 @@ function DocumentSidebar({
         <div
           style={{
             marginTop: '10px', minHeight: '60px', borderTop: folders.length > 0 ? '1px solid #333' : 'none', paddingTop: '10px',
-            backgroundColor: dragOverId === 'root-root' ? 'rgba(100, 108, 255, 0.2)' : 'transparent', borderRadius: '4px', transition: 'background-color 0.2s',
+            borderRadius: '4px'
           }}
           onDragOver={(e) => handleDragOver(e, 'root', 'root')}
           onDrop={(e) => handleDrop(e, 'root', 'root')}
