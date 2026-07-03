@@ -188,6 +188,11 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
                 ET.SubElement(set_elem, "{urn:QDA-XML:project:1.0}MemberSource", attrib={
                     "targetGUID": generate_guid("doc", doc.id)
                 })
+            child_folders = [f for f in folders if getattr(f, 'parent_id', None) == folder.id]
+            for child in child_folders:
+                ET.SubElement(set_elem, "{urn:QDA-XML:project:1.0}MemberSet", attrib={
+                    "targetGUID": generate_guid("folder", child.id)
+                })
 
     # Description
     if project.description:
@@ -435,21 +440,38 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
 
 
         if 'guid_to_doc_id' in locals():
+            guid_to_folder_id = {}
+            
+            # create all folders first so we have their IDs
             for set_elem in root.findall(".//Set"):
+                set_guid = set_elem.attrib.get("guid") or str(uuid.uuid4())
                 set_name = set_elem.attrib.get("name", "Imported Set")
-                folder_id = None
                 
+                new_folder = models.DocumentFolder(name=set_name, project_id=new_project.id)
+                db.add(new_folder)
+                db.flush()
+                guid_to_folder_id[set_guid.lower()] = new_folder.id
+                
+                # Assign documents to this folder
                 for ms in set_elem.findall("./MemberSource"):
                     t_guid = next((v for k, v in ms.attrib.items() if k.lower() == "targetguid"), None)
                     if t_guid and t_guid.lower() in guid_to_doc_id:
-                        if not folder_id:
-                            new_folder = models.DocumentFolder(name=set_name, project_id=new_project.id)
-                            db.add(new_folder)
-                            db.flush()
-                            folder_id = new_folder.id
-                        
                         doc_id = guid_to_doc_id[t_guid.lower()]
-                        db.query(models.Document).filter(models.Document.id == doc_id).update({"folder_id": folder_id})
+                        db.query(models.Document).filter(models.Document.id == doc_id).update({"folder_id": new_folder.id})
+            
+            # establish nested sub-folder relationships (MemberSet)
+            for set_elem in root.findall(".//Set"):
+                parent_guid = set_elem.attrib.get("guid")
+                if not parent_guid or parent_guid.lower() not in guid_to_folder_id:
+                    continue
+                parent_id = guid_to_folder_id[parent_guid.lower()]
+                
+                for ms in set_elem.findall("./MemberSet"):
+                    child_guid = next((v for k, v in ms.attrib.items() if k.lower() == "targetguid"), None)
+                    if child_guid and child_guid.lower() in guid_to_folder_id:
+                        child_id = guid_to_folder_id[child_guid.lower()]
+                        # Update the child folder to point to this parent
+                        db.query(models.DocumentFolder).filter(models.DocumentFolder.id == child_id).update({"parent_id": parent_id})
                         
         db.commit()
         return new_project

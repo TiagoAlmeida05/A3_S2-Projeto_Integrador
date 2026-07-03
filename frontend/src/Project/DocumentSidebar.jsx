@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
 
 function DocumentSidebar({ 
   documents, 
@@ -16,6 +17,8 @@ function DocumentSidebar({
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [addingSubFolderTo, setAddingSubFolderTo] = useState(null); 
+  const [newSubFolderName, setNewSubFolderName] = useState("");
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const dragCounter = useRef(0);
   const [isImportDropActive, setIsImportDropActive] = useState(false);
@@ -24,6 +27,8 @@ function DocumentSidebar({
   const [metadataDialog, setMetadataDialog] = useState({ isOpen: false, documentId: null, documentName: "" });
   const [metadataFieldName, setMetadataFieldName] = useState("");
   const [metadataFieldValue, setMetadataFieldValue] = useState("");
+  const [folderToDelete, setFolderToDelete] = useState(null);
+  const [renamingFolder, setRenamingFolder] = useState(null);
 
   // Unified Drag State
   const [draggedItem, setDraggedItem] = useState(null); 
@@ -177,6 +182,49 @@ function DocumentSidebar({
     }
   };
 
+  const handleCreateSubFolder = async (e, parentId) => {
+    if (e) e.preventDefault();
+    if (!newSubFolderName.trim()) {
+      setAddingSubFolderTo(null);
+      return;
+    }
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newSubFolderName, parent_id: parentId })
+      });
+      if (res.ok) {
+        setNewSubFolderName("");
+        setAddingSubFolderTo(null);
+        fetchFolders();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const getAggregatedDocumentCount = (folderId) => {
+    // recursively find all child folder IDs
+    const getDescendants = (pId) => {
+      let ids = [pId];
+      folders.filter(f => f.parent_id === pId).forEach(child => {
+        ids = ids.concat(getDescendants(child.id));
+      });
+      return ids;
+    };
+    
+    // count documents that belong to ANY of those folders
+    const descIds = getDescendants(folderId);
+    const aggregatedDocs = documents.filter(d => descIds.includes(d.folder_id));
+    const aggregatedGroups = getDocumentBuckets(aggregatedDocs);
+    
+    return {
+      total: aggregatedGroups.matching.length + aggregatedGroups.missingField.length,
+      matching: aggregatedGroups.matching.length
+    };
+  };
+
   const fetchFolders = () => {
     fetch(`http://127.0.0.1:8000/projects/${projectId}/folders`)
       .then(res => res.json())
@@ -252,8 +300,6 @@ function DocumentSidebar({
   };
 
   const handleDeleteFolder = async (folderId) => {
-    const confirmDelete = window.confirm("Delete this folder? All documents inside will be moved to the root area.");
-    if (!confirmDelete) return;
     try {
       const res = await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/${folderId}`, { method: 'DELETE' });
       if (res.ok) {
@@ -321,6 +367,36 @@ function DocumentSidebar({
     }
   };
 
+  const startRenameFolder = (folder) => {
+    setRenamingFolder({ id: folder.id, value: folder.name });
+    setContextMenu(null);
+  };
+
+  const finishRenameFolder = async () => {
+    if (!renamingFolder) return;
+    const nextName = renamingFolder.value.trim();
+    const currentFolder = folders.find(f => f.id === renamingFolder.id);
+
+    if (!currentFolder || !nextName || nextName === currentFolder.name) {
+      setRenamingFolder(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/${renamingFolder.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nextName })
+      });
+      if (res.ok) {
+        fetchFolders(); // Refresh folders to show the new name
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setRenamingFolder(null);
+  };
+
     // --- DRAG AND DROP ---
   const handleDragStart = (e, type, id) => {
     e.stopPropagation(); // Stops document drag events from triggering parent folder drag parameters!
@@ -342,12 +418,16 @@ function DocumentSidebar({
     let position = "inside";
     if (targetType === 'folder') {
       if (draggedItem?.type === 'folder') {
-         position = y < rect.height / 2 ? "before" : "after";
+        if (y < rect.height * 0.25) position = "before";
+         else if (y > rect.height * 0.75) position = "after";
+         else position = "inside";
       } else if (draggedItem?.type === 'doc') {
          position = "inside";
       }
     } else if (targetType === 'doc' && draggedItem?.type === 'doc' && sortMode === 'custom') {
       position = y < rect.height / 2 ? "before" : "after";
+    } else if (targetType === 'root') {
+      position = "inside";
     }
 
     setDragOverId(`${targetType}-${targetId}`);
@@ -408,25 +488,48 @@ function DocumentSidebar({
 
     const { id, type } = draggedItem;
 
-    if (type === 'folder' && targetType === 'folder') {
-      const draggedFolder = folders.find(f => f.id === id);
-      let remaining = folders.filter(f => f.id !== id);
-      const targetIndex = remaining.findIndex(f => f.id === targetId);
+   if (type === 'folder') {
+      if (targetType === 'folder' && dragPosition === 'inside') {
+        // Move folder INSIDE another folder
+        try {
+          await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/${id}/move`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ parent_id: targetId })
+          });
+          fetchFolders();
+          setExpandedFolders(prev => new Set(prev).add(targetId)); // Auto expand
+        } catch (err) { console.error(err); }
+      } else if (targetType === 'root') {
+        // Move folder OUT to the root (un-nest it)
+        try {
+          await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/${id}/move`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ parent_id: null }) // null means root level!
+          });
+          fetchFolders();
+        } catch (err) { console.error(err); }
+      } else if (targetType === 'folder') {
+        // Standard vertical reordering
+        const draggedFolder = folders.find(f => f.id === id);
+        let remaining = folders.filter(f => f.id !== id);
+        const targetIndex = remaining.findIndex(f => f.id === targetId);
 
-      let insertIndex = dragPosition === 'after' ? targetIndex + 1 : targetIndex;
-      remaining.splice(insertIndex, 0, draggedFolder);
-      setFolders([...remaining]); 
+        let insertIndex = dragPosition === 'after' ? targetIndex + 1 : targetIndex;
+        remaining.splice(insertIndex, 0, draggedFolder);
+        setFolders([...remaining]); 
 
-      const reorderPayload = remaining.map((f, idx) => ({ id: f.id, order_index: idx }));
-      try {
-        await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/reorder`, {
-          method: 'PUT',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ folders: reorderPayload })
-        });
-      } catch (err) { console.error(err); }
-
-    } else if (type === 'doc') {
+        const reorderPayload = remaining.map((f, idx) => ({ id: f.id, order_index: idx }));
+        try {
+          await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/reorder`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ folders: reorderPayload })
+          });
+        } catch (err) { console.error(err); }
+      }
+    }else if (type === 'doc') {
       const draggedDoc = documents.find((doc) => doc.id === id);
 
       if (targetType === 'root') {
@@ -589,11 +692,38 @@ function DocumentSidebar({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h3 style={{ margin: 0 }}>Documents</h3>
         <button 
-          onClick={(e) => handleContextMenu(e, 'root')} 
-          style={{ background: 'transparent', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: '18px' }}
-          title="Options"
+          onClick={() => setIsCreatingFolder(true)} 
+          onMouseOver={(e) => {
+            e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+            e.currentTarget.style.borderColor = "#aaa";
+            e.currentTarget.style.color = "#fff";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+            e.currentTarget.style.borderColor = "#444";
+            e.currentTarget.style.color = "#ccc";
+          }}
+          style={{ 
+            padding: '6px 10px', 
+            backgroundColor: 'transparent', 
+            border: '1px solid #444', 
+            color: '#ccc', 
+            borderRadius: '6px', 
+            cursor: 'pointer', 
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.2s ease'
+          }}
+          title="Create New Folder"
         >
-          ⋮
+          <svg xmlns="http://www.w3.org/2000/svg" width="14px" height="14px" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            <line x1="12" y1="11" x2="12" y2="17"></line>
+            <line x1="9" y1="14" x2="15" y2="14"></line>
+          </svg>
+          New Folder
         </button>
       </div>
 
@@ -666,7 +796,7 @@ function DocumentSidebar({
               cursor: 'pointer', textAlign: 'center', fontSize: '14px', fontWeight: 'bold', display: 'flex',alignItems: 'center',justifyContent: 'center',gap: '8px'
             }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 64 64" stroke-width="3" stroke="currentColor" fill="none">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 64 64" strokeWidth="2" stroke="currentColor" fill="none">
               <path d="M55.5,23.9V53.5a2,2,0,0,1-2,2h-43a2,2,0,0,1-2-2v-43a2,2,0,0,1,2-2H41.64"/>
               <path d="M19.48,38.77l-.64,5.59a.84.84,0,0,0,.92.93l5.56-.64a.87.87,0,0,0,.5-.24L54.9,15.22a1.66,1.66,0,0,0,0-2.35L51.15,9.1a1.67,1.67,0,0,0-2.36,0L19.71,38.28A.83.83,0,0,0,19.48,38.77Z"/><line x1="44.87" y1="13.04" x2="50.9" y2="19.24"/>
             </svg> Write
@@ -764,69 +894,130 @@ function DocumentSidebar({
         )}
 
         {/* FOLDERS LIST */}
-        {sortedFolders.map(folder => {
-          const folderGroups = getDocumentBuckets(documents.filter(d => d.folder_id === folder.id));
-          const isExpanded = expandedFolders.has(folder.id);
-          const isDraggingOver = dragOverId === `folder-${folder.id}`;
-          const isBeingDragged = draggedItem?.type === 'folder' && draggedItem.id === folder.id;
+        {(() => {
+          const renderFolder = (folder, depth = 0) => {
+            const folderGroups = getDocumentBuckets(documents.filter(d => d.folder_id === folder.id));
+            const childFolders = sortedFolders.filter(f => f.parent_id === folder.id);
+            const isExpanded = expandedFolders.has(folder.id);
+            const isDraggingOver = dragOverId === `folder-${folder.id}`;
+            const isBeingDragged = draggedItem?.type === 'folder' && draggedItem.id === folder.id;
+            const counts = getAggregatedDocumentCount(folder.id);
 
-          return (
-            <div 
-              key={`folder-${folder.id}`} draggable
-              onDragStart={(e) => handleDragStart(e, 'folder', folder.id)}
-              onDragOver={(e) => handleDragOver(e, 'folder', folder.id)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, 'folder', folder.id)}
-              onDragEnd={handleDragEnd}
-              style={{ 
-                marginBottom: '5px', opacity: isBeingDragged ? 0.3 : 1, transition: 'all 0.2s ease',
-                borderTop: isDraggingOver && dragPosition === 'before' ? '2px solid #646cff' : '2px solid transparent',
-                borderBottom: isDraggingOver && dragPosition === 'after' ? '2px solid #646cff' : '2px solid transparent',
-                backgroundColor: isDraggingOver && dragPosition === 'inside' ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
-                borderRadius: '4px'
-              }}
-            >
+            return (
               <div 
-                onContextMenu={(e) => handleContextMenu(e, 'folder', folder.id)}
-                style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', cursor: 'grab' }}
+                key={`folder-${folder.id}`} 
+                draggable
+                onDragStart={(e) => handleDragStart(e, 'folder', folder.id)}
+                onDragOver={(e) => handleDragOver(e, 'folder', folder.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, 'folder', folder.id)}
+                onDragEnd={handleDragEnd}
+                style={{ 
+                  marginBottom: '5px', 
+                  marginLeft: depth > 0 ? '16px' : '0px', // Indents nested folders!
+                  opacity: isBeingDragged ? 0.3 : 1, 
+                  transition: 'opacity 0.2s ease, background-color 0.2s ease',
+                  borderTop: isDraggingOver && dragPosition === 'before' ? '2px solid #646cff' : '2px solid transparent',
+                  borderBottom: isDraggingOver && dragPosition === 'after' ? '2px solid #646cff' : '2px solid transparent',
+                  backgroundColor: isDraggingOver && dragPosition === 'inside' ? 'rgba(100, 108, 255, 0.2)' : 'transparent',
+                  borderRadius: '4px'
+                }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-                  <div style={{ color: '#666', fontSize: '14px', cursor: 'grab' }}>⋮⋮</div>
-                  <div onClick={(e) => toggleFolder(e, folder.id)} style={{ cursor: 'pointer', fontSize: '12px', color: '#aaa', padding: '4px' }}>
-                    {isExpanded ? '▼' : '▶'}
+                <div 
+                  onContextMenu={(e) => handleContextMenu(e, 'folder', folder.id)}
+                  style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', color: 'white', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', cursor: 'grab' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                    <div style={{ color: '#666', fontSize: '14px', cursor: 'grab' }}>⋮⋮</div>
+                    <div onClick={(e) => toggleFolder(e, folder.id)} style={{ cursor: 'pointer', fontSize: '12px', color: '#aaa', padding: '4px' }}>
+                      {isExpanded ? '▼' : '▶'}
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14px" height="14px" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                        <path d="M0 1H5L8 3H13V5H3.7457L2.03141 11H4.11144L5.2543 7H16L14 14H0V1Z" fill="#ccc"/>
+                      </svg> 
+                      {renamingFolder?.id === folder.id ? (
+                        <input
+                          autoFocus
+                          value={renamingFolder.value}
+                          onChange={(e) => setRenamingFolder(prev => ({ ...prev, value: e.target.value }))}
+                          onBlur={finishRenameFolder}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); finishRenameFolder(); }
+                            if (e.key === 'Escape') { e.preventDefault(); setRenamingFolder(null); }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            flex: 1, minWidth: 0, background: '#111', border: '1px solid #646cff',
+                            color: '#fff', outline: 'none', borderRadius: '4px', fontSize: '13px', padding: '4px 6px'
+                          }}
+                        />
+                      ) : (
+                        <span style={{fontSize: '15px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {folder.name}
+                        </span>
+                      )}
                   </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14px" height="14px" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                      <path d="M0 1H5L8 3H13V5H3.7457L2.03141 11H4.11144L5.2543 7H16L14 14H0V1Z" fill="#ccc"/>
-                    </svg> 
-                    <span style={{fontSize: '15px', fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {folder.name}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    <span style={{ backgroundColor: '#111', color: '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
+                      {metadataFilterKey.trim() ? `${counts.matching}/${counts.total}` : counts.total}
                     </span>
+                  </div>
                 </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                  <span style={{ backgroundColor: '#111', color: '#aaa', fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
-                    {metadataFilterKey.trim() ? `${folderGroups.matching.length}/${folderGroups.matching.length + folderGroups.missingField.length}` : folderGroups.matching.length + folderGroups.missingField.length}
-                  </span>
-                </div>
-              </div>
-              
-              {isExpanded && (
-                <ul style={{ listStyleType: 'none', padding: 0, marginTop: '4px' }}>
-                  {folderGroups.matching.length === 0 && folderGroups.missingField.length === 0 ? (
-                    <li>
-                      <div style={{ marginLeft: '40px', fontSize: '12px', color: '#555', fontStyle: 'italic', padding: '4px' }}>Empty folder</div>
-                    </li>
-                  ) : (
-                    renderMetadataSections(folderGroups, true)
-                  )}
-                </ul>
-              )}
-            </div>
-          );
-        })}
+                
+                {isExpanded && (
+                  <ul style={{ listStyleType: 'none', padding: 0, marginTop: '4px' }}>
+                    
+                    {/* 1. Render Nested Folders FIRST */}
+                    {childFolders.map(child => renderFolder(child, depth + 1))}
 
+                    {/* 2. Render Sub-Folder Creation Input */}
+                    {addingSubFolderTo === folder.id && (
+                      <li style={{ marginBottom: '5px', marginLeft: '16px' }}>
+                        <div style={{ padding: '8px 12px', backgroundColor: '#2a2a2a', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid #646cff' }}>
+                          <span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14px" height="14px" viewBox="0 0 16 16" fill="none">
+                              <path d="M0 1H5L8 3H13V5H3.7457L2.03141 11H4.11144L5.2543 7H16L14 14H0V1Z" fill="#ccc"/>
+                            </svg>
+                          </span>
+                          <input 
+                            autoFocus 
+                            value={newSubFolderName} 
+                            onChange={(e) => setNewSubFolderName(e.target.value)}
+                            onKeyDown={(e) => { 
+                              if (e.key === 'Enter') handleCreateSubFolder(e, folder.id); 
+                              if (e.key === 'Escape') setAddingSubFolderTo(null); 
+                            }}
+                            onBlur={() => { 
+                              if (newSubFolderName.trim()) handleCreateSubFolder(null, folder.id); 
+                              else setAddingSubFolderTo(null); 
+                            }}
+                            placeholder="Sub-folder name..."
+                            style={{ flex: 1, background: '#111', border: 'none', color: '#fff', outline: 'none', fontSize: '14px' }}
+                          />
+                        </div>
+                      </li>
+                    )}
+
+                    {/* 3. Then Render Documents (or Empty State) */}
+                    {folderGroups.matching.length === 0 && folderGroups.missingField.length === 0 && childFolders.length === 0 && addingSubFolderTo !== folder.id ? (
+                      <li>
+                        <div style={{ marginLeft: '40px', fontSize: '12px', color: '#555', fontStyle: 'italic', padding: '4px' }}>Empty folder</div>
+                      </li>
+                    ) : (
+                      renderMetadataSections(folderGroups, true)
+                    )}
+                  </ul>
+                )}
+              </div>
+            );
+          };
+
+          // Kick off the recursion by only mapping folders that have NO parent
+          return sortedFolders.filter(f => !f.parent_id).map(folder => renderFolder(folder, 0));
+        })()}
         {/* ROOT LEVEL DOCUMENTS AREA */}
         <div
           style={{
@@ -859,7 +1050,45 @@ function DocumentSidebar({
             <button onClick={(e) => { e.stopPropagation(); setIsCreatingFolder(true); setContextMenu(null); }} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}>Create Folder</button>
           )}
           {contextMenu.type === 'folder' && (
-            <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(contextMenu.id); setContextMenu(null); }} style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: '#ff6b6b', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}>Delete Folder</button>
+           <>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  setAddingSubFolderTo(contextMenu.id); 
+                  setExpandedFolders(prev => new Set(prev).add(contextMenu.id)); // Auto-expand to show input
+                  setContextMenu(null); 
+                }} 
+                style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#646cff'}
+                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                Create Sub-Folder
+              </button>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  const folder = folders.find(f => f.id === contextMenu.id);
+                  if (folder) startRenameFolder(folder);
+                }} 
+                style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#3a3a46'}
+                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                Rename Folder
+              </button>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation();
+                  setFolderToDelete(folders.find(f => f.id === contextMenu.id)); 
+                  setContextMenu(null);
+                }} 
+                style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: '#ff6b6b', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#441111'}
+                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                Delete Folder
+              </button>
+            </>
           )}
           {contextMenu.type === 'doc' && (
             <>
@@ -925,6 +1154,21 @@ function DocumentSidebar({
           </div>
         </div>
       )}
+      <ConfirmDeleteModal 
+        isOpen={!!folderToDelete}
+        onClose={() => setFolderToDelete(null)}
+        onConfirm={() => {
+          handleDeleteFolder(folderToDelete.id);
+          setFolderToDelete(null);
+        }}
+        title={folderToDelete ? `Delete "${folderToDelete.name}"?` : "Delete Folder?"}
+        title={folderToDelete ? `Delete "${folderToDelete.name}"?` : "Delete Folder?"}
+        warningText={
+          folderToDelete?.parent_id
+            ? `Are you sure you want to delete this folder? All items inside will be moved up to "${folders.find(f => f.id === folderToDelete.parent_id)?.name || 'the parent folder'}".`
+            : "Are you sure you want to delete this folder? All items inside will be moved to the root area."
+        }
+      />
     </>
   );
 }

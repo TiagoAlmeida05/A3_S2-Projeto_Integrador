@@ -10,8 +10,8 @@ class FolderRepository:
             models.DocumentFolder.project_id == project_id
         ).order_by(models.DocumentFolder.order_index).all()
 
-    def create(self, project_id: int, name: str):
-        new_folder = models.DocumentFolder(name=name, project_id=project_id)
+    def create(self, project_id: int, name: str,parent_id: int = None):
+        new_folder = models.DocumentFolder(name=name, project_id=project_id,parent_id=parent_id)
         self.db.add(new_folder)
         self.db.commit()
         self.db.refresh(new_folder)
@@ -37,3 +37,33 @@ class FolderRepository:
             self.db.commit()
             return True
         return False
+    
+    def move(self, project_id: int, folder_id: int, parent_id: int = None):
+        folder = self.db.query(models.DocumentFolder).filter(
+            models.DocumentFolder.id == folder_id,
+            models.DocumentFolder.project_id == project_id
+        ).first()
+        
+        if folder:
+            # Prevent a folder from being moved into itself
+            if folder_id == parent_id:
+                return folder
+                
+            folder.parent_id = parent_id
+            self.db.commit()
+            self.db.refresh(folder)
+            return folder
+        return None
+    
+    def update_name(self, project_id: int, folder_id: int, new_name: str):
+        folder = self.db.query(models.DocumentFolder).filter(
+            models.DocumentFolder.id == folder_id,
+            models.DocumentFolder.project_id == project_id
+        ).first()
+        
+        if folder:
+            folder.name = new_name
+            self.db.commit()
+            self.db.refresh(folder)
+            return folder
+        return None

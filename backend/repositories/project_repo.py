@@ -20,7 +20,7 @@ class ProjectRepository:
     def get_by_local_path(self, path: str):
         return self.db.query(models.Project).filter(models.Project.local_path == path).first()
 
-    def create(self, project_data: schemas.ProjectCreate, final_path: str = None):
+    def create(self, project_data: schemas.ProjectCreate, final_path: str = None, parent_id: int = None):
         new_project = models.Project(
             name=project_data.name, 
             description=project_data.description,

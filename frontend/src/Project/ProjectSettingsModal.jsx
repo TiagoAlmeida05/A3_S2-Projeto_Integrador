@@ -80,13 +80,29 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
           <div style={{ display: 'flex', gap: '10px' }}>
             <button 
               onClick={onClose} 
-              style={{ padding: '10px 15px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer' }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+                e.currentTarget.style.borderColor = "#aaa";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.borderColor = "#666";
+                e.currentTarget.style.color = "#ccc";
+              }}
+              style={{ padding: '10px 15px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s ease' }}
             >
               Cancel
             </button>
             <button 
               onClick={handleSave} 
-              style={{ padding: '10px 15px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "#5cd661"; // Brighter green on hover
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "#4CAF50"; // Standard green
+              }}
+              style={{ padding: '10px 15px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s ease' }}
             >
               Save Changes
             </button>

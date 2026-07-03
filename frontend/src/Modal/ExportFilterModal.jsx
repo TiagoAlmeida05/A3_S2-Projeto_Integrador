@@ -134,13 +134,45 @@ const ExportFilterModal = ({ isOpen, onClose, onExport, documents, codes }) => {
 
         {/* FOOTER BUTTONS */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #333" }}>
-          <button onClick={onClose} style={{ padding: "8px 16px", backgroundColor: "#2a2a2a", border: "1px solid #444", borderRadius: "6px", color: "white", cursor: "pointer" }}>
+          <button 
+            onClick={onClose} 
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+              e.currentTarget.style.borderColor = "#aaa";
+              e.currentTarget.style.color = "#fff";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.borderColor = "#555";
+              e.currentTarget.style.color = "#ccc";
+            }}
+            style={{ padding: "10px 16px", backgroundColor: "transparent", border: "1px solid #555", borderRadius: "6px", color: "#ccc", cursor: "pointer", transition: "all 0.2s ease" }}
+          >
             Cancel
           </button>
           <button 
             onClick={() => onExport(selectedDocs, selectedCodes)} 
             disabled={selectedDocs.length === 0 || selectedCodes.length === 0}
-            style={{ padding: "8px 16px", backgroundColor: (selectedDocs.length === 0 || selectedCodes.length === 0) ? "#444" : "#4CAF50", border: "none", borderRadius: "6px", color: "white", cursor: (selectedDocs.length === 0 || selectedCodes.length === 0) ? "not-allowed" : "pointer", fontWeight: "bold" }}
+            onMouseOver={(e) => {
+              if (selectedDocs.length > 0 && selectedCodes.length > 0) {
+                e.currentTarget.style.backgroundColor = "#5cd661";
+              }
+            }}
+            onMouseOut={(e) => {
+              if (selectedDocs.length > 0 && selectedCodes.length > 0) {
+                e.currentTarget.style.backgroundColor = "#4CAF50";
+              }
+            }}
+            style={{ 
+              padding: "10px 16px", 
+              backgroundColor: (selectedDocs.length === 0 || selectedCodes.length === 0) ? "#444" : "#4CAF50", 
+              border: "none", 
+              borderRadius: "6px", 
+              color: "white", 
+              cursor: (selectedDocs.length === 0 || selectedCodes.length === 0) ? "not-allowed" : "pointer", 
+              fontWeight: "bold", 
+              transition: "all 0.2s ease" 
+            }}
           >
             Export Data
           </button>
