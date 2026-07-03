@@ -1,8 +1,8 @@
 import React from 'react';
 
-function MarginSidebar({ marginBars, projectCodes, onRightClickBar }) {
+function MarginSidebar({ marginBars, projectCodes, onRightClickBar, scrollRef, contentHeight }) {
   if (!marginBars || marginBars.length === 0) {
-    return <div style={{ width: '25%', borderLeft: '1px solid #eee', minHeight: '100%' }}></div>;
+    return <div style={{ width: '100%',boxSizing: 'border-box', borderLeft: '1px solid #eee', height: '100%' }}></div>;
   }
 
   // ==========================================
@@ -135,10 +135,12 @@ function MarginSidebar({ marginBars, projectCodes, onRightClickBar }) {
   });
 
   return (
-    <div style={{ width: '25%', position: 'relative', borderLeft: '1px solid #eee', minHeight: '100%', overflowX: 'auto', overflowY: 'hidden', backgroundColor: '#fdfdfd' }}>
-      <div style={{ width: 'max-content', minWidth: '100%', minHeight: '100%', position: 'relative', paddingRight: '20px' }}>
+    <div 
+      ref={scrollRef}
+      style={{ width: '100%',boxSizing: 'border-box', position: 'relative', borderLeft: '1px solid #eee', height: '100%', overflowX: 'auto', overflowY: 'hidden', backgroundColor: '#fdfdfd' }}
+    >
+      <div style={{ width: 'max-content', minWidth: '100%', height: contentHeight ? `${contentHeight}px` : '100%', position: 'relative', paddingRight: '20px' }}>
         
-        {/* RENDER COLORED LINES */}
         {sortedForLines.map((bar, i) => (
           <div 
             key={`line-${bar.id}-${i}`}

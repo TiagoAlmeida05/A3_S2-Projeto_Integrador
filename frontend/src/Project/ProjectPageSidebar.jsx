@@ -26,7 +26,13 @@ const ProjectPageSidebar = ({
 }) => {
 
   return (
-    <>
+    <div
+      style={{
+        display: "flex",
+        width: "100%",
+        height: "100%",
+      }}
+    >
       <div
         style={{
           width: "60px",
@@ -41,17 +47,30 @@ const ProjectPageSidebar = ({
       >
         <button
           onClick={() => setActiveTab("documents")}
+          onMouseEnter={(e) => {
+            if (activeTab !== "documents") {
+              e.currentTarget.style.opacity = "0.8";
+              e.currentTarget.style.color = "#fff";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== "documents") {
+              e.currentTarget.style.opacity = "0.4";
+              e.currentTarget.style.color = "#fff";
+            }
+          }}
           style={{
             backgroundColor: "transparent",
             border: "none",
             fontSize: "24px",
             cursor: "pointer",
-            padding: "10px",
+            padding: "10px",  
             opacity: activeTab === "documents" ? 1 : 0.4,
-            borderLeft:
-              activeTab === "documents"
-                ? "3px solid #646cff"
-                : "3px solid transparent",
+            transition: "all 0.2s ease",
+            borderLeft: activeTab === "documents" ? "3px solid #646cff" : "3px solid transparent",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
           }}
           title="Documents"
         >
@@ -61,6 +80,18 @@ const ProjectPageSidebar = ({
         </button>
         <button
           onClick={() => setActiveTab("codes")}
+          onMouseEnter={(e) => {
+            if (activeTab !== "codes") {
+              e.currentTarget.style.opacity = "0.8";
+              e.currentTarget.style.color = "#fff";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== "codes") {
+              e.currentTarget.style.opacity = "0.4";
+              e.currentTarget.style.color = "#fff";
+            }
+          }}
           style={{
             backgroundColor: "transparent",
             border: "none",
@@ -68,6 +99,7 @@ const ProjectPageSidebar = ({
             padding: "10px",
             marginTop: "10px",
             opacity: activeTab === "codes" ? 1 : 0.4,
+            transition: "all 0.2s ease",
             borderLeft: activeTab === "codes" ? "3px solid #646cff" : "3px solid transparent",
             display: "flex",
             alignItems: "center",
@@ -81,6 +113,18 @@ const ProjectPageSidebar = ({
         </button>
         <button
           onClick={() => setActiveTab("memos")}
+          onMouseEnter={(e) => {
+            if (activeTab !== "memos") {
+              e.currentTarget.style.opacity = "0.8";
+              e.currentTarget.style.color = "#fff";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (activeTab !== "memos") {
+              e.currentTarget.style.opacity = "0.4";
+              e.currentTarget.style.color = "#fff";
+            }
+          }}
           style={{
             backgroundColor: "transparent",
             border: "none",
@@ -104,7 +148,8 @@ const ProjectPageSidebar = ({
 
       <div
         style={{
-          width: "300px",
+          flex: 1,
+          minWidth: 0,
           display: "flex",
           flexDirection: "column",
           padding: "20px",
@@ -142,7 +187,7 @@ const ProjectPageSidebar = ({
         )}
         {activeTab === "memos" && <MemosTab projectId={id} codes={projectCodes} pushUndoAction={pushUndoAction}/>}
       </div>
-    </>
+    </div>
   );
 };
 

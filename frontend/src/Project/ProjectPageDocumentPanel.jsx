@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { Group, Panel, Separator } from "react-resizable-panels";
 import MarginSidebar from "./MarginSidebar";
 
   const getRandomColor = () => {
@@ -50,6 +51,9 @@ const ProjectPageDocumentPanel = ({
   const [editContent, setEditContent] = useState("");
   const [localSegments, setLocalSegments] = useState([]);
   const bgRef = useRef(null);
+
+  const marginScrollRef = useRef(null);
+  const [contentHeight, setContentHeight] = useState(0);
   
   // Auto-save state
   const [lastSavedContent, setLastSavedContent] = useState("");
@@ -441,6 +445,9 @@ const ProjectPageDocumentPanel = ({
       bgRef.current.scrollTop = e.target.scrollTop;
       bgRef.current.scrollLeft = e.target.scrollLeft;
     }
+    if (marginScrollRef.current) {
+      marginScrollRef.current.scrollTop = e.target.scrollTop;
+    }
   };
 
   const handleToggleEdit = () => {
@@ -554,7 +561,9 @@ const ProjectPageDocumentPanel = ({
       return;
     }
 
-    const measureTimer = setTimeout(() => {
+    const measureMargins = () => {
+      if (!targetRef.current) return;
+
       const containerBounds = targetRef.current.getBoundingClientRect();
       const chunks = targetRef.current.querySelectorAll(".highlight-chunk");
       const segmentBounds = {};
@@ -564,7 +573,7 @@ const ProjectPageDocumentPanel = ({
         if (!ids) return;
 
         const chunkRect = chunk.getBoundingClientRect();
-        const top = chunkRect.top - containerBounds.top;
+        const top = (chunkRect.top - containerBounds.top) + targetRef.current.scrollTop;
         const bottom = top + chunkRect.height;
 
         ids.split(" ").forEach((id) => {
@@ -578,31 +587,31 @@ const ProjectPageDocumentPanel = ({
       });
 
       const rawBars = targetSegments.map((seg) => {
-          const bounds = segmentBounds[seg.id];
-          if (!bounds) return null;
-          const code = projectCodes.find((currentCode) => currentCode.id === seg.code_id);
-          let displayColor = code ? code.color : "#ccc";
-          let displayName = code ? code.name : "Unknown";
+        const bounds = segmentBounds[seg.id];
+        if (!bounds) return null;
+        const code = projectCodes.find((currentCode) => currentCode.id === seg.code_id);
+        let displayColor = code ? code.color : "#ccc";
+        let displayName = code ? code.name : "Unknown";
 
-          if (showParentInMargin && code && code.parent_id) {
-            let currentIter = code;
-            const pathArray = [currentIter.name];
-            while (currentIter.parent_id) {
-              const parent = projectCodes.find((cc) => Number(cc.id) === Number(currentIter.parent_id));
-              if (parent) {
-                pathArray.unshift(parent.name);
-                currentIter = parent;
-              } else break; 
-            }
-            displayColor = currentIter.color;
-            displayName = pathArray.join(" > ");
+        if (showParentInMargin && code && code.parent_id) {
+          let currentIter = code;
+          const pathArray = [currentIter.name];
+          while (currentIter.parent_id) {
+            const parent = projectCodes.find((cc) => Number(cc.id) === Number(currentIter.parent_id));
+            if (parent) {
+              pathArray.unshift(parent.name);
+              currentIter = parent;
+            } else break; 
           }
+          displayColor = currentIter.color;
+          displayName = pathArray.join(" > ");
+        }
 
-          return {
-            id: seg.id, code_id: seg.code_id, codeName: displayName,
-            color: displayColor, top: bounds.top, height: bounds.bottom - bounds.top, track: 0,
-          };
-        }).filter(Boolean);
+        return {
+          id: seg.id, code_id: seg.code_id, codeName: displayName,
+          color: displayColor, top: bounds.top, height: bounds.bottom - bounds.top, track: 0,
+        };
+      }).filter(Boolean);
 
       rawBars.sort((a, b) => {
         if (Math.abs(b.height - a.height) > 10) return b.height - a.height;
@@ -622,10 +631,25 @@ const ProjectPageDocumentPanel = ({
         }
         bar.track = currentTrack;
       });
+      
+      setContentHeight(targetRef.current.scrollHeight);
       setMarginBars(rawBars);
-    }, 50);
+    };
 
-    return () => clearTimeout(measureTimer);
+    const measureTimer = setTimeout(measureMargins, 50);
+
+    //resize observer
+    const resizeObserver = new ResizeObserver(() => {
+      // Use requestAnimationFrame to prevent layout thrashing
+      requestAnimationFrame(measureMargins);
+    });
+
+    resizeObserver.observe(targetRef.current);
+
+    return () => {
+      clearTimeout(measureTimer);
+      resizeObserver.disconnect();
+    };
   }, [activeDocument, documentSegments, localSegments, projectCodes, showParentInMargin, isEditing]);
 
   const renderHighlightedContent = (content, segments, codes, searchResult) => {
@@ -761,8 +785,11 @@ const ProjectPageDocumentPanel = ({
   };
 
   const documentShellStyle = {
-    flex: 1, borderLeft: "1px solid #ccc", padding: "30px",borderTop: "1px solid #333",
-    backgroundColor: "#fff", color: "#333", overflowY: "auto", position: "relative",
+    display: "flex",            
+    flexDirection: "column",      
+    boxSizing: "border-box",
+    flex: 1, borderLeft: "1px solid #ccc", padding: "30px", paddingBottom: "10px",borderTop: "1px solid #333",
+    backgroundColor: "#fff", color: "#333", overflow: "hidden", position: "relative",height: "100%",
   };
 
   if (!activeDocument) {
@@ -820,29 +847,52 @@ const ProjectPageDocumentPanel = ({
                    border: "1px solid transparent",
                  }}
                >
-                 {autoSaveStatus === 'saving' ? '⏳ Saving...' : '✓ Saved'}
+                 {autoSaveStatus === 'saving' ? 'Saving...' : 'Saved'}
                </div>
             )}
               <button 
                 onClick={handleSaveEdit} 
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = "#4CAF50";
+                  e.currentTarget.style.color = "white";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = "white";
+                  e.currentTarget.style.color = "#4CAF50";
+                }}
                 style={{ 
                   height: "36px",        // Match height
                   padding: '0 16px', 
-                  background: '#4CAF50', 
-                  color: 'white', 
+                  backgroundColor: 'white', 
+                  color: '#4CAF50', 
                   borderRadius: '4px', 
-                  border: 'none', 
+                  border: '1px solid #4CAF50',
                   cursor: 'pointer', 
                   fontWeight: 'bold',
                   display: 'flex',       // Center the text/icon
-                  alignItems: 'center' 
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                💾 Save
+                <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" fill="none">
+                  <path fill-rule="evenodd" clip-rule="evenodd" d="M18.1716 1C18.702 1 19.2107 1.21071 19.5858 1.58579L22.4142 4.41421C22.7893 4.78929 23 5.29799 23 5.82843V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V4C1 2.34315 2.34315 1 4 1H18.1716ZM4 3C3.44772 3 3 3.44772 3 4V20C3 20.5523 3.44772 21 4 21L5 21L5 15C5 13.3431 6.34315 12 8 12L16 12C17.6569 12 19 13.3431 19 15V21H20C20.5523 21 21 20.5523 21 20V6.82843C21 6.29799 20.7893 5.78929 20.4142 5.41421L18.5858 3.58579C18.2107 3.21071 17.702 3 17.1716 3H17V5C17 6.65685 15.6569 8 14 8H10C8.34315 8 7 6.65685 7 5V3H4ZM17 21V15C17 14.4477 16.5523 14 16 14L8 14C7.44772 14 7 14.4477 7 15L7 21L17 21ZM9 3H15V5C15 5.55228 14.5523 6 14 6H10C9.44772 6 9 5.55228 9 5V3Z" fill="currentColor"/>
+                </svg>
+                Save
               </button>
               
               <button 
                 onClick={handleToggleEdit} 
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(0,0,0,0.05)";
+                  e.currentTarget.style.borderColor = "#666";
+                  e.currentTarget.style.color = "#333";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = "transparent";
+                  e.currentTarget.style.borderColor = "#999";
+                  e.currentTarget.style.color = "#555";
+                }}
                 style={{ 
                   height: "36px",        // Match height
                   padding: '0 16px', 
@@ -852,22 +902,45 @@ const ProjectPageDocumentPanel = ({
                   borderRadius: '4px', 
                   cursor: 'pointer',
                   display: 'flex',       // Center the text
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 Cancel
               </button>
             </div>
           ) : (
-            <button onClick={handleToggleEdit} style={{ padding: '6px 12px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer' }}>
-              ✏️ {isPDF ? "Edit PDF Text (Not Recommended)" : "Edit Text"}
+            <button onClick={handleToggleEdit} 
+
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "#e8e8e8";
+                e.currentTarget.style.borderColor = "#999";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "#f0f0f0";
+                e.currentTarget.style.borderColor = "#ccc";
+              }}
+              style={{ display:'flex',alignItems:'center',padding: '6px 12px', background: '#f0f0f0', color: '#333', border: '1px solid #ccc', borderRadius: '4px', cursor: 'pointer', gap:'6px',transition: 'all 0.2s ease' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="16px" height="16px" viewBox="0 0 24 24" fill="none" style={{transform: 'translateY(-1px)'}}>
+                  <path d="M20.1497 7.93997L8.27971 19.81C7.21971 20.88 4.04971 21.3699 3.27971 20.6599C2.50971 19.9499 3.06969 16.78 4.12969 15.71L15.9997 3.84C16.5478 3.31801 17.2783 3.03097 18.0351 3.04019C18.7919 3.04942 19.5151 3.35418 20.0503 3.88938C20.5855 4.42457 20.8903 5.14781 20.8995 5.90463C20.9088 6.66146 20.6217 7.39189 20.0997 7.93997H20.1497Z" stroke="#000000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M21 21H12" stroke="#000000" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              {isPDF ? "Edit PDF Text (Not Recommended)" : "Edit Text"}
             </button>
           )}
 
           {isPDF && (
             <button
               onClick={() => setIsPdfPreviewCollapsed((prev) => !prev)}
-              style={{ padding: '6px 12px', background: '#1f1f28', color: '#fff', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer' }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "#2a2a35";
+                e.currentTarget.style.borderColor = "#777";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "#1f1f28";
+                e.currentTarget.style.borderColor = "#555";
+              }}
+              style={{ padding: '6px 12px', background: '#1f1f28', color: '#fff', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s ease' }}
               title={isPdfPreviewCollapsed ? 'Show the PDF preview' : 'Hide the PDF preview'}
             >
               {isPdfPreviewCollapsed ? 'Show PDF Preview' : 'Hide PDF Preview'}
@@ -921,86 +994,106 @@ const ProjectPageDocumentPanel = ({
         </div>
       )}
 
-      <div style={{ display: "flex", position: "relative", gap: "16px", alignItems: "stretch" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {isEditing ? (
-            <div style={{ position: "relative", width: "100%", minHeight: "600px", border: "2px solid #646cff", borderRadius: "6px", backgroundColor: "#fafafa", overflow: "hidden" }}>
-            
-            <div
-              ref={bgRef}
-              style={{
-                position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
-                color: "transparent", 
-                fontFamily: "system-ui, sans-serif", fontSize: "16px", lineHeight: "1.6",
-                padding: "15px", boxSizing: "border-box",
-                whiteSpace: "pre-wrap", overflowY: "auto", pointerEvents: "none", zIndex: 1
-              }}
-            >
-              {renderHighlightedContent(editContent, localSegments, projectCodes, currentSearchResult)}
-            </div>
-            
-            <textarea 
-              value={editContent}
-              onChange={handleEditChange}
-              onScroll={handleScroll}
-              spellCheck="false"
-              placeholder={activeDocument.id === "NEW_DOC_PENDING" ? "Start typing your document here..." : ""}
-              style={{ 
-                position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
-                backgroundColor: "transparent", 
-                color: "#222", 
-                border: "none", 
-                padding: "15px", boxSizing: "border-box",
-                fontFamily: "system-ui, sans-serif", fontSize: "16px", lineHeight: "1.6",
-                resize: "none", outline: "none",
-                whiteSpace: "pre-wrap", overflowY: "auto", zIndex: 2
-              }}
-            />
-          </div>
-        ) : (
-          <div
-            ref={viewerRef}
-            tabIndex={0}
-            onMouseUp={handleTextSelection}
-            onKeyUp={handleTextSelection}
-            style={{ width: "100%", paddingRight: isPDF && showPdfPreview ? "0" : "30px", whiteSpace: "pre-wrap", fontSize: "16px", lineHeight: "1.6", fontFamily: "system-ui, sans-serif", outline: "none", position: "relative" }}
-          >
-            {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes, currentSearchResult)}
-          </div>
+      <div style={{ flex: 1, minHeight: 0, position: "relative", display: "flex", height: "100%" }}>
+        <Group direction="horizontal" autoSaveId="doc-internal-layout">
+          
+          {/* Main Text Editor / Viewer */}
+          <Panel defaultSize={isPDF && showPdfPreview ? 45 : 75} minSize={30} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
+            {isEditing ? (
+              <div style={{ position: "relative", flex: 1,minHeight: 0, height: "100%", border: "2px solid #646cff", borderRadius: "6px", backgroundColor: "#fafafa", overflow: "hidden" }}>
+                <div
+                  ref={bgRef}
+                  style={{
+                    position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+                    color: "transparent", 
+                    fontFamily: "system-ui, sans-serif", fontSize: "16px", lineHeight: "1.6",
+                    padding: "15px", boxSizing: "border-box",
+                    whiteSpace: "pre-wrap", overflowY: "auto", pointerEvents: "none", zIndex: 1
+                  }}
+                >
+                  {renderHighlightedContent(editContent, localSegments, projectCodes, currentSearchResult)}
+                </div>
+                
+                <textarea 
+                  value={editContent}
+                  onChange={handleEditChange}
+                  onScroll={handleScroll}
+                  spellCheck="false"
+                  placeholder={activeDocument.id === "NEW_DOC_PENDING" ? "Start typing your document here..." : ""}
+                  style={{ 
+                    position: "absolute", top: 0, left: 0, width: "100%", height: "100%",
+                    backgroundColor: "transparent", 
+                    color: "#222", 
+                    border: "none", 
+                    padding: "15px", boxSizing: "border-box",
+                    fontFamily: "system-ui, sans-serif", fontSize: "16px", lineHeight: "1.6",
+                    resize: "none", outline: "none",
+                    whiteSpace: "pre-wrap", overflowY: "auto", zIndex: 2
+                  }}
+                />
+              </div>
+            ) : (
+              <div
+                ref={viewerRef}
+                tabIndex={0}
+                onMouseUp={handleTextSelection}
+                onKeyUp={handleTextSelection}
+                onScroll={handleScroll}
+                style={{ flex: 1,minHeight: 0, height: "100%", paddingRight: isPDF && showPdfPreview ? "0" : "30px", whiteSpace: "pre-wrap", fontSize: "16px", lineHeight: "1.6", fontFamily: "system-ui, sans-serif", outline: "none", overflowY: "auto" }}
+              >
+                {renderHighlightedContent(activeDocument.content, documentSegments, projectCodes)}
+              </div>
+            )}
+          </Panel>
+
+          <Separator style={{ width: "16px", cursor: "col-resize", backgroundColor: "transparent", display: "flex", justifyContent: "center" }}>
+             <div style={{ width: "2px", height: "100%", backgroundColor: "#eee" }} />
+          </Separator>
+
+          {/* PDF Preview Panel */}
+          {isPDF && showPdfPreview && (
+            <>
+              <Panel defaultSize={35} minSize={20} style={{ display: "flex", flexDirection: "column", backgroundColor: "#0f1115", border: "1px solid #2d2f36", borderRadius: "8px", overflow: "hidden" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #2d2f36", color: "#e5e7eb", backgroundColor: "#151922" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "bold" }}>Original PDF</div>
+                </div>
+                <embed
+                  title={`${activeDocument.filename} preview`}
+                  src={`${pdfPreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                  type="application/pdf"
+                  style={{ width: "100%", flex: 1, border: "none", backgroundColor: "#fff" }}
+                />
+              </Panel>
+              <Separator style={{ width: "16px", cursor: "col-resize", backgroundColor: "transparent", display: "flex", justifyContent: "center" }}>
+                 <div style={{ width: "2px", height: "100%", backgroundColor: "#eee" }} />
+              </Separator>
+            </>
           )}
-        </div>
 
-        {isPDF && showPdfPreview && (
-          <div style={{ flex: "0 0 38%", minWidth: "320px", minHeight: "600px", display: "flex", flexDirection: "column", backgroundColor: "#0f1115", border: "1px solid #2d2f36", borderRadius: "8px", overflow: "hidden" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #2d2f36", color: "#e5e7eb", backgroundColor: "#151922" }}>
-              <div style={{ fontSize: "13px", fontWeight: "bold" }}>Original PDF</div>
+          {isPDF && isPdfPreviewCollapsed && (
+            <div style={{ flex: "0 0 52px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <button
+                onClick={() => setIsPdfPreviewCollapsed(false)}
+                style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", backgroundColor: "#1f1f28", color: "#fff", border: "1px solid #555", borderRadius: "8px", padding: "12px 8px", cursor: "pointer", fontSize: "12px", letterSpacing: "0.4px" }}
+                title="Show the PDF preview"
+              >
+                Show PDF Preview
+              </button>
             </div>
-            <embed
-              title={`${activeDocument.filename} preview`}
-              src={`${pdfPreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-              type="application/pdf"
-              style={{ width: "100%", flex: 1, border: "none", backgroundColor: "#fff" }}
+          )}
+
+          {/* Margin Sidebar Panel */}
+          <Panel defaultSize={20} minSize={10} style={{ position: "relative" }}>
+            <MarginSidebar 
+              marginBars={marginBars} 
+              projectCodes={projectCodes} 
+              onRightClickBar={handleRightClickSegment}
+              scrollRef={marginScrollRef}        
+              contentHeight={contentHeight}
             />
-          </div>
-        )}
+          </Panel>
 
-        {isPDF && isPdfPreviewCollapsed && (
-          <div style={{ flex: "0 0 52px", minHeight: "600px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <button
-              onClick={() => setIsPdfPreviewCollapsed(false)}
-              style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", backgroundColor: "#1f1f28", color: "#fff", border: "1px solid #555", borderRadius: "8px", padding: "12px 8px", cursor: "pointer", fontSize: "12px", letterSpacing: "0.4px" }}
-              title="Show the PDF preview"
-            >
-              Show PDF Preview
-            </button>
-          </div>
-        )}
-
-        <MarginSidebar 
-          marginBars={marginBars} 
-          projectCodes={projectCodes} 
-          onRightClickBar={handleRightClickSegment}
-        />
+        </Group>
       </div>
 
       {segmentContextMenu && (
