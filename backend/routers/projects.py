@@ -169,3 +169,90 @@ def export_project_excel(project_id: int,docs: Optional[str] = None,codes: Optio
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename*=utf-8''{safe_filename}"}
     )
+
+@router.get("/{project_id}/search")
+def search_documents(project_id: int, query: str, db: Session = Depends(get_db)):
+    """Search for text across all documents in a project"""
+    import re
+    
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    if not query or len(query.strip()) == 0:
+        return []
+    
+    query_lower = query.lower().strip()
+    documents = db.query(models.Document).filter(
+        models.Document.project_id == project_id
+    ).all()
+    
+    results = []
+    for doc in documents:
+        if not doc.content:
+            continue
+        
+        is_pdf = doc.filename.lower().endswith('.pdf') or doc.type == 'pdf'
+        content_lower = doc.content.lower()
+        start_pos = 0
+        
+        # Find all occurrences of the query
+        while True:
+            pos = content_lower.find(query_lower, start_pos)
+            if pos == -1:
+                break
+            
+            # Extract context (100 chars before and after)
+            context_start = max(0, pos - 100)
+            context_end = min(len(doc.content), pos + len(query) + 100)
+            context = doc.content[context_start:context_end]
+            
+            # Extract the exact matched text from original content (before normalization)
+            exact_match = doc.content[pos:pos + len(query)]
+            
+            # Normalize whitespace in context for cleaner display
+            context_display = re.sub(r'\s+', ' ', context).strip()
+            
+            # Find where the exact match appears in the normalized context
+            # We search for the normalized version of the matched text
+            exact_match_normalized = re.sub(r'\s+', ' ', exact_match)
+            match_offset_in_display = context_display.find(exact_match_normalized)
+            
+            # If not found, try to find using case-insensitive search
+            if match_offset_in_display == -1:
+                match_offset_in_display = context_display.lower().find(exact_match_normalized.lower())
+            
+            # Add ellipsis if needed - this shifts the offset
+            ellipsis_prefix = ""
+            if context_start > 0:
+                ellipsis_prefix = "..."
+                if match_offset_in_display != -1:
+                    match_offset_in_display += 3
+            
+            context_display = ellipsis_prefix + context_display
+            
+            if context_end < len(doc.content):
+                context_display = context_display + "..."
+            
+            # Calculate page for PDFs
+            if is_pdf:
+                page_num = max(1, (pos // 2000) + 1)
+                position_label = f"Page {page_num}"
+            else:
+                position_label = f"Char {pos}"
+            
+            result = {
+                "document_id": doc.id,
+                "document_filename": doc.filename,
+                "start_char": pos,
+                "end_char": pos + len(query),
+                "context": context_display,
+                "match_offset": max(0, match_offset_in_display),
+                "query_length": len(query),
+                "position_label": position_label,
+                "is_pdf": is_pdf
+            }
+            results.append(result)
+            start_pos = pos + 1
+    
+    return results

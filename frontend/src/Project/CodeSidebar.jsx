@@ -12,7 +12,7 @@ const getRandomColor = () => {
   return color;
 };
 
-function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV }) {
+function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV, pushUndoAction }) {
   const [memoModalOpen, setMemoModalOpen] = useState(false);
   const [memoTargetCode, setMemoTargetCode] = useState(null);
   const [memoError, setMemoError] = useState(null);
@@ -100,9 +100,18 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     }
   };
 
-  const handleUpdateCode= async (e) => {
+  const handleUpdateCode = async (e) => {
     e.preventDefault();
     if(!editingCodeId) return;
+
+    const originalCode = codes.find(c => Number(c.id) === Number(editingCodeId));
+    if (originalCode && pushUndoAction) {
+      pushUndoAction({
+        type: "edit-code",
+        codeId: editingCodeId,
+        previousState: { name: originalCode.name, color: originalCode.color }
+      });
+    }
 
     try {
       const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/${editingCodeId}`, {
@@ -229,6 +238,17 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
       parent_id: c.parent_id,
       order_index: idx
     }));
+
+    if (pushUndoAction) {
+      pushUndoAction({
+        type: "reorder-codes",
+        previousState: codes.map((c, idx) => ({ 
+          id: c.id, 
+          parent_id: c.parent_id || null, 
+          order_index: c.order_index ?? idx 
+        }))
+      });
+    }
 
     if (onReorderCodes) onReorderCodes(remainingCodes);
 
