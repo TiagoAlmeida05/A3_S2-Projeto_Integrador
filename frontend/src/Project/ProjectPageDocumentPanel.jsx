@@ -1114,8 +1114,19 @@ const ProjectPageDocumentPanel = ({
             <h3 style={{ marginTop: 0, marginBottom: "16px" }}>Add Quote Memo</h3>
             <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)} placeholder="Memo text..." rows={5} autoFocus style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", boxSizing: "border-box", marginBottom: "16px", resize: "vertical" }} />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button onClick={() => setIsMemoModalOpen(false)} style={{ padding: "8px 16px", backgroundColor: "#444", border: "none", borderRadius: "8px", color: "white", cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleSaveLocalSegmentMemo} style={{ padding: "8px 16px", backgroundColor: "#646cff", border: "none", borderRadius: "8px", color: "white", cursor: "pointer" }}>Save</button>
+              <button onClick={() => setIsMemoModalOpen(false)} 
+                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "#aaa"; }}
+                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.borderColor = "#555"; }}
+                style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s ease' }}>
+                Cancel
+              </button>
+              <button onClick={handleSaveLocalSegmentMemo} 
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#7a82ff"}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#646cff"}
+                  style={{ padding: '8px 16px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                >
+                  Save Memo
+              </button>
             </div>
           </div>
         </div>

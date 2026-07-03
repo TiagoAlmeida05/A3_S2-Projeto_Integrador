@@ -20,8 +20,23 @@ export default function CodeMemoModal({ open, onClose, onSave, codeName }) {
           placeholder="Write your memo here..."
         />
         <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: '8px 16px', background: '#444', color: 'white', border: 'none', borderRadius: 6 }}>Cancel</button>
-          <button onClick={() => { onSave(text); setText(""); }} disabled={!text.trim()} style={{ padding: '8px 16px', background: '#646cff', color: 'white', border: 'none', borderRadius: 6, fontWeight: 'bold' }}>Save Memo</button>
+          <button 
+              onClick={onClose} 
+              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "#aaa"; }}
+              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.borderColor = "#555"; }}
+              style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s ease' }}
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={() => { onSave(text); setText(""); }} 
+              disabled={!text.trim()} 
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#7a82ff"}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#646cff"}
+              style={{ padding: '8px 16px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' }}
+            >
+              Save Memo
+            </button>
         </div>
       </div>
     </div>
