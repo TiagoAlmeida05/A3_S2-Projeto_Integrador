@@ -8,6 +8,12 @@ venv/
 *.pyc
 __pycache__/
 
+# PyInstaller build artifacts (regenerated from the .spec)
+build/
+dist/
+backend/dist/
+backend/build/
+
 # OS
 .DS_Store
 
@@ -15,3 +21,10 @@ __pycache__/
 backend/qda_data.db
 *.db
 *.sqlite3
+
+# Electron-builder output
+release/
+
+# Logs
+*.log
+backend.log
