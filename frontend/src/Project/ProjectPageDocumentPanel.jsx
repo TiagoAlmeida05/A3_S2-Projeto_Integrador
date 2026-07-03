@@ -1070,17 +1070,6 @@ const ProjectPageDocumentPanel = ({
             </>
           )}
 
-          {isPDF && isPdfPreviewCollapsed && (
-            <div style={{ flex: "0 0 52px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <button
-                onClick={() => setIsPdfPreviewCollapsed(false)}
-                style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", backgroundColor: "#1f1f28", color: "#fff", border: "1px solid #555", borderRadius: "8px", padding: "12px 8px", cursor: "pointer", fontSize: "12px", letterSpacing: "0.4px" }}
-                title="Show the PDF preview"
-              >
-                Show PDF Preview
-              </button>
-            </div>
-          )}
 
           {/* Margin Sidebar Panel */}
           <Panel defaultSize={20} minSize={10} style={{ position: "relative" }}>
@@ -1109,13 +1098,32 @@ const ProjectPageDocumentPanel = ({
       )}
 
       {isMemoModalOpen && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ backgroundColor: "#23232a", padding: "24px", borderRadius: "12px", width: "400px", color: "white", border: "1px solid #444", boxShadow: "0 12px 30px rgba(0,0,0,0.5)" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "16px" }}>Add Quote Memo</h3>
-            <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)} placeholder="Memo text..." rows={5} autoFocus style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", boxSizing: "border-box", marginBottom: "16px", resize: "vertical" }} />
+        <div style={{position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 9999,display: "flex", alignItems: "center", justifyContent: "center"}}>
+          <div style={{ 
+            backgroundColor: "#242424", 
+            padding: "30px", 
+            borderRadius: "8px", 
+            border: "1px solid #444", 
+            width: "400px", 
+            color: "white", 
+            boxShadow: "0 8px 30px rgba(0,0,0,0.6)" 
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: "15px" }}>Add Quote Memo</h3>
+            <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)} placeholder="Memo text..." rows={5} autoFocus style={{ width: "100%", padding: "12px", borderRadius: 4, border: "1px solid #555", backgroundColor: "#111", color: "white", boxSizing: "border-box", marginBottom: "16px", resize: "vertical" }} />
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button onClick={() => setIsMemoModalOpen(false)} style={{ padding: "8px 16px", backgroundColor: "#444", border: "none", borderRadius: "8px", color: "white", cursor: "pointer" }}>Cancel</button>
-              <button onClick={handleSaveLocalSegmentMemo} style={{ padding: "8px 16px", backgroundColor: "#646cff", border: "none", borderRadius: "8px", color: "white", cursor: "pointer" }}>Save</button>
+              <button onClick={() => setIsMemoModalOpen(false)} 
+                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "#aaa"; }}
+                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.borderColor = "#555"; }}
+                style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s ease' }}>
+                Cancel
+              </button>
+              <button onClick={handleSaveLocalSegmentMemo} 
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#7a82ff"}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#646cff"}
+                  style={{ padding: '8px 16px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' }}
+                >
+                  Save Memo
+              </button>
             </div>
           </div>
         </div>
@@ -1201,8 +1209,38 @@ const ProjectPageDocumentPanel = ({
             )}
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
-            <button onClick={handleQuickCodeAction} style={{ flex: 1, padding: "8px 10px", backgroundColor: "#646cff", border: "none", borderRadius: "8px", color: "white", cursor: "pointer" }}>Apply</button>
-            <button onClick={clearTextSelection} style={{ padding: "8px 10px", backgroundColor: "#444", border: "none", borderRadius: "8px", color: "white", cursor: "pointer" }}>Cancel</button>
+            <button 
+              onClick={handleQuickCodeAction} 
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#7a82ff"}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#646cff"}
+              style={{ 
+                flex: 1, padding: "8px 10px", backgroundColor: "#646cff", border: "none", 
+                borderRadius: "6px", color: "white", cursor: "pointer", fontWeight: "bold",
+                transition: "all 0.2s ease"
+              }}
+            >
+              Apply
+            </button>
+            <button 
+              onClick={clearTextSelection} 
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+                e.currentTarget.style.borderColor = "#aaa";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.borderColor = "#555";
+                e.currentTarget.style.color = "#ccc";
+              }}
+              style={{ 
+                padding: "8px 10px", backgroundColor: "transparent", border: "1px solid #555", 
+                color: "#ccc", borderRadius: "6px", cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
