@@ -4,6 +4,8 @@ import ProjectPageDocumentPanel from "./ProjectPageDocumentPanel";
 import ProjectPageSidebar from "./ProjectPageSidebar";
 import ProjectPageTopBar from "./ProjectPageTopBar";
 import ProjectSettingsModal from "./ProjectSettingsModal";
+// V4 Imports
+import { Group, Panel, Separator } from "react-resizable-panels";
 
 const ProjectPageView = ({ page }) => {
   const {
@@ -61,6 +63,12 @@ const ProjectPageView = ({ page }) => {
     
   } = page;
 
+  const handleStyle = {
+    width: "1px",
+    backgroundColor: "#333",
+    cursor: "col-resize",
+  };
+
   return (
     <div
       style={{
@@ -86,62 +94,83 @@ const ProjectPageView = ({ page }) => {
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <ProjectPageSidebar
-          id={id}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          documents={documents}
-          activeDocument={activeDocument}
-          uploadStatus={uploadStatus}
-          uploadProgress={uploadProgress}
-          handleFileUpload={handleFileUpload}
-          handleDocumentClick={handleDocumentClick}
-          handleDeleteDocument={handleDeleteDocument}
-          handleRenameDocument={handleRenameDocument}
-          projectCodes={projectCodes}
-          handleDeleteCode={handleDeleteCode}
-          fetchCodes={fetchCodes}
-          fetchDocuments={fetchDocuments}
-          openCodePanel={openCodePanel}
-          setProjectCodes={setProjectCodes}
-          handleCreateTextDocument={handleCreateTextDocument}
-          handleExportQuotesCSV={handleExportQuotesCSV}
-          handleExportExcel={handleExportExcel}
+        {/* V4 syntax: Group and orientation */}
+        <Group orientation="horizontal" autoSaveId="project-page-layout">
+          
+          <Panel defaultSize={28} minSize={20}>
+            <ProjectPageSidebar
+              id={id}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              documents={documents}
+              activeDocument={activeDocument}
+              uploadStatus={uploadStatus}
+              uploadProgress={uploadProgress}
+              handleFileUpload={handleFileUpload}
+              handleDocumentClick={handleDocumentClick}
+              handleDeleteDocument={handleDeleteDocument}
+              handleRenameDocument={handleRenameDocument}
+              projectCodes={projectCodes}
+              handleDeleteCode={handleDeleteCode}
+              fetchCodes={fetchCodes}
+              fetchDocuments={fetchDocuments}
+              openCodePanel={openCodePanel}
+              setProjectCodes={setProjectCodes}
+              handleCreateTextDocument={handleCreateTextDocument}
+              handleExportQuotesCSV={handleExportQuotesCSV}
+              handleExportExcel={handleExportExcel}
+            />
+          </Panel>
+
+          {/* V4 syntax: Separator */}
+          <Separator style={handleStyle} />
+
+          {codePanelOpen && (
+            <>
+              <Panel defaultSize={30} minSize={20} style={{ minWidth: 0 }}>
+                <ProjectPageCodePanel
+                  API_BASE={API_BASE}
+                  projectId={id}
+                  projectCodes={projectCodes}
+                  documents={documents}
+                  codePanelOpen={codePanelOpen}
+                  activeCode={activeCode}
+                  refreshToken={codePanelRefreshTick}
+                  codeSegments={codeSegments}
+                  setCodePanelOpen={setCodePanelOpen}
+                  setActiveCode={setActiveCode}
+                  setCodeSegments={setCodeSegments}
+                  setActiveDocument={setActiveDocument}
+                  setDocumentSegments={setDocumentSegments}
+                  setPendingQuoteJump={setPendingQuoteJump}
+                  fetchCodes={fetchCodes}
+                  pushUndoAction={pushUndoAction}
+                />
+              </Panel>
+              <Separator style={handleStyle} />
+            </>
+          )}
+
+          <Panel defaultSize={codePanelOpen ? 42 : 72} minSize={30}>
+            <ProjectPageDocumentPanel
+              viewerRef={viewerRef}
+              activeDocument={activeDocument}
+              projectCodes={projectCodes}
+              documentSegments={documentSegments}
+              setUploadStatus={setUploadStatus}
+              setDocumentSegments={setDocumentSegments}
+              setActiveDocument={setActiveDocument}
+              fetchCodes={fetchCodes}
+              fetchDocuments={fetchDocuments}
+              API_BASE={API_BASE}
+              projectId={id}
+              pushUndoAction={pushUndoAction}
+              currentSearchResult={currentSearchResult}
+              setCurrentSearchResult={setCurrentSearchResult}
         />
-        <ProjectPageCodePanel
-          API_BASE={API_BASE}
-          projectId={id}
-          projectCodes={projectCodes}
-          documents={documents}
-          codePanelOpen={codePanelOpen}
-          activeCode={activeCode}
-          refreshToken={codePanelRefreshTick}
-          codeSegments={codeSegments}
-          setCodePanelOpen={setCodePanelOpen}
-          setActiveCode={setActiveCode}
-          setCodeSegments={setCodeSegments}
-          setActiveDocument={setActiveDocument}
-          setDocumentSegments={setDocumentSegments}
-          setPendingQuoteJump={setPendingQuoteJump}
-          fetchCodes={fetchCodes}
-          pushUndoAction={pushUndoAction}
-        />
-        <ProjectPageDocumentPanel
-          viewerRef={viewerRef}
-          activeDocument={activeDocument}
-          projectCodes={projectCodes}
-          documentSegments={documentSegments}
-          setUploadStatus={setUploadStatus}
-          setDocumentSegments={setDocumentSegments}
-          setActiveDocument={setActiveDocument}
-          fetchCodes={fetchCodes}
-          fetchDocuments={fetchDocuments}
-          API_BASE={API_BASE}
-          projectId={id}
-          pushUndoAction={pushUndoAction}
-          currentSearchResult={currentSearchResult}
-          setCurrentSearchResult={setCurrentSearchResult}
-        />
+          </Panel>
+
+        </Group>
       </div>
 
       <CollisionModal

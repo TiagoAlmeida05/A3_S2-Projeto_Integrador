@@ -1,8 +1,21 @@
 import React from 'react';
 
-function MarginSidebar({ marginBars, projectCodes, onRightClickBar }) {
+const getContrastText = (hex) => {
+  if (!hex) return '#FFFFFF';
+  let cleanHex = hex.replace('#', '');
+  if (cleanHex.length === 3) {
+    cleanHex = cleanHex.split('').map(c => c + c).join('');
+  }
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  return yiq >= 128 ? '#000000' : '#FFFFFF';
+};
+
+function MarginSidebar({ marginBars, projectCodes, onRightClickBar, scrollRef, contentHeight }) {
   if (!marginBars || marginBars.length === 0) {
-    return <div style={{ width: '25%', borderLeft: '1px solid #eee', minHeight: '100%' }}></div>;
+    return <div style={{ width: '100%',boxSizing: 'border-box', borderLeft: '1px solid #eee', height: '100%' }}></div>;
   }
 
   // ==========================================
@@ -135,10 +148,12 @@ function MarginSidebar({ marginBars, projectCodes, onRightClickBar }) {
   });
 
   return (
-    <div style={{ width: '25%', position: 'relative', borderLeft: '1px solid #eee', minHeight: '100%', overflowX: 'auto', overflowY: 'hidden', backgroundColor: '#fdfdfd' }}>
-      <div style={{ width: 'max-content', minWidth: '100%', minHeight: '100%', position: 'relative', paddingRight: '20px' }}>
+    <div 
+      ref={scrollRef}
+      style={{ width: '100%',boxSizing: 'border-box', position: 'relative', borderLeft: '1px solid #eee', height: '100%', overflowX: 'auto', overflowY: 'hidden', backgroundColor: '#fdfdfd' }}
+    >
+      <div style={{ width: 'max-content', minWidth: '100%', height: contentHeight ? `${contentHeight}px` : '100%', position: 'relative', paddingRight: '20px' }}>
         
-        {/* RENDER COLORED LINES */}
         {sortedForLines.map((bar, i) => (
           <div 
             key={`line-${bar.id}-${i}`}
@@ -173,31 +188,35 @@ function MarginSidebar({ marginBars, projectCodes, onRightClickBar }) {
               zIndex: 10
             }}
           >
-            {row.bars.map((bar, i) => (
-              <div 
-                key={`label-${bar.id}-${i}`}
-                onContextMenu={(e) => {
-                  if (onRightClickBar) onRightClickBar(e, bar.id);
-                }}
-                style={{
-                  backgroundColor: bar.color,
-                  color: '#fff',
-                  fontSize: '11px',
-                  padding: '0 8px', 
-                  borderRadius: '4px', 
-                  fontWeight: 'bold',
-                  display: 'flex',
-                  alignItems: 'center',
-                  height: `${BOX_HEIGHT}px`,
-                  width: 'max-content',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.15)'
-                }}
-                title={bar.codeName} 
-              >
-                {bar.codeName}
-              </div>
-            ))}
+            {row.bars.map((bar, i) => {
+              const textColor = getContrastText(bar.color);
+
+              return (
+                <div 
+                  key={`label-${bar.id}-${i}`}
+                  onContextMenu={(e) => {
+                    if (onRightClickBar) onRightClickBar(e, bar.id);
+                  }}
+                  style={{
+                    backgroundColor: bar.color,
+                    color: textColor,
+                    fontSize: '11px',
+                    padding: '0 8px', 
+                    borderRadius: '4px', 
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    height: `${BOX_HEIGHT}px`,
+                    width: 'max-content',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.15)'
+                  }}
+                  title={bar.codeName} 
+                >
+                  {bar.codeName}
+                </div>
+              );
+            })}
           </div>
         ))}
         

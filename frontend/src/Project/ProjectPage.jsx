@@ -290,6 +290,8 @@ function ProjectPage() {
             target_id: memo.target_id
           }),
         });
+
+        window.dispatchEvent(new CustomEvent('memos-updated'));
       }
 
       setUploadStatus("Undo complete.");
@@ -364,6 +366,21 @@ function ProjectPage() {
     fetchProjectDetails();
     fetchCodes();
   }, [id]);
+
+  useEffect(() => {
+    const handleCodesMerged = (event) => {
+      const { sourceId, targetId } = event.detail;
+      
+      setDocumentSegments(prevSegments => prevSegments.map(seg => 
+        seg.code_id === sourceId ? { ...seg, code_id: targetId } : seg
+      ));
+
+      fetchCodes(); 
+    };
+    
+    window.addEventListener('codes-merged', handleCodesMerged);
+    return () => window.removeEventListener('codes-merged', handleCodesMerged);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -612,6 +629,8 @@ function ProjectPage() {
           setActiveDocument(null);
           setDocumentSegments([]);
         }
+
+        fetchCodes(); 
 
         pushUndoAction({
           type: "delete-document",

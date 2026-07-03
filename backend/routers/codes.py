@@ -49,6 +49,19 @@ def delete_code(project_id: int, code_id: int, repo: CodeRepository = Depends(ge
         raise HTTPException(status_code=404, detail="Code not found")
     return {"message": "Code deleted successfully"}
 
+@router.post("/merge")
+def merge_codes(project_id: int, merge_req: schemas.CodeMergeRequest, repo: CodeRepository = Depends(get_code_repo)):
+    success = repo.merge(
+        project_id, 
+        merge_req.source_code_id, 
+        merge_req.target_code_id,
+        merge_req.new_name,   
+        merge_req.new_color 
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail="Merge failed. Ensure both codes exist.")
+    return {"message": "Codes merged successfully"}
+  
 @router.get("/export/docx")
 def export_codebook_docx(project_id: int, db: Session = Depends(get_db)):
     # fetch project

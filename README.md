@@ -128,3 +128,28 @@ npm start
 * **WSLg:** If you are using WSL, ensure you are on Windows 11 or have a Wayland/X11 server configured to see the Electron GUI.
 
 ---
+
+
+Backend notes
+
+- System dependency: ffmpeg is required for audio processing (splitting, transcoding).
+
+Why ffmpeg is a system dependency
+- `ffmpeg` is a standalone command-line binary not distributed via PyPI.
+- The code uses `subprocess` to invoke `ffmpeg` and expects the binary on PATH.
+- Pip can install Python bindings (e.g., PyAV) but that still often requires system ffmpeg libraries or a bundled wheel; installing the OS package ensures predictable behavior.
+
+Quick install
+
+- Debian / Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install ffmpeg -y
+```
+
+- macOS (Homebrew):
+
+```bash
+brew install ffmpeg
+```

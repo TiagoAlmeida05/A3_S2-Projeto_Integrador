@@ -97,6 +97,8 @@ class DocumentFolder(Base):
     name = Column(String, nullable=False)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     order_index = Column(Integer, default=0)
+    parent_id = Column(Integer, ForeignKey("document_folders.id", ondelete="CASCADE"), nullable=True)
 
     project = relationship("Project", back_populates="document_folders")
     documents = relationship("Document", back_populates="folder")
+    parent = relationship("DocumentFolder", remote_side=[id], backref="children")

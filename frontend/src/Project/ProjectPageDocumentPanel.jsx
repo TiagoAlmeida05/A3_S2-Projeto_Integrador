@@ -48,18 +48,15 @@ const ProjectPageDocumentPanel = ({
   const [documentMetadata, setDocumentMetadata] = useState({});
 
   useEffect(() => {
-    if (currentSearchResult && activeDocument && currentSearchResult.document_id === activeDocument.id) {
-      
-      setTimeout(() => {
-        if (viewerRef.current) {
-          const elements = viewerRef.current.querySelectorAll('[data-search-result="true"]');
-          if (elements.length > 0) {
-            elements[0].scrollIntoView({ behavior: "smooth", block: "center" });
-          }
-        }
-      }, 100); 
+    if (currentSearchResult && viewerRef.current) {
+      // Find the element containing the search result text and scroll to it
+      const elements = viewerRef.current.querySelectorAll('[data-search-result]');
+      if (elements.length > 0) {
+        elements[0].scrollIntoView({ behavior: "smooth", block: "center" });
+        //setTimeout(() => setCurrentSearchResult(null), 2000); 
+      }
     }
-  }, [currentSearchResult, activeDocument?.id, activeDocument?.content, viewerRef]);
+  }, [currentSearchResult, viewerRef, activeDocument?.id, activeDocument?.content]);
 
   useEffect(() => {
     const handleCloseMenu = () => {
@@ -154,9 +151,6 @@ const ProjectPageDocumentPanel = ({
   };
 
   const handleTextSelection = (e) => {
-    if (currentSearchResult) {
-      setCurrentSearchResult(null);
-    }
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return clearTextSelection();
     const selectedText = selection.toString();
@@ -606,13 +600,10 @@ const ProjectPageDocumentPanel = ({
   const renderHighlightedContent = (content, segments, codes, searchResult) => {
     if(!content) return "";
     
-    const activeSearch = (searchResult && activeDocument && searchResult.document_id === activeDocument.id)
-      ? searchResult 
-      : null;
-    
     if (!segments || segments.length === 0) {
-      if (activeSearch) {
-        const { start_char, end_char } = activeSearch;
+      // If no segments but there's a search result, highlight it
+      if (searchResult) {
+        const { start_char, end_char } = searchResult;
         return [
           <span key="before">{content.slice(0, start_char)}</span>,
           <span
@@ -621,10 +612,7 @@ const ProjectPageDocumentPanel = ({
             style={{
               backgroundColor: "#FFD700",
               color: "#000",
-              fontWeight: "bold",
-              padding: "2px 4px",
-              borderRadius: "3px",
-              animation: "pulse 1s ease-in-out infinite",
+              //borderRadius: "3px"
             }}
           >
             {content.slice(start_char, end_char)}
@@ -641,9 +629,10 @@ const ProjectPageDocumentPanel = ({
       boundaries.add(seg.end_char);
     });
     
-    if (activeSearch) {
-      boundaries.add(activeSearch.start_char);
-      boundaries.add(activeSearch.end_char);
+    // Add search result boundaries
+    if (searchResult) {
+      boundaries.add(searchResult.start_char);
+      boundaries.add(searchResult.end_char);
     }
     
     const sortedBoundaries = Array.from(boundaries).sort((a, b) => a - b);
@@ -656,9 +645,10 @@ const ProjectPageDocumentPanel = ({
       const chunkText = content.slice(start, end);
       const coveringSegments = segments.filter((seg) => seg.start_char <= start && seg.end_char >= end);
 
-      const isSearchResult = activeSearch && 
-        activeSearch.start_char <= start && 
-        activeSearch.end_char >= end;
+      // Check if this chunk is part of the search result
+      const isSearchResult = searchResult && 
+        searchResult.start_char <= start && 
+        searchResult.end_char >= end;
 
       if (isSearchResult) {
         parts.push(
@@ -922,7 +912,6 @@ const ProjectPageDocumentPanel = ({
               value={editContent}
               onChange={handleEditChange}
               onScroll={handleScroll}
-              onClick={() => currentSearchResult && setCurrentSearchResult(null)}
               spellCheck="false"
               placeholder={activeDocument.id === "NEW_DOC_PENDING" ? "Start typing your document here..." : ""}
               style={{ 

@@ -54,8 +54,11 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
 
         <div style={{ marginBottom: '25px', padding: '15px', backgroundColor: '#1a1a1a', borderRadius: '4px', border: '1px dashed #444' }}>
           <label style={{ fontSize: '12px', color: '#888', display: 'block', marginBottom: '5px' }}>Permanent Local Path</label>
-          <div style={{ fontSize: '13px', color: '#aaa', wordBreak: 'break-all' }}>
-            📂 {currentLocalPath || "Stored in database only"}
+          <div style={{ display:'flex',alignItems:'center',fontSize: '13px', color: '#aaa', wordBreak: 'break-all', gap: '6px' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14px" height="14px" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                <path d="M0 1H5L8 3H13V5H3.7457L2.03141 11H4.11144L5.2543 7H16L14 14H0V1Z" fill="#ccc"/>
+            </svg> 
+            {currentLocalPath || "Stored in database only"}
           </div>
           <p style={{ fontSize: '11px', color: '#666', marginTop: '5px', marginBottom: 0 }}>
             Changing the project name above will not change the folder name on your hard drive to prevent data loss.
@@ -77,13 +80,29 @@ function ProjectSettingsModal({ isOpen, onClose, currentName, currentDescription
           <div style={{ display: 'flex', gap: '10px' }}>
             <button 
               onClick={onClose} 
-              style={{ padding: '10px 15px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer' }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+                e.currentTarget.style.borderColor = "#aaa";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.borderColor = "#666";
+                e.currentTarget.style.color = "#ccc";
+              }}
+              style={{ padding: '10px 15px', backgroundColor: 'transparent', border: '1px solid #666', color: '#ccc', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s ease' }}
             >
               Cancel
             </button>
             <button 
               onClick={handleSave} 
-              style={{ padding: '10px 15px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = "#5cd661"; // Brighter green on hover
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = "#4CAF50"; // Standard green
+              }}
+              style={{ padding: '10px 15px', backgroundColor: '#4CAF50', border: 'none', color: 'white', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', transition: 'all 0.2s ease' }}
             >
               Save Changes
             </button>

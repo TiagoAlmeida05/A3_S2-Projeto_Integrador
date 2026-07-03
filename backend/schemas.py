@@ -46,6 +46,12 @@ class CodeReorderItem(BaseModel):
 class CodeReorderRequest(BaseModel):
     codes: List[CodeReorderItem]
 
+class CodeMergeRequest(BaseModel):
+    source_code_id: int
+    target_code_id: int
+    new_name: Optional[str] = None
+    new_color: Optional[str] = None
+    
 
 # Segment Schemas 
 
@@ -87,6 +93,13 @@ class MemoResponse(MemoBase):
 # Document and Folder Schemas
 
 class FolderCreate(BaseModel):
+    name: str
+    parent_id: Optional[int] = None
+
+class FolderMoveRequest(BaseModel):
+    parent_id: Optional[int] = None
+
+class FolderRename(BaseModel):
     name: str
 
 class FolderReorderItem(BaseModel):

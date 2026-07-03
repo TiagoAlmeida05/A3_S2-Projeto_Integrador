@@ -1,5 +1,23 @@
 import { useState, useEffect, useRef } from "react";
 
+const getContrastText = (hex) => {
+  if (!hex) return '#FFFFFF';
+  
+  let cleanHex = hex.replace('#', '');
+  
+  if (cleanHex.length === 3) {
+    cleanHex = cleanHex.split('').map(c => c + c).join('');
+  }
+  
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  
+  return yiq >= 128 ? '#000000' : '#FFFFFF';
+};
+
 const ProjectPageCodePanel = ({
   API_BASE,
   projectId,
@@ -133,7 +151,7 @@ const ProjectPageCodePanel = ({
   const hasChildren = activeCode && projectCodes.some((c) => Number(c.parent_id) === Number(activeCode.id));
 
   return (
-    <div style={{ width: "360px", display: "flex", flexDirection: "column", border: "1px solid #ccc",borderRight: "1px solid #333" , padding: "20px", backgroundColor: "#111", color: "#fff", overflowY: "auto",borderTop: "1px solid #ccc" }}>
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", border: "1px solid #ccc",borderRight: "1px solid #333" , padding: "20px", backgroundColor: "#111", color: "#fff",borderTop: "1px solid #ccc", overflow: "hidden", boxSizing: "border-box", }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
         <div>
           <h3 style={{ margin: 0, fontSize: "18px" }}>Compiled Quotes</h3>
@@ -174,9 +192,9 @@ const ProjectPageCodePanel = ({
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {(() => {
-              const groupedQuotes = [];
+              const mergedQuotes = [];
               localSegments.forEach((quote) => {
-                const existing = groupedQuotes.find(
+                const existing = mergedQuotes.find(
                   (group) =>
                     group.document_id === quote.document_id &&
                     group.start_char === quote.start_char &&
@@ -189,11 +207,11 @@ const ProjectPageCodePanel = ({
                 if (existing) {
                   existing.badges.push(badgeData);
                 } else {
-                  groupedQuotes.push({ ...quote, badges: [badgeData] });
+                  mergedQuotes.push({ ...quote, badges: [badgeData] });
                 }
               });
 
-              groupedQuotes.forEach((quote) => {
+              mergedQuotes.forEach((quote) => {
                 quote.badges.sort((a, b) => {
                   const idxA = projectCodes.findIndex((code) => code.name === a.name);
                   const idxB = projectCodes.findIndex((code) => code.name === b.name);
@@ -201,83 +219,131 @@ const ProjectPageCodePanel = ({
                 });
               });
 
-              return groupedQuotes.map((quote, idx) => {
+              const quotesByDocument = mergedQuotes.reduce((groups, quote) => {
                 const docObj = documents?.find(d => Number(d.id) === Number(quote.document_id));
                 const docName = docObj ? docObj.filename : `Document #${quote.document_id}`;
 
-                const isSelected = quote.badges.some((badge) => badge.segment_id === selectedQuoteId);
-                const primarySegmentId = quote.badges[0]?.segment_id ?? quote.id;
-
-                let before = "";
-                let highlight = quote.content || "Empty quote";
-                let after = "";
-
-                if (docCache[quote.document_id]?.content && quote.start_char !== undefined && quote.end_char !== undefined) {
-                  const fullText = docCache[quote.document_id].content;
-                  const start = quote.start_char;
-                  const end = quote.end_char;
-                  
-                  const pad = 120; 
-                  const cStart = Math.max(0, start - pad);
-                  const cEnd = Math.min(fullText.length, end + pad);
-
-                  before = fullText.substring(cStart, start);
-                  if (cStart > 0) before = "..." + before;
-
-                  highlight = fullText.substring(start, end) || quote.content;
-
-                  after = fullText.substring(end, cEnd);
-                  if (cEnd < fullText.length) after = after + "...";
+                if (!groups[quote.document_id]) {
+                  groups[quote.document_id] = {
+                    documentId: quote.document_id,
+                    documentName: docName,
+                    quotes: []
+                  };
                 }
+                groups[quote.document_id].quotes.push(quote);
+                return groups;
+              }, {});
 
-                return (
-                  <button
-                    key={`grouped-${primarySegmentId}-${idx}`}
-                    onClick={() => handleQuoteClick({ id: primarySegmentId, document_id: quote.document_id })}
-                    style={{
-                      textAlign: "left",
-                      backgroundColor: isSelected ? "#1f1f2a" : "#17171d",
-                      border: "1px solid #333",
-                      borderRadius: "8px",
-                      padding: "14px",
-                      color: "white",
-                      cursor: "pointer",
-                      transition: "background-color 0.2s ease",
-                      width: "100%",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                          <span style={{ fontWeight: "600", fontSize: "14px", color: '#ccc' }}>📄 {docName}</span>
-                          {quote.badges.map((badge) => (
-                            <div key={badge.segment_id} style={{ display: "flex", alignItems: "center", backgroundColor: badge.color, borderRadius: "4px", overflow: "hidden" }}>
-                              <span style={{ color: "#fff", fontSize: "10px", padding: "2px 6px", fontWeight: "bold" }}>{badge.name}</span>
-                              <span
-                                onClick={(e) => handleDeleteSegment(e, badge.segment_id)}
-                                style={{ backgroundColor: "rgba(0,0,0,0.2)", color: "#fff", padding: "2px 6px", fontSize: "10px", cursor: "pointer" }}
-                                title={`Remove ${badge.name}`}
-                                onMouseOver={(e) => (e.target.style.backgroundColor = "rgba(255,0,0,0.5)")}
-                                onMouseOut={(e) => (e.target.style.backgroundColor = "rgba(0,0,0,0.2)")}
-                              >
-                                ×
-                              </span>
-                            </div>
-                          ))}
+              return Object.values(quotesByDocument).map((docGroup) => (
+                <div 
+                  key={`doc-group-${docGroup.documentId}`} 
+                  style={{
+                    backgroundColor: "#17171d",
+                    border: "1px solid #333",
+                    borderRadius: "8px",
+                    padding: "16px",
+                  }}
+                >
+                  {/* --- DOCUMENT HEADER --- */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+                    <span style={{ fontWeight: "600", fontSize: "14px", color: '#ccc' }}>📄 {docGroup.documentName}</span>
+                  </div>
+
+                  {/* --- NESTED QUOTES LIST --- */}
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    {docGroup.quotes.map((quote, idx) => {
+                      const isSelected = quote.badges.some((badge) => badge.segment_id === selectedQuoteId);
+                      const primarySegmentId = quote.badges[0]?.segment_id ?? quote.id;
+
+                      let before = "";
+                      let highlight = quote.content || "Empty quote";
+                      let after = "";
+
+                      if (docCache[quote.document_id]?.content && quote.start_char !== undefined && quote.end_char !== undefined) {
+                        const fullText = docCache[quote.document_id].content;
+                        const start = quote.start_char;
+                        const end = quote.end_char;
+                        
+                        const pad = 120; 
+                        const cStart = Math.max(0, start - pad);
+                        const cEnd = Math.min(fullText.length, end + pad);
+
+                        before = fullText.substring(cStart, start);
+                        if (cStart > 0) before = "..." + before;
+
+                        highlight = fullText.substring(start, end) || quote.content;
+
+                        after = fullText.substring(end, cEnd);
+                        if (cEnd < fullText.length) after = after + "...";
+                      }
+
+                      const isLastQuote = idx === docGroup.quotes.length - 1;
+
+                      return (
+                        <div
+                          key={`quote-${primarySegmentId}`}
+                          onClick={() => handleQuoteClick({ id: primarySegmentId, document_id: quote.document_id })}
+                          style={{
+                            padding: isSelected ? "10px" : "10px 0",
+                            backgroundColor: isSelected ? "#1f1f2a" : "transparent",
+                            borderRadius: isSelected ? "6px" : "0",
+                            borderBottom: (!isLastQuote && !isSelected) ? "1px dashed #444" : "none",
+                            marginBottom: !isLastQuote ? "16px" : "0",
+                            cursor: "pointer",
+                            transition: "background-color 0.2s ease",
+                          }}
+                        >
+                          {/* Badges Area */}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
+                            {quote.badges.map((badge) => {
+                              const textColor = getContrastText(badge.color);
+                              
+                              return (
+                                <div key={badge.segment_id} style={{ display: "flex", alignItems: "center", backgroundColor: badge.color, borderRadius: "4px", overflow: "hidden" }}>
+                                  
+                                  <span style={{ color: textColor, fontSize: "10px", padding: "2px 6px", fontWeight: "bold" }}>
+                                    {badge.name}
+                                  </span>
+                                  
+                                  <span
+                                    onClick={(e) => handleDeleteSegment(e, badge.segment_id)}
+                                    style={{ 
+                                      backgroundColor: "rgba(0,0,0,0.15)", 
+                                      color: textColor,                   
+                                      padding: "2px 6px", 
+                                      fontSize: "10px", 
+                                      cursor: "pointer" 
+                                    }}
+                                    title={`Remove ${badge.name}`}
+                                    onMouseOver={(e) => (e.target.style.backgroundColor = "rgba(255,0,0,0.6)")}
+                                    onMouseOut={(e) => (e.target.style.backgroundColor = "rgba(0,0,0,0.15)")}
+                                  >
+                                    ×
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Text Snippet Area */}
+                          <div style={{ fontSize: "14px", lineHeight: "1.5", color: "#ddd" }}>
+                            {before}
+                            <span style={{ 
+                              backgroundColor: quote.badges[0]?.color || "#646cff", 
+                              color: getContrastText(quote.badges[0]?.color || "#646cff"), 
+                              borderRadius: "4px", 
+                              padding: "0 3px" 
+                            }}>
+                              {highlight}
+                            </span>
+                            {after}
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  
-                    <div style={{ fontSize: "14px", lineHeight: "1.5", color: "#ddd" }}>
-                      {before}
-                      <span style={{ backgroundColor: quote.badges[0]?.color || "#646cff", color: "#fff", borderRadius: "4px", padding: "0 3px" }}>
-                        {highlight}
-                      </span>
-                      {after}
-                    </div>
-                  </button>
-                );
-              });
+                      );
+                    })}
+                  </div>
+                </div>
+              ));
             })()}
           </div>
         )}
