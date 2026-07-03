@@ -1070,17 +1070,6 @@ const ProjectPageDocumentPanel = ({
             </>
           )}
 
-          {isPDF && isPdfPreviewCollapsed && (
-            <div style={{ flex: "0 0 52px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <button
-                onClick={() => setIsPdfPreviewCollapsed(false)}
-                style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", backgroundColor: "#1f1f28", color: "#fff", border: "1px solid #555", borderRadius: "8px", padding: "12px 8px", cursor: "pointer", fontSize: "12px", letterSpacing: "0.4px" }}
-                title="Show the PDF preview"
-              >
-                Show PDF Preview
-              </button>
-            </div>
-          )}
 
           {/* Margin Sidebar Panel */}
           <Panel defaultSize={20} minSize={10} style={{ position: "relative" }}>
