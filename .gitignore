@@ -9,7 +9,6 @@ venv/
 __pycache__/
 
 # PyInstaller build artifacts (regenerated from the .spec)
-build/
 dist/
 backend/dist/
 backend/build/
