@@ -204,7 +204,6 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
         content_lower = doc.content.lower()
         start_pos = 0
         
-        # Find all occurrences of the query
        # Find all occurrences of the query
         while True:
             pos = content_lower.find(query_lower, start_pos)
@@ -216,9 +215,6 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
             context_end = min(len(doc.content), pos + len(query) + 100)
             context = doc.content[context_start:context_end]
             
-            # --- CORREÇÃO AQUI ---
-            # Em vez de usar .find(), calculamos a posição matemática exata da letra no excerto.
-            # Isto garante que destaca exatamente a letra certa, mesmo que existam várias iguais.
             match_offset_in_display = pos - context_start
             
             # Substituímos as quebras de linha por espaços para ficar bonito no menu,
