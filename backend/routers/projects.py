@@ -183,12 +183,20 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
         return []
     
     query_lower = query.lower().strip()
+    
     documents = db.query(models.Document).filter(
         models.Document.project_id == project_id
-    ).all()
+    ).distinct().all()
     
     results = []
+    
+    seen_doc_ids = set()
+    
     for doc in documents:
+        if doc.id in seen_doc_ids:
+            continue
+        seen_doc_ids.add(doc.id)
+        
         if not doc.content:
             continue
         
@@ -214,7 +222,6 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
             context_display = re.sub(r'\s+', ' ', context).strip()
             
             # Find where the exact match appears in the normalized context
-            # We search for the normalized version of the matched text
             exact_match_normalized = re.sub(r'\s+', ' ', exact_match)
             match_offset_in_display = context_display.find(exact_match_normalized)
             
@@ -253,6 +260,7 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
                 "is_pdf": is_pdf
             }
             results.append(result)
-            start_pos = pos + 1
+            
+            start_pos = pos + len(query)
     
     return results

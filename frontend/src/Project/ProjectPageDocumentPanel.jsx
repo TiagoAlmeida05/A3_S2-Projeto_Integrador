@@ -74,6 +74,24 @@ const ProjectPageDocumentPanel = ({
   }, [currentSearchResult, viewerRef, activeDocument?.id, activeDocument?.content]);
 
   useEffect(() => {
+    if (!currentSearchResult) return;
+
+    const handleGlobalClick = () => {
+      setCurrentSearchResult(null);
+    };
+
+    const timer = setTimeout(() => {
+      window.addEventListener("click", handleGlobalClick);
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("click", handleGlobalClick);
+    };
+  }, [currentSearchResult, setCurrentSearchResult]);
+
+  
+  useEffect(() => {
     const handleCloseMenu = () => {
       if (segmentContextMenu) {
         setSegmentContextMenu(null);
