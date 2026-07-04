@@ -19,6 +19,7 @@ function createWindow () {
   });
 
   mainWindow.maximize();
+  mainWindow.removeMenu();
   
   if (app.isPackaged) {
     mainWindow.loadFile(path.join(__dirname, 'frontend', 'dist', 'index.html'));
