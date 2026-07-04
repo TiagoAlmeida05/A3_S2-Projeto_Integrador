@@ -25,6 +25,7 @@ function DocumentSidebar({
   const [sortMode, setSortMode] = useState("custom");
   const [metadataFilterKey, setMetadataFilterKey] = useState("");
   const [metadataDialog, setMetadataDialog] = useState({ isOpen: false, documentId: null, documentName: "" });
+  const [metadataFieldSelection, setMetadataFieldSelection] = useState("Date"); 
   const [metadataFieldName, setMetadataFieldName] = useState("");
   const [metadataFieldValue, setMetadataFieldValue] = useState("");
   const [folderToDelete, setFolderToDelete] = useState(null);
@@ -46,6 +47,15 @@ function DocumentSidebar({
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [projectId]);
+
+  useEffect(() => {
+    const handleOpenMetadata = (e) => {
+      openMetadataDialog(e.detail.documentId, e.detail.documentName);
+    };
+    
+    window.addEventListener('open-metadata', handleOpenMetadata);
+    return () => window.removeEventListener('open-metadata', handleOpenMetadata);
+  }, []);
 
   const normalizeMetadata = (doc) => {
     if (!doc || !doc.metadata || typeof doc.metadata !== "object") {
@@ -234,6 +244,7 @@ function DocumentSidebar({
 
   const openMetadataDialog = (documentId, documentName) => {
     setMetadataDialog({ isOpen: true, documentId, documentName: documentName || "Document" });
+    setMetadataFieldSelection("Date");
     setMetadataFieldName("");
     setMetadataFieldValue("");
     setContextMenu(null);
@@ -241,23 +252,27 @@ function DocumentSidebar({
 
   const closeMetadataDialog = () => {
     setMetadataDialog({ isOpen: false, documentId: null, documentName: "" });
+    setMetadataFieldSelection("Date");
     setMetadataFieldName("");
     setMetadataFieldValue("");
   };
 
   const saveDocumentMetadata = async () => {
-    const fieldName = metadataFieldName.trim();
+    const finalFieldName = metadataFieldSelection === "Custom..." 
+      ? metadataFieldName.trim() 
+      : metadataFieldSelection.trim();
+      
     const fieldValue = metadataFieldValue.trim();
-    if (!fieldName || !metadataDialog.documentId) return;
+    if (!finalFieldName || !metadataDialog.documentId) return;
 
     const currentDocument = documents.find((doc) => doc.id === metadataDialog.documentId);
     const currentMetadata = normalizeMetadata(currentDocument);
     const nextMetadata = { ...currentMetadata };
 
     if (fieldValue) {
-      nextMetadata[fieldName] = fieldValue;
+      nextMetadata[finalFieldName] = fieldValue;
     } else {
-      delete nextMetadata[fieldName];
+      delete nextMetadata[finalFieldName];
     }
 
     try {
@@ -1134,19 +1149,56 @@ function DocumentSidebar({
       )}
 
       {metadataDialog.isOpen && (
-        <div onClick={closeMetadataDialog} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.55)', display: 'flex', alignItems: 'center', justifyIntent: 'center', justifyContent: 'center', zIndex: 10000, padding: '16px' }}>
+        <div onClick={closeMetadataDialog} style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, padding: '16px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '420px', backgroundColor: '#1c1c22', border: '1px solid #444', borderRadius: '12px', padding: '18px', color: 'white', boxShadow: '0 20px 40px rgba(0,0,0,0.45)' }}>
             <h4 style={{ marginTop: 0, marginBottom: '6px' }}>Add details to this document</h4>
             <p style={{ marginTop: 0, color: '#b8b8b8', fontSize: '13px', lineHeight: 1.5 }}>Use simple details to easily locate items later.</p>
             <div style={{ marginBottom: '14px', fontSize: '12px', color: '#8f8f8f' }}>{metadataDialog.documentName}</div>
+            
             <label style={{ display: 'block', fontSize: '13px', marginBottom: '10px' }}>
-              Label name
-              <input value={metadataFieldName} onChange={(e) => setMetadataFieldName(e.target.value)} placeholder='Interview date' style={{ width: '100%', marginTop: '6px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', backgroundColor: '#111', color: 'white', boxSizing: 'border-box' }} />
+              Detail Category
+              <select 
+                value={metadataFieldSelection} 
+                onChange={(e) => setMetadataFieldSelection(e.target.value)} 
+                style={{ width: '100%', marginTop: '6px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', backgroundColor: '#111', color: 'white', boxSizing: 'border-box', cursor: 'pointer' }}
+              >
+                <option value="Date">Date</option>
+                <option value="Location">Location</option>
+                <option value="Interviewer">Interviewer</option>
+                <option value="Participant Type">Participant Type</option>
+                <option value="Demographic">Demographic</option>
+                <option value="Custom...">✨ Custom...</option>
+              </select>
             </label>
+
+            {metadataFieldSelection === "Custom..." && (
+              <label style={{ display: 'block', fontSize: '13px', marginBottom: '10px' }}>
+                Custom Label Name
+                <input autoFocus value={metadataFieldName} onChange={(e) => setMetadataFieldName(e.target.value)} placeholder='e.g., Project Phase' style={{ width: '100%', marginTop: '6px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', backgroundColor: '#111', color: 'white', boxSizing: 'border-box' }} />
+              </label>
+            )}
+
             <label style={{ display: 'block', fontSize: '13px', marginBottom: '16px' }}>
-              Label value
-              <input value={metadataFieldValue} onChange={(e) => setMetadataFieldValue(e.target.value)} placeholder='Lisbon' style={{ width: '100%', marginTop: '6px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #444', backgroundColor: '#111', color: 'white', boxSizing: 'border-box' }} />
+              Value
+              <input 
+                type={metadataFieldSelection === "Date" ? "date" : "text"}
+                value={metadataFieldValue} 
+                onChange={(e) => setMetadataFieldValue(e.target.value)} 
+                placeholder={metadataFieldSelection === "Custom..." ? 'e.g., Phase 1' : 'e.g., Lisbon or Tag'} 
+                style={{ 
+                  width: '100%', 
+                  marginTop: '6px', 
+                  padding: '10px 12px', 
+                  borderRadius: '8px', 
+                  border: '1px solid #444', 
+                  backgroundColor: '#111', 
+                  color: 'white', 
+                  boxSizing: 'border-box',
+                  colorScheme: 'dark' 
+                }} 
+              />
             </label>
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button onClick={closeMetadataDialog} style={{ padding: '9px 14px', borderRadius: '8px', border: '1px solid #555', backgroundColor: 'transparent', color: '#ddd', cursor: 'pointer' }}>Cancel</button>
               <button onClick={saveDocumentMetadata} style={{ padding: '9px 14px', borderRadius: '8px', border: 'none', backgroundColor: '#646cff', color: 'white', cursor: 'pointer', fontWeight: 'bold' }}>Save details</button>

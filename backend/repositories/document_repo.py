@@ -139,19 +139,13 @@ class DocumentRepository:
         if not doc:
             return None
 
-        current_metadata = self._deserialize_metadata(getattr(doc, "metadata_json", None))
+        sanitized_metadata = {
+            str(k).strip(): str(v).strip() 
+            for k, v in metadata_updates.items() 
+            if str(k).strip() and v is not None and str(v).strip()
+        }
 
-        for key, value in metadata_updates.items():
-            normalized_key = str(key).strip()
-            if not normalized_key:
-                continue
-
-            if value is None or (isinstance(value, str) and not value.strip()):
-                current_metadata.pop(normalized_key, None)
-            else:
-                current_metadata[normalized_key] = str(value).strip()
-
-        doc.metadata_json = self._serialize_metadata(current_metadata)
+        doc.metadata_json = self._serialize_metadata(sanitized_metadata)
         self.db.commit()
         self.db.refresh(doc)
         return doc

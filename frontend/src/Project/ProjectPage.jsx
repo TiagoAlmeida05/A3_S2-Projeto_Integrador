@@ -95,7 +95,16 @@ function ProjectPage() {
   const fetchDocuments = () => {
     fetch(`${API_BASE}/projects/${id}/documents/`)
       .then((res) => res.json())
-      .then((data) => setDocuments(data))
+      .then((data) => {
+        setDocuments(data);
+        
+        setActiveDocument((prevActive) => {
+          if (!prevActive || prevActive.id === "NEW_DOC_PENDING") return prevActive;
+          
+          const freshDoc = data.find((d) => d.id === prevActive.id);
+          return freshDoc ? { ...prevActive, metadata: freshDoc.metadata, folder_id: freshDoc.folder_id } : prevActive;
+        });
+      })
       .catch((err) => console.error(err));
   };
 
@@ -292,6 +301,15 @@ function ProjectPage() {
         });
 
         window.dispatchEvent(new CustomEvent('memos-updated'));
+        
+      } else if (lastAction.type === "edit-metadata") {
+        await fetch(`${API_BASE}/projects/${id}/documents/${lastAction.documentId}/metadata`, {
+          method: "PUT", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ metadata: lastAction.previousMetadata }),
+        });
+        // This will instantly update the sidebar and active document!
+        fetchDocuments(); 
       }
 
       setUploadStatus("Undo complete.");
