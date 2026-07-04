@@ -165,6 +165,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   const handleDragStart = (e, codeId) => {
     setDraggedId(codeId);
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(codeId)); 
   };
 
   const isDecendant = (childId, parentId) => {
@@ -203,7 +204,6 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     setDraggedId(null);
     setDragOverId(null);
     setDragPosition(null);
-    setPendingDropAction(null);
   };
 
   const executeReorder = async (sourceId, targetCode, position) => {
