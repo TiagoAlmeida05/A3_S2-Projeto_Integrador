@@ -205,6 +205,7 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
         start_pos = 0
         
         # Find all occurrences of the query
+       # Find all occurrences of the query
         while True:
             pos = content_lower.find(query_lower, start_pos)
             if pos == -1:
@@ -215,26 +216,20 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
             context_end = min(len(doc.content), pos + len(query) + 100)
             context = doc.content[context_start:context_end]
             
-            # Extract the exact matched text from original content (before normalization)
-            exact_match = doc.content[pos:pos + len(query)]
+            # --- CORREÇÃO AQUI ---
+            # Em vez de usar .find(), calculamos a posição matemática exata da letra no excerto.
+            # Isto garante que destaca exatamente a letra certa, mesmo que existam várias iguais.
+            match_offset_in_display = pos - context_start
             
-            # Normalize whitespace in context for cleaner display
-            context_display = re.sub(r'\s+', ' ', context).strip()
-            
-            # Find where the exact match appears in the normalized context
-            exact_match_normalized = re.sub(r'\s+', ' ', exact_match)
-            match_offset_in_display = context_display.find(exact_match_normalized)
-            
-            # If not found, try to find using case-insensitive search
-            if match_offset_in_display == -1:
-                match_offset_in_display = context_display.lower().find(exact_match_normalized.lower())
+            # Substituímos as quebras de linha por espaços para ficar bonito no menu,
+            # mas sem alterar o tamanho do texto (ao contrário do re.sub que estragava a posição).
+            context_display = context.replace('\n', ' ').replace('\r', ' ')
             
             # Add ellipsis if needed - this shifts the offset
             ellipsis_prefix = ""
             if context_start > 0:
                 ellipsis_prefix = "..."
-                if match_offset_in_display != -1:
-                    match_offset_in_display += 3
+                match_offset_in_display += 3
             
             context_display = ellipsis_prefix + context_display
             
@@ -254,13 +249,14 @@ def search_documents(project_id: int, query: str, db: Session = Depends(get_db))
                 "start_char": pos,
                 "end_char": pos + len(query),
                 "context": context_display,
-                "match_offset": max(0, match_offset_in_display),
+                "match_offset": match_offset_in_display,
                 "query_length": len(query),
                 "position_label": position_label,
                 "is_pdf": is_pdf
             }
             results.append(result)
             
+            # Advance by the length of the query
             start_pos = pos + len(query)
     
     return results
