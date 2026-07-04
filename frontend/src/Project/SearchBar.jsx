@@ -93,14 +93,22 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
         `${API_BASE}/projects/${projectId}/search?query=${encodeURIComponent(searchQuery)}`
       );
       if (response.ok) {
-        const data = await response.json();
+        const rawData = await response.json();
+        
+        // This removes results that have the exact same document_id AND start_char
+        const uniqueData = rawData.filter((item, index, self) =>
+          index === self.findIndex((t) => (
+            t.document_id === item.document_id && 
+            t.start_char === item.start_char
+          ))
+        );
         
         // ONLY update the UI if the user hasn't typed something else in the meantime!
         if (latestQuery.current === searchQuery) {
-          setResults(data);
+          setResults(uniqueData);
           setShowResults(true);
           if (onSearchResults) {
-            onSearchResults(data);
+            onSearchResults(uniqueData);
           }
         }
       }
