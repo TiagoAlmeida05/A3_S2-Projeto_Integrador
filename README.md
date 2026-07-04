@@ -22,7 +22,7 @@ Designed to streamline document management, audio transcription, and complex qua
 ### Installation
 1. Download the latest release of **jUPiter QDA** for your operating system from the **[Releases Page]**.
 2. **Windows:** Run the `jUPiter.QDA.Setup.1.0.0.exe ` installer.
-3. **Linux:** Install the `jUPiter.QDA.Setup.AppImage` and run it.
+3. **Linux:** Install the `jUPiter.QDA-1.0.0.AppImage` and run it.
 
 ### Launching the App
 Simply launch **jUPiter QDA** from your desktop or applications menu. The application will initialize in its own native window, ready for you to create or open a project.
