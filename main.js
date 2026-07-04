@@ -6,11 +6,17 @@ const { spawn } = require('child_process');
 let mainWindow;
 let backendProcess;
 
+function getWindowIcon() {
+  if (process.platform === 'darwin') return path.join(__dirname, 'build', 'logo.icns');
+  if (process.platform === 'linux') return path.join(__dirname, 'build', 'logo.png');
+  return path.join(__dirname, 'build', 'logo.ico');
+}
+
 function createWindow () {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    icon: path.join(__dirname, 'build', 'logo.ico'), 
+    icon: getWindowIcon(),
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: true, 
@@ -34,11 +40,23 @@ function log(msg) {
   fs.appendFileSync(logPath, `[${new Date().toISOString()}] ${msg}\n`);
 }
 
+function getBackendExecutableName() {
+  return process.platform === 'win32' ? 'jupiter-backend.exe' : 'jupiter-backend';
+}
+
 // Function to start the FastAPI sidecar
 function startBackend() {
   if (app.isPackaged) {
-    const backendPath = path.join(process.resourcesPath, 'backend', 'jupiter-backend', 'jupiter-backend.exe');
+    const backendPath = path.join(process.resourcesPath, 'backend', 'jupiter-backend', getBackendExecutableName());
     const userDataPath = app.getPath('userData');
+
+    if (process.platform !== 'win32' && fs.existsSync(backendPath)) {
+      try {
+        fs.chmodSync(backendPath, 0o755);
+      } catch (err) {
+        log(`Failed to chmod backend binary: ${err.message}`);
+      }
+    } 
     
     backendProcess = spawn(backendPath, [], {
       cwd: path.join(process.resourcesPath, 'backend'),
