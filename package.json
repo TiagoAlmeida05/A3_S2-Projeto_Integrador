@@ -1,8 +1,13 @@
 {
   "name": "jupiter-qda",
   "version": "1.0.0",
+  "license": "ISC",
   "main": "main.js",
   "scripts": {
+    "dev": "concurrently -k \"npm run dev:frontend\" \"npm run dev:backend\" \"npm run dev:electron\"",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "cd backend && env/bin/python -m uvicorn main:app --reload --port 8000",
+    "dev:electron": "wait-on http://localhost:5173 && electron .",
     "start": "electron .",
     "build:react": "cd frontend && npm run build",
     "build:win": "npm run build:react && electron-builder --win",
@@ -12,11 +17,12 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
   "description": "Qualitative Data Analysis Tool",
   "devDependencies": {
+    "concurrently": "^9.2.3",
     "electron": "^41.2.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "wait-on": "^8.0.5"
   },
   "dependencies": {
     "axios": "^1.15.2",
