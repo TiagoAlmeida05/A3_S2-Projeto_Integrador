@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
-from typing import Optional
-import models
-import schemas
+
+import app.models as models
+import app.schemas as schemas
 
 class CodeRepository:
     def __init__(self, db: Session):

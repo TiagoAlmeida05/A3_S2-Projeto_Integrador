@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from database import get_db
-import schemas
-import models
-from repositories.memo_repo import MemoRepository
+
+from app.database import get_db
+import app.schemas as schemas
+import app.models as models
+from app.repositories import MemoRepository
 
 router = APIRouter(tags=["Memos"])
 

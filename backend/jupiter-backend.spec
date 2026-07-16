@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['main.py'],
+    ['run_backend.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -15,7 +15,7 @@ a = Analysis(
     'uvicorn.protocols.websockets',
     'uvicorn.protocols.websockets.auto',
     'uvicorn.lifespan',
-    'uvicorn.lifespan.on',],
+    'uvicorn.lifespan.on'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -5,10 +5,10 @@ from typing import List, Optional
 import os
 import json
 
-from database import get_db
-import schemas
-from repositories.document_repo import DocumentRepository
-from repositories.project_repo import ProjectRepository
+from app.database import get_db
+import app.schemas as schemas
+from app.repositories import DocumentRepository
+from app.repositories import ProjectRepository
 
 # Note the prefix includes the project_id!
 router = APIRouter(

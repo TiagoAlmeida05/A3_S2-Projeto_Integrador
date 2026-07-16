@@ -1,15 +1,8 @@
-# === USER FUNCTIONALITY DISABLED FOR NOW ===
-# class User(Base):
-#     __tablename__ = "users"
-#     id = Column(Integer, primary_key=True, index=True)
-#     name = Column(String, nullable=False, index=True)
-#     email = Column(String, nullable=False, unique=True, index=True)
-#     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
-
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
-from database import Base
+
+from app.database import Base
 
 class Project(Base):
     __tablename__ = "projects"
@@ -102,3 +95,12 @@ class DocumentFolder(Base):
     project = relationship("Project", back_populates="document_folders")
     documents = relationship("Document", back_populates="folder")
     parent = relationship("DocumentFolder", remote_side=[id], backref="children")
+
+
+# === USER FUNCTIONALITY DISABLED FOR NOW ===
+# class User(Base):
+#     __tablename__ = "users"
+#     id = Column(Integer, primary_key=True, index=True)
+#     name = Column(String, nullable=False, index=True)
+#     email = Column(String, nullable=False, unique=True, index=True)
+#     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")    

@@ -2,14 +2,13 @@ import io
 import uuid
 import xml.etree.ElementTree as ET
 import zipfile
-
 from fastapi import HTTPException, UploadFile, Depends, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-from database import engine, get_db
 from datetime import datetime
 
-import models
+from app.database import get_db
+from app.models import Project, Code, Document, Segment, Memo, DocumentFolder
 
 def parse_refi_date(date_str):
     if not date_str:
@@ -24,7 +23,7 @@ def generate_guid(prefix: str, item_id: int) -> str:
 
 
 def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
-    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -47,17 +46,17 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
         "name": "jUPiter User"
     })
 
-    codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
-    docs = db.query(models.Document).filter(models.Document.project_id == project_id).all()
-    doc_segments = db.query(models.Segment).join(models.Document).filter(models.Document.project_id == project_id).all()
+    codes = db.query(Code).filter(Code.project_id == project_id).all()
+    docs = db.query(Document).filter(Document.project_id == project_id).all()
+    doc_segments = db.query(Segment).join(Document).filter(Document.project_id == project_id).all()
     
     code_ids = [c.id for c in codes]
     segment_ids = [s.id for s in doc_segments]
 
     # Fetch Memos by target type
-    project_memos = db.query(models.Memo).filter(models.Memo.target_type == "project", models.Memo.target_id == project_id).all()
-    code_memos = db.query(models.Memo).filter(models.Memo.target_type == "code", models.Memo.target_id.in_(code_ids)).all() if code_ids else []
-    segment_memos = db.query(models.Memo).filter(models.Memo.target_type == "segment", models.Memo.target_id.in_(segment_ids)).all() if segment_ids else []
+    project_memos = db.query(Memo).filter(Memo.target_type == "project", Memo.target_id == project_id).all()
+    code_memos = db.query(Memo).filter(Memo.target_type == "code", Memo.target_id.in_(code_ids)).all() if code_ids else []
+    segment_memos = db.query(Memo).filter(Memo.target_type == "segment", Memo.target_id.in_(segment_ids)).all() if segment_ids else []
     
     all_memos = project_memos + code_memos + segment_memos
     
@@ -173,7 +172,7 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
             content_elem.text = m.text
 
     # Sets
-    folders = db.query(models.DocumentFolder).filter(models.DocumentFolder.project_id == project_id).all()
+    folders = db.query(DocumentFolder).filter(DocumentFolder.project_id == project_id).all()
     if folders:
         sets_elem = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Sets")
         for folder in folders:
@@ -247,14 +246,14 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
         
         #prevent duplicate names
         counter = 1
-        while db.query(models.Project).filter(models.Project.name == proj_name).first() is not None:
+        while db.query(Project).filter(Project.name == proj_name).first() is not None:
             proj_name = f"{base_name} ({counter})"
             counter += 1
 
         desc_elem = root.find("Description")
         proj_desc = desc_elem.text if desc_elem is not None else None
 
-        new_project = models.Project(name=proj_name, description=proj_desc)
+        new_project = Project(name=proj_name, description=proj_desc)
         db.add(new_project)
         db.commit()
         db.refresh(new_project)
@@ -296,7 +295,7 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
         for note_ref in root.findall("./NoteRef"): 
             target_guid = next((v for k, v in note_ref.attrib.items() if k.lower() == "targetguid"), None)
             if target_guid in notes_dict:
-                db.add(models.Memo(text=notes_dict[target_guid], target_type="project", target_id=new_project.id))
+                db.add(Memo(text=notes_dict[target_guid], target_type="project", target_id=new_project.id))
 
         # Extract Codes 
         guid_to_code_id = {} # Maps XML GUID to SQLite ID 
@@ -310,7 +309,7 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
             c_desc_elem = code_elem.find("Description")
             imported_description = c_desc_elem.text if c_desc_elem is not None else None
 
-            new_code = models.Code(
+            new_code = Code(
                 project_id=new_project.id,
                 name=name,
                 color=color,
@@ -326,13 +325,13 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
             guid_to_code_id[guid] = new_code.id
 
             if imported_description:
-                db.add(models.Memo(text=imported_description, target_type="code", target_id=new_code.id))
+                db.add(Memo(text=imported_description, target_type="code", target_id=new_code.id))
 
             # Extract Code-Level Memos
             for note_ref in code_elem.findall("./NoteRef"):
                 t_guid = next((v for k, v in note_ref.attrib.items() if k.lower() == "targetguid"), None)
                 if t_guid and t_guid.lower() in notes_dict:
-                    db.add(models.Memo(text=notes_dict[t_guid.lower()], target_type="code", target_id=new_code.id))
+                    db.add(Memo(text=notes_dict[t_guid.lower()], target_type="code", target_id=new_code.id))
 
             #child nodes
             for child_elem in code_elem.findall("./Code"):
@@ -379,7 +378,7 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                 if pt_elem is not None and pt_elem.text:
                     doc_content = pt_elem.text
 
-            new_doc = models.Document(
+            new_doc = Document(
                 project_id=new_project.id,
                 filename=doc_name,
                 content=doc_content,
@@ -416,7 +415,7 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                             if not date_str and coding_elem is not None:
                                 date_str = coding_elem.attrib.get("modified") or coding_elem.attrib.get("created")
                             
-                            new_segment = models.Segment(
+                            new_segment = Segment(
                                 document_id=new_doc.id,
                                 code_id=actual_code_id,
                                 start_char=start_pos,
@@ -433,7 +432,7 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                             for note_ref in sel_elem.findall(".//NoteRef"):
                                 t_guid = next((v for k, v in note_ref.attrib.items() if k.lower() == "targetguid"), None)
                                 if t_guid and t_guid.lower() in notes_dict:
-                                    db.add(models.Memo(text=notes_dict[t_guid.lower()], target_type="segment", target_id=new_segment.id))
+                                    db.add(Memo(text=notes_dict[t_guid.lower()], target_type="segment", target_id=new_segment.id))
 
 
         if 'guid_to_doc_id' in locals():
@@ -444,7 +443,7 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                 set_guid = set_elem.attrib.get("guid") or str(uuid.uuid4())
                 set_name = set_elem.attrib.get("name", "Imported Set")
                 
-                new_folder = models.DocumentFolder(name=set_name, project_id=new_project.id)
+                new_folder = DocumentFolder(name=set_name, project_id=new_project.id)
                 db.add(new_folder)
                 db.flush()
                 guid_to_folder_id[set_guid.lower()] = new_folder.id
@@ -454,7 +453,7 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                     t_guid = next((v for k, v in ms.attrib.items() if k.lower() == "targetguid"), None)
                     if t_guid and t_guid.lower() in guid_to_doc_id:
                         doc_id = guid_to_doc_id[t_guid.lower()]
-                        db.query(models.Document).filter(models.Document.id == doc_id).update({"folder_id": new_folder.id})
+                        db.query(Document).filter(Document.id == doc_id).update({"folder_id": new_folder.id})
             
             # establish nested sub-folder relationships (MemberSet)
             for set_elem in root.findall(".//Set"):
@@ -468,7 +467,7 @@ async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(ge
                     if child_guid and child_guid.lower() in guid_to_folder_id:
                         child_id = guid_to_folder_id[child_guid.lower()]
                         # Update the child folder to point to this parent
-                        db.query(models.DocumentFolder).filter(models.DocumentFolder.id == child_id).update({"parent_id": parent_id})
+                        db.query(DocumentFolder).filter(DocumentFolder.id == child_id).update({"parent_id": parent_id})
                         
         db.commit()
         return new_project

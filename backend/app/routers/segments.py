@@ -1,15 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import Optional
-from database import get_db
-import schemas
-import models
-from repositories.segment_repo import SegmentRepository
 import csv
 import io
 import urllib.parse
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
+from app.database import get_db
+import app.schemas as schemas
+import app.models as models
+from app.repositories import SegmentRepository
 
 # We use an empty prefix here because we have two different base paths
 router = APIRouter(tags=["Segments"])

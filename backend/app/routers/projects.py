@@ -1,18 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
-from typing import List
 import os
 import shutil
 import io
 import urllib.parse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy.orm import Session
+from typing import List
 from fastapi.responses import StreamingResponse
-from database import get_db
-import schemas
-from repositories.project_repo import ProjectRepository
-import models
 import openpyxl
 from openpyxl.styles import Font, PatternFill
 from typing import Optional
+
+from app.database import get_db
+import app.schemas as schemas
+from app.repositories import ProjectRepository
+import app.models as models
 
 router = APIRouter(
     prefix="/projects",
@@ -26,12 +27,12 @@ def get_project_repo(db: Session = Depends(get_db)):
 @router.post("/import/refi", response_model=schemas.ProjectResponse)
 async def import_refi_xml_route(file: UploadFile = File(...), db: Session = Depends(get_db)):
     # Import locally to avoid circular dependencies
-    from refi_service import import_refi_xml
+    from app.refi_service import import_refi_xml
     return await import_refi_xml(file, db)
 
 @router.get("/{project_id}/export/refi")
 def export_refi_xml_route(project_id: int, db: Session = Depends(get_db)):
-    from refi_service import export_refi_xml
+    from app.refi_service import export_refi_xml
     return export_refi_xml(project_id, db)
 
 @router.get("", response_model=List[schemas.ProjectResponse])

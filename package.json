@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "concurrently -k \"npm run dev:frontend\" \"npm run dev:backend\" \"npm run dev:electron\"",
     "dev:frontend": "npm --prefix frontend run dev",
-    "dev:backend": "cd backend && env/bin/python -m uvicorn main:app --reload --port 8000",
+    "dev:backend": "cd backend && env/bin/python -m uvicorn app.main:app --reload --port 8000",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "start": "electron .",
+    "build:backend": "cd backend && env/bin/pyinstaller jupiter-backend.spec",
     "build:react": "cd frontend && npm run build",
     "build:win": "npm run build:react && electron-builder --win",
     "build:mac": "npm run build:react && electron-builder --mac",

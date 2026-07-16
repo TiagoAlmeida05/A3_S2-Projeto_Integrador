@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db
-from repositories.document_repo import DocumentRepository
-from transcribe_service import transcribe_service
 import os
-import schemas
 import time
+
+from app.database import get_db
+from app.repositories.document_repo import DocumentRepository
+from app.transcribe_service import transcribe_service
 
 router = APIRouter(
     prefix="/projects/{project_id}/audio",
