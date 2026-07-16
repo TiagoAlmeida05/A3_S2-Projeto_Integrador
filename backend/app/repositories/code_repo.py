@@ -12,6 +12,11 @@ class CodeRepository:
             models.Code.project_id == project_id
         ).order_by(models.Code.order_index).all()
 
+    def get(self, project_id: int, code_id: int):
+        return self.db.query(models.Code).filter(
+            models.Code.id == code_id, models.Code.project_id == project_id
+        ).first()
+
     def create(self, project_id: int, code_data: schemas.CodeCreate):
         new_code = models.Code(
             name=code_data.name,

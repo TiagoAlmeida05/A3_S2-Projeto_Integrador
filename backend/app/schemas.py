@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, computed_field
 from typing import Optional, List, Dict
 from datetime import datetime
 
@@ -28,6 +28,20 @@ class ProjectUpdate(BaseModel):
 
 # Code Schemas
 
+class CodeSummary(BaseModel):
+    id: int
+    name: str
+    color: str
+    project_id: int
+    parent_id: Optional[int] = None
+    order_index: int
+    segments: list[SegmentSummary] = Field(exclude=True)
+    
+    @computed_field
+    @property
+    def frequency(self) -> int:
+        return len(self.segments)
+
 class CodeCreate(BaseModel):
     name: str
     color: str = "#FFFFFF"
@@ -54,6 +68,9 @@ class CodeMergeRequest(BaseModel):
     
 
 # Segment Schemas 
+
+class SegmentSummary(BaseModel):
+    content: str
 
 class SegmentCreate(BaseModel):
     document_id: int
