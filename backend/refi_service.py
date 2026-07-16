@@ -85,9 +85,6 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
         code_attribs = {"guid": cg, "name": c.name, "isCodable": "true"}
         if c.color: 
             code_attribs["color"] = c.color
-
-        if hasattr(c, 'created_at') and c.created_at:
-            code_attribs["modified"] = c.created_at.strftime("%Y-%m-%dT%H:%M:%SZ")
             
         code_elem = ET.SubElement(parent_xml_element, "{urn:QDA-XML:project:1.0}Code", attrib=code_attribs)
 
@@ -138,7 +135,7 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
             })
 
             if hasattr(seg, 'created_at') and seg.created_at:
-                sel_elem.set("modified", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                sel_elem.set("creationDateTime", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
             coding_elem = ET.SubElement(sel_elem, "{urn:QDA-XML:project:1.0}Coding", attrib={
                 "guid": generate_guid("coding", seg.id),
@@ -146,7 +143,7 @@ def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
             })
 
             if hasattr(seg, 'created_at') and seg.created_at:
-                coding_elem.set("modified", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                coding_elem.set("creationDateTime", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
             ET.SubElement(coding_elem, "{urn:QDA-XML:project:1.0}CodeRef", attrib={
                 "targetGUID": code_guid_map[seg.code_id]
