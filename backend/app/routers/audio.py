@@ -5,7 +5,7 @@ import time
 
 from app.database import get_db
 from app.repositories.document_repo import DocumentRepository
-from app.transcribe_service import transcribe_service
+from app.services.transcribe_service import transcribe_service
 
 router = APIRouter(
     prefix="/projects/{project_id}/audio",
