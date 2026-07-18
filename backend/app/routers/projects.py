@@ -27,13 +27,17 @@ def get_project_repo(db: Session = Depends(get_db)):
 @router.post("/import/refi", response_model=schemas.ProjectResponse)
 async def import_refi_xml_route(file: UploadFile = File(...), db: Session = Depends(get_db)):
     # Import locally to avoid circular dependencies
-    from app.refi_service import import_refi_xml
+    from app.services.refi_service import import_refi_xml
     return await import_refi_xml(file, db)
 
 @router.get("/{project_id}/export/refi")
 def export_refi_xml_route(project_id: int, db: Session = Depends(get_db)):
-    from app.refi_service import export_refi_xml
-    return export_refi_xml(project_id, db)
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.services.refi_service import RefiExporter
+    return RefiExporter().export_refi_xml(project)
 
 @router.get("", response_model=List[schemas.ProjectResponse])
 def get_projects(repo: ProjectRepository = Depends(get_project_repo)):

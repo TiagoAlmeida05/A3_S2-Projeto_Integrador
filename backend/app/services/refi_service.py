@@ -6,6 +6,7 @@ from fastapi import HTTPException, UploadFile, Depends, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from datetime import datetime
+from itertools import chain
 
 from app.database import get_db
 from app.models import Project, Code, Document, Segment, Memo, DocumentFolder
@@ -22,205 +23,213 @@ def generate_guid(prefix: str, item_id: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, f"jupiter.qda.{prefix}.{item_id}"))
 
 
-def export_refi_xml(project_id: int, db: Session = Depends(get_db)):
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    ET.register_namespace("", "urn:QDA-XML:project:1.0")
+class RefiExporter():
     
-    # Generate a single user GUID to own the project
-    master_user_guid = str(uuid.uuid4())
+    def __init__(self):
+        self.code_guid_map = {}
+        # Generate a single user GUID to own the project
+        self.master_user_guid = str(uuid.uuid4())
 
-    #Root Element
-    root = ET.Element("{urn:QDA-XML:project:1.0}Project", attrib={
-        "name": project.name,
-        "origin": "jUPiter QDA",
-        "creatingUserGUID": master_user_guid
-    })
+    def export_refi_xml(self, project: Project):
+          
+        root = self.create_root_xml(project)
 
-    # Users
-    users = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Users")
-    ET.SubElement(users, "{urn:QDA-XML:project:1.0}User", attrib={
-        "guid": master_user_guid, 
-        "name": "jUPiter User"
-    })
-
-    codes = db.query(Code).filter(Code.project_id == project_id).all()
-    docs = db.query(Document).filter(Document.project_id == project_id).all()
-    doc_segments = db.query(Segment).join(Document).filter(Document.project_id == project_id).all()
-    
-    code_ids = [c.id for c in codes]
-    segment_ids = [s.id for s in doc_segments]
-
-    # Fetch Memos by target type
-    project_memos = db.query(Memo).filter(Memo.target_type == "project", Memo.target_id == project_id).all()
-    code_memos = db.query(Memo).filter(Memo.target_type == "code", Memo.target_id.in_(code_ids)).all() if code_ids else []
-    segment_memos = db.query(Memo).filter(Memo.target_type == "segment", Memo.target_id.in_(segment_ids)).all() if segment_ids else []
-    
-    all_memos = project_memos + code_memos + segment_memos
-    
-    memos_by_code = {}
-    for m in code_memos:
-        memos_by_code.setdefault(m.target_id, []).append(m)
-
-    memos_by_segment = {}
-    for m in segment_memos:
-        memos_by_segment.setdefault(m.target_id, []).append(m)
+        self.add_users(root)
         
-    codes_by_parent = {}
-    for c in codes:
-        codes_by_parent.setdefault(c.parent_id, []).append(c)
+        self.add_codebook(project, root)
 
-    # CodeBook 
-    codebook = ET.SubElement(root, "{urn:QDA-XML:project:1.0}CodeBook")
-    codes_elem = ET.SubElement(codebook, "{urn:QDA-XML:project:1.0}Codes")
+        files_to_write_to_zip = self.add_all_documents(project, root)
 
-    code_guid_map = {}
+        self.add_all_memos(project, root)
 
-    def build_code_xml(c, parent_xml_element):
-        cg = generate_guid("code", c.id)
-        code_guid_map[c.id] = cg
-        code_attribs = {"guid": cg, "name": c.name, "isCodable": "true"}
-        if c.color: 
-            code_attribs["color"] = c.color
-            
-        code_elem = ET.SubElement(parent_xml_element, "{urn:QDA-XML:project:1.0}Code", attrib=code_attribs)
+        self.add_folders(project, root)
 
+        self.add_description(project, root)
 
-        if c.id in memos_by_code:
-            for m in memos_by_code[c.id]:
-                ET.SubElement(code_elem, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
-                    "targetGUID": generate_guid("memo", m.id)
+        self.link_project_memos(project, root)
+
+        safe_filename, zip_bytes = self.compile_zip(project, root, files_to_write_to_zip)
+
+        return Response(
+            content=zip_bytes, 
+            media_type="application/zip", 
+            headers={
+                "Content-Disposition": f'attachment; filename="{safe_filename}.qdpx"'
+            }
+        )
+
+    def link_project_memos(self, project, root):
+        project_memos = project.memos
+        for m in project_memos:
+            ET.SubElement(root, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
+                "targetGUID": generate_guid("memo", m.id)
+            })
+
+    def add_description(self, project, root):
+        if project.description:
+            desc = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Description")
+            desc.text = project.description
+
+    def add_codebook(self, project, root):
+        codebook = ET.SubElement(root, "{urn:QDA-XML:project:1.0}CodeBook")
+        codes_elem = ET.SubElement(codebook, "{urn:QDA-XML:project:1.0}Codes")
+        
+        #start with recursion from parent codes
+        #top_level_codes = codes_by_parent.get(None, [])
+        top_level_codes = [code for code in project.codes if code.parent is None]
+        for tlc in top_level_codes:
+            self.add_code_xml(tlc, codes_elem)
+
+    def add_folders(self, project, root):
+        folders = project.document_folders
+        if folders:
+            sets_elem = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Sets")
+            for folder in folders:
+                set_elem = ET.SubElement(sets_elem, "{urn:QDA-XML:project:1.0}Set", attrib={
+                    "guid": generate_guid("folder", folder.id),
+                    "name": folder.name
                 })
-            
-        child_codes = codes_by_parent.get(c.id, [])
-        for child in child_codes:
-            build_code_xml(child, code_elem)
+                for doc in folder.documents:
+                    ET.SubElement(set_elem, "{urn:QDA-XML:project:1.0}MemberSource", attrib={
+                        "targetGUID": generate_guid("doc", doc.id)
+                    })
+                child_folders = [f for f in folders if getattr(f, 'parent_id', None) == folder.id]
+                for child in child_folders:
+                    ET.SubElement(set_elem, "{urn:QDA-XML:project:1.0}MemberSet", attrib={
+                        "targetGUID": generate_guid("folder", child.id)
+                    })
 
-    #start with recursion from parent codes
-    top_level_codes = codes_by_parent.get(None, [])
-    for tlc in top_level_codes:
-        build_code_xml(tlc, codes_elem)
-
-    zip_files_to_write = {}
-
-    # Sources
-    sources = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Sources")
-   
-    for d in docs:
-        doc_guid = generate_guid("doc", d.id)
-        internal_filename = f"{doc_guid}.txt"
+    def compile_zip(self, project, root, zip_files_to_write):
+        xml_str = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        safe_filename = project.name.replace(" ", "_")
         
-        source_elem = ET.SubElement(sources, "{urn:QDA-XML:project:1.0}TextSource", attrib={
-            "guid": doc_guid,
-            "name": d.filename,
-            "plainTextPath": f"internal://{internal_filename}",
-            "creatingUser": master_user_guid
-        })
-
-        zip_files_to_write[f"Sources/{internal_filename}"] = d.content
-
-        d_segments = [s for s in doc_segments if s.document_id == d.id]
-        for seg in d_segments:
-            sel_guid = generate_guid("selection", seg.id)
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr("project.qde", xml_str)
             
-            sel_elem = ET.SubElement(source_elem, "{urn:QDA-XML:project:1.0}PlainTextSelection", attrib={
-                "guid": sel_guid,
-                "name": f"Selection-{seg.id}",
-                "startPosition": str(seg.start_char),
-                "endPosition": str(seg.end_char),
-                "creatingUser": master_user_guid
+            for filepath, content in zip_files_to_write.items():
+                zip_file.writestr(filepath, content.encode('utf-8'))
+
+        zip_bytes = zip_buffer.getvalue()
+        return safe_filename,zip_bytes
+
+    def add_all_documents(self, project, root):
+        files_to_write_to_zip = {}
+
+        # Sources
+        sources = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Sources")
+    
+        doc_segments = list(chain.from_iterable([code.segments for code in project.codes]))
+        for d in project.documents:
+            doc_guid = generate_guid("doc", d.id)
+            internal_filename = f"{doc_guid}.txt"
+            
+            source_elem = ET.SubElement(sources, "{urn:QDA-XML:project:1.0}TextSource", attrib={
+                "guid": doc_guid,
+                "name": d.filename,
+                "plainTextPath": f"internal://{internal_filename}",
+                "creatingUser": self.master_user_guid
             })
 
-            if hasattr(seg, 'created_at') and seg.created_at:
-                sel_elem.set("creationDateTime", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+            files_to_write_to_zip[f"Sources/{internal_filename}"] = d.content
 
-            coding_elem = ET.SubElement(sel_elem, "{urn:QDA-XML:project:1.0}Coding", attrib={
-                "guid": generate_guid("coding", seg.id),
-                "creatingUser": master_user_guid
-            })
+            d_segments = [s for s in doc_segments if s.document_id == d.id]
+            for seg in d_segments:
+                self.add_segment_xml(source_elem, seg)
+        return files_to_write_to_zip
 
-            if hasattr(seg, 'created_at') and seg.created_at:
-                coding_elem.set("creationDateTime", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+    def add_all_memos(self, project, root):
+        doc_segments = list(chain.from_iterable([code.segments for code in project.codes]))
+        project_memos = project.memos
+        code_memos = list(chain.from_iterable([code.memos for code in project.codes]))
+        segment_memos = list(chain.from_iterable([segment.memos for segment in doc_segments]))
+        
+        all_memos = project_memos + code_memos + segment_memos
 
-            ET.SubElement(coding_elem, "{urn:QDA-XML:project:1.0}CodeRef", attrib={
-                "targetGUID": code_guid_map[seg.code_id]
-            })
+        if all_memos:
+            notes_elem = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Notes")
+            for m in all_memos:
+                self.add_memo_xml(m, notes_elem)
 
-            if seg.id in memos_by_segment:
-                for m in memos_by_segment[seg.id]:
-                    ET.SubElement(sel_elem, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
+    def add_segment_xml(self, source_elem, seg):
+        sel_guid = generate_guid("selection", seg.id)
+                
+        sel_elem = ET.SubElement(source_elem, "{urn:QDA-XML:project:1.0}PlainTextSelection", attrib={
+                    "guid": sel_guid,
+                    "name": f"Selection-{seg.id}",
+                    "startPosition": str(seg.start_char),
+                    "endPosition": str(seg.end_char),
+                    "creatingUser": self.master_user_guid
+                })
+
+        if hasattr(seg, 'created_at') and seg.created_at:
+            sel_elem.set("creationDateTime", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+        coding_elem = ET.SubElement(sel_elem, "{urn:QDA-XML:project:1.0}Coding", attrib={
+                    "guid": generate_guid("coding", seg.id),
+                    "creatingUser": self.master_user_guid
+                })
+
+        if hasattr(seg, 'created_at') and seg.created_at:
+            coding_elem.set("creationDateTime", seg.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+        ET.SubElement(coding_elem, "{urn:QDA-XML:project:1.0}CodeRef", attrib={
+                    "targetGUID": self.code_guid_map[seg.code_id]
+                })
+
+        for m in seg.memos:
+            ET.SubElement(sel_elem, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
                         "targetGUID": generate_guid("memo", m.id)
                     })
 
-    if all_memos:
-        notes_elem = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Notes")
-        for m in all_memos:
-            memo_guid = generate_guid("memo", m.id)
-            
-            preview_text = (m.text[:47] + '...') if len(m.text) > 50 else m.text
-            preview_text = preview_text.replace('\n', ' ')
+    def add_memo_xml(self, m, notes_elem):
+        memo_guid = generate_guid("memo", m.id)
+                
+        preview_text = (m.text[:47] + '...') if len(m.text) > 50 else m.text
+        preview_text = preview_text.replace('\n', ' ')
 
-            note_elem = ET.SubElement(notes_elem, "{urn:QDA-XML:project:1.0}Note", attrib={
-                "guid": memo_guid,
-                "name": preview_text,
-                "creatingUser": master_user_guid
-            })
-            
-            content_elem = ET.SubElement(note_elem, "{urn:QDA-XML:project:1.0}PlainTextContent")
-            content_elem.text = m.text
-
-    # Sets
-    folders = db.query(DocumentFolder).filter(DocumentFolder.project_id == project_id).all()
-    if folders:
-        sets_elem = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Sets")
-        for folder in folders:
-            set_elem = ET.SubElement(sets_elem, "{urn:QDA-XML:project:1.0}Set", attrib={
-                "guid": generate_guid("folder", folder.id),
-                "name": folder.name
-            })
-            for doc in folder.documents:
-                ET.SubElement(set_elem, "{urn:QDA-XML:project:1.0}MemberSource", attrib={
-                    "targetGUID": generate_guid("doc", doc.id)
+        note_elem = ET.SubElement(notes_elem, "{urn:QDA-XML:project:1.0}Note", attrib={
+                    "guid": memo_guid,
+                    "name": preview_text,
+                    "creatingUser": self.master_user_guid
                 })
-            child_folders = [f for f in folders if getattr(f, 'parent_id', None) == folder.id]
-            for child in child_folders:
-                ET.SubElement(set_elem, "{urn:QDA-XML:project:1.0}MemberSet", attrib={
-                    "targetGUID": generate_guid("folder", child.id)
-                })
+                
+        content_elem = ET.SubElement(note_elem, "{urn:QDA-XML:project:1.0}PlainTextContent")
+        content_elem.text = m.text
 
-    # Description
-    if project.description:
-        desc = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Description")
-        desc.text = project.description
-
-    for m in project_memos:
-        ET.SubElement(root, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
-            "targetGUID": generate_guid("memo", m.id)
+    def add_users(self, root):
+        users = ET.SubElement(root, "{urn:QDA-XML:project:1.0}Users")
+        ET.SubElement(users, "{urn:QDA-XML:project:1.0}User", attrib={
+            "guid": self.master_user_guid, 
+            "name": "jUPiter User"
         })
 
-    # === Compile to ZIP (QDPX) ===
-    xml_str = ET.tostring(root, encoding="utf-8", xml_declaration=True)
-    safe_filename = project.name.replace(" ", "_")
-    
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        zip_file.writestr("project.qde", xml_str)
+    def create_root_xml(self, project):
+        ET.register_namespace("", "urn:QDA-XML:project:1.0")
+        root = ET.Element("{urn:QDA-XML:project:1.0}Project", attrib={
+            "name": project.name,
+            "origin": "jUPiter QDA",
+            "creatingUserGUID": self.master_user_guid
+        })
         
-        for filepath, content in zip_files_to_write.items():
-            zip_file.writestr(filepath, content.encode('utf-8'))
+        return root
 
-    zip_bytes = zip_buffer.getvalue()
+    def add_code_xml(self, code, parent_xml_element):
+        cg = generate_guid("code", code.id)
+        self.code_guid_map[code.id] = cg
+        code_attribs = {"guid": cg, "name": code.name, "isCodable": "true"}
+        if code.color: 
+            code_attribs["color"] = code.color
+            
+        code_elem = ET.SubElement(parent_xml_element, "{urn:QDA-XML:project:1.0}Code", attrib=code_attribs)
 
-    return Response(
-        content=zip_bytes, 
-        media_type="application/zip", 
-        headers={
-            "Content-Disposition": f'attachment; filename="{safe_filename}.qdpx"'
-        }
-    )
-
+        for m in code.memos:
+            ET.SubElement(code_elem, "{urn:QDA-XML:project:1.0}NoteRef", attrib={
+                "targetGUID": generate_guid("memo", m.id)
+            })
+            
+        for child in code.children:
+            self.add_code_xml(child, code_elem)
 
 async def import_refi_xml(file: UploadFile = File(...), db: Session = Depends(get_db)):
     if not file.filename.endswith('.qdpx'):
