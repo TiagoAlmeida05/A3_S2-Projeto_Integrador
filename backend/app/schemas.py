@@ -79,6 +79,13 @@ class SegmentCreate(BaseModel):
     end_char: int
     content: str
 
+class SegmentDetail(BaseModel):
+    id: int
+    document_id: int
+    code_id: int
+    start_char: int
+    end_char: int
+    content: str
 
 class SegmentUpdate(BaseModel):
     start_char: int
