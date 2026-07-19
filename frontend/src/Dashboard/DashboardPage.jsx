@@ -3,8 +3,7 @@ import { useNavigate } from "react-router-dom";
 import CreateProjectModal from "./CreateProjectModal";
 import ImportProjectModal from "./ImportProjectModal";
 import ConfirmDeleteModal from "../Modal/ConfirmDeleteModal";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { fetchProjects, createProject, deleteProject } from "../utils/backend-api"
 
 function Dashboard() {
   const [projects, setProjects] = useState([]);
@@ -15,44 +14,23 @@ function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchProjects();
+    fetchProjects().then(data => setProjects(data));
   }, []);
 
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/projects`, { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
- 
-        const sortedData = data.sort((a, b) => {
-          if (a.last_accessed && b.last_accessed) {
-            return new Date(b.last_accessed) - new Date(a.last_accessed);
-          }
-          return b.id - a.id; // Fallback if no date exists
-        });
-        
-        setProjects(sortedData);
-      }
-    } catch (err) {
-      console.error("Failed to fetch projects:", err);
-    }
-  };
-
   const handleCreateProject = async (projectData) => {
-    const res = await fetch(`${API_BASE}/projects`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(projectData),
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.detail || "Failed to create project");
-    }
-
-    const newProject = await res.json();
-    setIsCreateModalOpen(false);
-    navigate(`/project/${newProject.id}`);
+    
+    return createProject(projectData).then(async (res) => {
+      if (res.ok) {
+        const newProject = await res.json();
+        console.log(newProject);
+        setIsCreateModalOpen(false);
+        navigate(`/project/${newProject.id}`);
+      }
+      else {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Failed to create project");
+      }
+    });    
   };
 
   const triggerDelete = (e, projectObj) => {
@@ -62,12 +40,17 @@ function Dashboard() {
 
   const executeDelete = async () => {
     if (!deleteTarget.project) return;
-    try {
-      const res = await fetch(`${API_BASE}/projects/${deleteTarget.project.id}`, { method: "DELETE" });
-      if (res.ok) fetchProjects();
-    } catch (err) {
-      console.error("Failed to delete project:", err);
-    }
+
+    return deleteProject(deleteTarget.project.id)
+            .then(async (res) => {
+              if (res.ok) {
+                fetchProjects().then(data => setProjects(data));
+              }
+              else {
+                const errorData = await res.json();
+                console.error("Failed to delete project:", errorData);
+              }
+            });
   };
 
   const pageStyle = {
