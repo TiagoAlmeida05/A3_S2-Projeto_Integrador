@@ -1,7 +1,4 @@
 from typing import Optional
-import csv
-import io
-import urllib.parse
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -10,6 +7,7 @@ from app.database import get_db
 import app.schemas as schemas
 import app.models as models
 from app.repositories import SegmentRepository
+from app.services.csv_service import create_codebook_csv
 
 # We use an empty prefix here because we have two different base paths
 router = APIRouter(tags=["Segments"])
@@ -80,38 +78,11 @@ def export_segments_csv(project_id: int, db: Session = Depends(get_db)):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    segments = db.query(models.Segment).join(models.Document).filter(
-        models.Document.project_id == project_id
-    ).order_by(models.Segment.document_id, models.Segment.start_char).all()
-
-    output = io.StringIO()
-    output.write('\ufeff') 
-    
-    writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_ALL)
-    writer.writerow(["Document Name", "Code Name", "Quote Content", "Start Pos", "End Pos", "Attached Memos"])
-
-    for seg in segments:
-        doc_name = seg.document.filename if seg.document else "Unknown"
-        code_name = seg.code.name if seg.code else "Unknown"
-
-        clean_content = seg.content.replace('\r', '').strip() if seg.content else ""
-
-        # Fetch all memos attached specifically to this quote
-        memos = db.query(models.Memo).filter(
-            models.Memo.target_type == "segment", 
-            models.Memo.target_id == seg.id
-        ).all()
-        
-        memos_text = "\n---\n".join([m.text.replace('\r', '').strip() for m in memos])
-
-        writer.writerow([doc_name, code_name, clean_content, seg.start_char, seg.end_char, memos_text])
-
-    output.seek(0)
-    
-    safe_filename = urllib.parse.quote(f"Quotes_{project.name}.csv")
+    output, safe_filename = create_codebook_csv(project)
 
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename*=utf-8''{safe_filename}"}
     )
+
