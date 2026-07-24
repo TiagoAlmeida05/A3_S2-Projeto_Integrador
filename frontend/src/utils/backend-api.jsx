@@ -48,8 +48,7 @@ export async function fetchDocument(projectId, docId) {
 }
 
 export async function renameDocument(projectId, docId, filename) {
-  return await fetch(
-      `${API_BASE}/projects/${projectId}/documents/${docId}/rename`,
+  return await fetch(`${API_BASE}/projects/${projectId}/documents/${docId}/rename`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -82,4 +81,12 @@ export async function fetchSegmentsForDocument(projectId, documentId) {
 
 export async function deleteSegment(projectId, segmentId) {
   return await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`, { method: "DELETE" })
+}
+
+export async function createMemoForSegment(segmentId, memoText) {
+  return await fetch(`${API_BASE}/memos`, {
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: memoText, target_type: "segment", target_id: segmentId }),
+      });
 }

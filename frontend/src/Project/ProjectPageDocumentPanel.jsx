@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import MarginSidebar from "./MarginSidebar";
-import { createCode, deleteSegment, fetchDocument, fetchSegmentsForDocument } from "../utils/backend-api";
+import { createCode, createMemoForSegment, deleteSegment, fetchDocument, fetchSegmentsForDocument } from "../utils/backend-api";
 
   const getRandomColor = () => {
     const chars = '6789ABCDEF'; 
@@ -319,10 +319,7 @@ const ProjectPageDocumentPanel = ({
   const handleSaveLocalSegmentMemo = async () => {
     if (!memoText.trim()) return;
     try {
-      await fetch(`${API_BASE}/memos`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: memoText, target_type: "segment", target_id: activeSegmentForMemo }),
-      });
+      await createMemoForSegment(activeSegmentForMemo, memoText);
       setIsMemoModalOpen(false);
       setMemoText("");
     } catch (error) {
