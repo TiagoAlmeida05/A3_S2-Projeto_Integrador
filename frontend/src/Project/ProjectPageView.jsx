@@ -1,7 +1,7 @@
 import CollisionModal from "./CollisionModal";
 import ProjectPageCodePanel from "./ProjectPageCodePanel";
 import ProjectPageDocumentPanel from "./ProjectPageDocumentPanel";
-import ProjectPageSidebar from "./ProjectPageSidebar";
+import ProjectPageSidebarPanel from "./ProjectPageSidebarPanel";
 import ProjectPageTopBar from "./ProjectPageTopBar";
 import ProjectSettingsModal from "./ProjectSettingsModal";
 // V4 Imports
@@ -98,7 +98,7 @@ const ProjectPageView = ({ page }) => {
         <Group orientation="horizontal" autoSaveId="project-page-layout">
           
           <Panel defaultSize={28} minSize={20}>
-            <ProjectPageSidebar
+            <ProjectPageSidebarPanel
               id={id}
               activeTab={activeTab}
               setActiveTab={setActiveTab}

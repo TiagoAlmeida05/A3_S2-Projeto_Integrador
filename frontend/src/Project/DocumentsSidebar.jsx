@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
 
-function DocumentSidebar({ 
+function DocumentsSidebar({ 
   documents, 
   activeDocumentId, 
   uploadStatus, 
@@ -1225,4 +1225,4 @@ function DocumentSidebar({
   );
 }
 
-export default DocumentSidebar;
+export default DocumentsSidebar;

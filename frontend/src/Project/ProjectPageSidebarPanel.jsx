@@ -1,8 +1,8 @@
-import CodeSidebar from "./CodeSidebar";
-import DocumentSidebar from "./DocumentSidebar";
-import MemosTab from "./MemosTab";
+import CodesSidebar from "./CodesSidebar";
+import DocumentsSidebar from "./DocumentsSidebar";
+import MemosSidebar from "./MemosSidebar";
 
-const ProjectPageSidebar = ({
+const ProjectPageSidebarPanel = ({
   id,
   activeTab,
   setActiveTab,
@@ -158,7 +158,7 @@ const ProjectPageSidebar = ({
         }}
       >
         {activeTab === "documents" && (
-          <DocumentSidebar
+          <DocumentsSidebar
             documents={documents}
             activeDocumentId={activeDocument?.id}
             uploadStatus={uploadStatus}
@@ -174,7 +174,7 @@ const ProjectPageSidebar = ({
           />
         )}
         {activeTab === "codes" && (
-          <CodeSidebar
+          <CodesSidebar
             projectId={id}
             codes={projectCodes}
             onDeleteCode={handleDeleteCode}
@@ -185,10 +185,10 @@ const ProjectPageSidebar = ({
             pushUndoAction={pushUndoAction}
           />
         )}
-        {activeTab === "memos" && <MemosTab projectId={id} codes={projectCodes} pushUndoAction={pushUndoAction}/>}
+        {activeTab === "memos" && <MemosSidebar projectId={id} codes={projectCodes} pushUndoAction={pushUndoAction}/>}
       </div>
     </div>
   );
 };
 
-export default ProjectPageSidebar;
+export default ProjectPageSidebarPanel;

@@ -12,7 +12,7 @@ const getRandomColor = () => {
   return color;
 };
 
-function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV, pushUndoAction }) {
+function CodesSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV, pushUndoAction }) {
   const [memoModalOpen, setMemoModalOpen] = useState(false);
   const [memoTargetCode, setMemoTargetCode] = useState(null);
   const [memoError, setMemoError] = useState(null);
@@ -919,4 +919,4 @@ return (
   );
 }
 
-export default CodeSidebar;
+export default CodesSidebar;

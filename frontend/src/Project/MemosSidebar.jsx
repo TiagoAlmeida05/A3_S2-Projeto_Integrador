@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 
-export default function MemosTab({ projectId, codes = [], pushUndoAction }) {
+export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) {
   const [memos, setMemos] = useState([]);
   const [editingMemo, setEditingMemo] = useState(null);
   const [newMemoText, setNewMemoText] = useState("");
