@@ -3,13 +3,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
 import AudioLanguageModal from "../Modal/AudioLanguageModal"; 
 import ExportFilterModal from '../Modal/ExportFilterModal';
-
+import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument } from "../utils/backend-api"
 
 import axios from "axios";
 
 const API_BASE = "http://127.0.0.1:8000";
-
-
 
 const hexToRGBA = (hex, opacity) => {
   if (!hex) return "transparent";
@@ -77,44 +75,6 @@ function ProjectPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [currentSearchResult, setCurrentSearchResult] = useState(null);
 
-  const fetchProjectDetails = () => {
-    fetch(`http://127.0.0.1:8000/projects/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.name) {
-          setProjectDetails({
-            name: data.name,
-            description: data.description || "",
-            localPath: data.local_path || "",
-          });
-        }
-      })
-      .catch((err) => console.error(err));
-  };
-
-  const fetchDocuments = () => {
-    fetch(`${API_BASE}/projects/${id}/documents/`)
-      .then((res) => res.json())
-      .then((data) => {
-        setDocuments(data);
-        
-        setActiveDocument((prevActive) => {
-          if (!prevActive || prevActive.id === "NEW_DOC_PENDING") return prevActive;
-          
-          const freshDoc = data.find((d) => d.id === prevActive.id);
-          return freshDoc ? { ...prevActive, metadata: freshDoc.metadata, folder_id: freshDoc.folder_id } : prevActive;
-        });
-      })
-      .catch((err) => console.error(err));
-  };
-
-  const fetchCodes = () => {
-    fetch(`${API_BASE}/projects/${id}/codes`)
-      .then((res) => res.json())
-      .then((data) => setProjectCodes(data))
-      .catch((err) => console.error(err));
-  };
-
   const pushUndoAction = (action) => {
     const actionWithTime = { ...action, timestamp: Date.now() };
     setUndoStack((prev) => [action, ...prev].slice(0, 20));
@@ -123,7 +83,7 @@ function ProjectPage() {
   const fetchAllDocumentSegments = async () => {
     const segmentResponses = await Promise.all(
       documents.map((doc) =>
-        fetch(`${API_BASE}/projects/${id}/segments?document_id=${doc.id}`).then((res) => res.json()),
+        fetchSegmentsForDocument(id, doc.id),
       ),
     );
 
@@ -151,8 +111,7 @@ function ProjectPage() {
   const refreshSegmentsForDocument = async (documentId) => {
     if (!activeDocument || Number(activeDocument.id) !== Number(documentId)) return;
 
-    const res = await fetch(`${API_BASE}/projects/${id}/segments?document_id=${documentId}`);
-    const data = await res.json();
+    const data = await fetchSegmentsForDocument(id, documentId);
     setDocumentSegments(Array.isArray(data) ? data : []);
   };
 
@@ -328,7 +287,7 @@ function ProjectPage() {
     try {
       // Fetch segments for every document we know exists
       const segmentPromises = documents.map((doc) =>
-        fetch(`${API_BASE}/projects/${id}/segments?document_id=${doc.id}`).then((res) => res.json())
+        fetchSegmentsForDocument(id, doc.id)
       );
       
       const segmentsArrays = await Promise.all(segmentPromises);
@@ -346,14 +305,12 @@ function ProjectPage() {
       setCurrentSearchResult(null);
     }
 
-    fetch(`${API_BASE}/projects/${id}/documents/${docId}`)
-      .then((res) => res.json())
+    fetchDocument(id, docId)
       .then((data) => setActiveDocument(data))
       .catch((err) => console.error("Failed to fetch document content:", err));
 
     // Fetch segments for this document
-    fetch(`${API_BASE}/projects/${id}/segments?document_id=${docId}`)
-      .then((res) => res.json())
+    fetchSegmentsForDocument(id, docId)
       .then((data) => setDocumentSegments(data))
       .catch((err) => console.error("Failed to fetch segments:", err));
   };
@@ -380,9 +337,29 @@ function ProjectPage() {
   }, [activeDocument, documentSegments, pendingQuoteJump]);
 
   useEffect(() => {
-    fetchDocuments();
-    fetchProjectDetails();
-    fetchCodes();
+    fetchDocuments(id).then((data) => {
+                      setDocuments(data);
+                      
+                      setActiveDocument((prevActive) => {
+                        if (!prevActive || prevActive.id === "NEW_DOC_PENDING") return prevActive;
+                        
+                        const freshDoc = data.find((d) => d.id === prevActive.id);
+                        return freshDoc ? { ...prevActive, metadata: freshDoc.metadata, folder_id: freshDoc.folder_id } : prevActive;
+                      });
+                    })
+                    .catch((err) => console.error(err));
+    fetchProjectDetails(id).then((data) => {
+                      if (data.name) {
+                        setProjectDetails({
+                          name: data.name,
+                          description: data.description || "",
+                          localPath: data.local_path || "",
+                        });
+                      }
+                    })
+                    .catch((err) => console.error(err));
+    fetchCodes(id).then((data) => setProjectCodes(data))
+                .catch((err) => console.error(err));
   }, [id]);
 
   useEffect(() => {
@@ -630,11 +607,12 @@ function ProjectPage() {
   const handleDeleteDocument = async (docId, docName) => {
     try {
       const docToSnapshot = documents.find(d => d.id === docId);
-      const docContentRes = await fetch(`${API_BASE}/projects/${id}/documents/${docId}`);
-      const docContentData = docContentRes.ok ? await docContentRes.json() : docToSnapshot;
+      // const docContentRes = await fetch(`${API_BASE}/projects/${id}/documents/${docId}`);
+      // const docContentData = docContentRes.ok ? await docContentRes.json() : docToSnapshot;
       
-      const segmentsRes = await fetch(`${API_BASE}/projects/${id}/segments?document_id=${docId}`);
-      const segmentsData = segmentsRes.ok ? await segmentsRes.json() : [];
+      const docContentData = await fetchDocument(id, docId);
+
+      const segmentsData = await fetchSegmentsForDocument(id, docId);
 
       const response = await fetch(
         `${API_BASE}/projects/${id}/documents/${docId}`,
@@ -673,14 +651,7 @@ function ProjectPage() {
       throw new Error("Document name cannot be empty.");
     }
 
-    const response = await fetch(
-      `${API_BASE}/projects/${id}/documents/${docId}/rename`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename }),
-      },
-    );
+    const response = await renameDocument(id, docId, filename);
 
     const data = await response.json();
     if (!response.ok) {

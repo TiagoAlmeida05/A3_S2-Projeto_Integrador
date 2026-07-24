@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { deleteSegment, fetchDocument, fetchSegmentsForDocument } from "../utils/backend-api"
 
 const getContrastText = (hex) => {
   if (!hex) return '#FFFFFF';
@@ -19,7 +20,6 @@ const getContrastText = (hex) => {
 };
 
 const ProjectPageCodePanel = ({
-  API_BASE,
   projectId,
   projectCodes,
   documents,
@@ -49,7 +49,7 @@ const ProjectPageCodePanel = ({
       setLoading(true);
       try {
         const segmentPromises = (documents || []).map((doc) =>
-          fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${doc.id}`).then((res) => res.json())
+          fetchSegmentsForDocument(projectId, doc.id),
         );
         const segmentsArrays = await Promise.all(segmentPromises);
         const allSegments = segmentsArrays.flat().filter(s => s && !s.detail);
@@ -74,7 +74,7 @@ const ProjectPageCodePanel = ({
     };
 
     loadQuotes();
-  }, [activeCode, includeSubCodes, codePanelOpen, documents, projectId, API_BASE, projectCodes, refreshToken]);
+  }, [activeCode, includeSubCodes, codePanelOpen, documents, projectId, projectCodes, refreshToken]);
 
   useEffect(() => {
     const missingDocIds = [...new Set(localSegments.map(s => s.document_id))]
@@ -86,25 +86,22 @@ const ProjectPageCodePanel = ({
 
     Promise.all(missingDocIds.map(async (docId) => {
       try {
-        const res = await fetch(`${API_BASE}/projects/${projectId}/documents/${docId}`);
-        const data = await res.json();
+        const data = await fetchDocument(projectId, docId);
         setDocCache(prev => ({ ...prev, [docId]: data }));
       } catch (err) {
         console.error("Failed to cache document for context:", err);
       }
     }));
-  }, [localSegments, projectId, API_BASE, docCache]);
+  }, [localSegments, projectId, docCache]);
 
   const handleQuoteClick = async (quote) => {
     setSelectedQuoteId(quote.id);
 
     try {
-      const docRes = await fetch(`${API_BASE}/projects/${projectId}/documents/${quote.document_id}`);
-      const docData = await docRes.json();
+      const docData = await fetchDocument(projectId, quote.document_id);
       setActiveDocument(docData);
 
-      const segRes = await fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${quote.document_id}`);
-      const segData = await segRes.json();
+      const segData = await fetchSegmentsForDocument(projectId, quote.document_id);
       setDocumentSegments(Array.isArray(segData) ? segData : []);
 
       setPendingQuoteJump({
@@ -124,7 +121,7 @@ const ProjectPageCodePanel = ({
     const segmentSnapshot = localSegments.find((segment) => segment.id === segmentId);
 
     try {
-      const response = await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`, { method: "DELETE" });
+      const response = await deleteSegment(projectId, segmentId);
       if (response.ok) {
         fetchCodes(); // Update the sidebar badge
         setLocalSegments((prev) => prev.filter((segment) => segment.id !== segmentId)); // Update panel instantly

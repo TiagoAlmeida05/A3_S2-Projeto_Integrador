@@ -30,4 +30,44 @@ export async function createProject(projectData) {
 
 export async function deleteProject(projectId) {
     return await fetch(`${API_BASE}/projects/${projectId}`, { method: "DELETE" });
+};
+
+export async function fetchProjectDetails (projectId) {
+  return await fetch(`${API_BASE}/projects/${projectId}`)
+    .then((res) => res.json());
+};
+
+export async function fetchDocuments (projectId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/documents/`)
+    .then((res) => res.json());
+};
+
+export async function fetchDocument(projectId, docId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/documents/${docId}`)
+      .then((res) => res.json())
+}
+
+export async function renameDocument(projectId, docId, filename) {
+  return await fetch(
+      `${API_BASE}/projects/${projectId}/documents/${docId}/rename`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename }),
+      },
+    )
+}
+
+export async function fetchCodes (projectId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/codes`)
+    .then((res) => res.json());
+};
+
+export async function fetchSegmentsForDocument(projectId, documentId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${documentId}`)
+              .then((res) => res.json());
+}
+
+export async function deleteSegment(projectId, segmentId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`, { method: "DELETE" })
 }

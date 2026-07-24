@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import MarginSidebar from "./MarginSidebar";
+import { fetchDocument, fetchSegmentsForDocument } from "../utils/backend-api";
 
   const getRandomColor = () => {
     const chars = '6789ABCDEF'; 
@@ -559,12 +560,10 @@ const ProjectPageDocumentPanel = ({
       );
       await Promise.all(deletePromises);
 
-      const updatedDocRes = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}`);
-      const updatedDoc = await updatedDocRes.json();
+      const updatedDoc = await fetchDocument(projectId, activeDocument.id);
       setActiveDocument(updatedDoc);
 
-      const updatedSegRes = await fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${activeDocument.id}`);
-      const updatedSeg = await updatedSegRes.json();
+      const updatedSeg = await fetchSegmentsForDocument(projectId, activeDocument.id);
       setDocumentSegments(updatedSeg);
 
       setIsEditing(false);

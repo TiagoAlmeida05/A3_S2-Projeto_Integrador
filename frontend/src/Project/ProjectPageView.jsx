@@ -129,7 +129,6 @@ const ProjectPageView = ({ page }) => {
             <>
               <Panel defaultSize={30} minSize={20} style={{ minWidth: 0 }}>
                 <ProjectPageCodePanel
-                  API_BASE={API_BASE}
                   projectId={id}
                   projectCodes={projectCodes}
                   documents={documents}
