@@ -40,8 +40,8 @@ const ProjectPageView = ({ page }) => {
     setPendingQuoteJump,
     setUploadStatus,
     setDocumentSegments,
-    fetchCodes,
-    fetchDocuments,
+    loadCodes,
+    loadDocuments,
     handleFileUpload,
     handleDocumentClick,
     handleDeleteDocument,
@@ -112,8 +112,8 @@ const ProjectPageView = ({ page }) => {
               handleRenameDocument={handleRenameDocument}
               projectCodes={projectCodes}
               handleDeleteCode={handleDeleteCode}
-              fetchCodes={fetchCodes}
-              fetchDocuments={fetchDocuments}
+              loadCodes={loadCodes}
+              loadDocuments={loadDocuments}
               openCodePanel={openCodePanel}
               setProjectCodes={setProjectCodes}
               handleCreateTextDocument={handleCreateTextDocument}
@@ -142,7 +142,7 @@ const ProjectPageView = ({ page }) => {
                   setActiveDocument={setActiveDocument}
                   setDocumentSegments={setDocumentSegments}
                   setPendingQuoteJump={setPendingQuoteJump}
-                  fetchCodes={fetchCodes}
+                  loadCodes={loadCodes}
                   pushUndoAction={pushUndoAction}
                 />
               </Panel>
@@ -159,8 +159,8 @@ const ProjectPageView = ({ page }) => {
               setUploadStatus={setUploadStatus}
               setDocumentSegments={setDocumentSegments}
               setActiveDocument={setActiveDocument}
-              fetchCodes={fetchCodes}
-              fetchDocuments={fetchDocuments}
+              loadCodes={loadCodes}
+              loadDocuments={loadDocuments}
               API_BASE={API_BASE}
               projectId={id}
               pushUndoAction={pushUndoAction}

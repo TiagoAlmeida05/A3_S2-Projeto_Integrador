@@ -75,6 +75,25 @@ function ProjectPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [currentSearchResult, setCurrentSearchResult] = useState(null);
 
+  const loadDocuments = () => {
+    fetchDocuments(id).then((data) => {
+                      setDocuments(data);
+                      
+                      setActiveDocument((prevActive) => {
+                        if (!prevActive || prevActive.id === "NEW_DOC_PENDING") return prevActive;
+                        
+                        const freshDoc = data.find((d) => d.id === prevActive.id);
+                        return freshDoc ? { ...prevActive, metadata: freshDoc.metadata, folder_id: freshDoc.folder_id } : prevActive;
+                      });
+                    })
+                    .catch((err) => console.error(err));
+  };
+
+  const loadCodes = () => {
+    fetchCodes(id).then((data) => setProjectCodes(data))
+                  .catch((err) => console.error(err)); 
+  };
+
   const pushUndoAction = (action) => {
     const actionWithTime = { ...action, timestamp: Date.now() };
     setUndoStack((prev) => [action, ...prev].slice(0, 20));
@@ -143,7 +162,7 @@ function ProjectPage() {
         if (lastAction.type === "create-quick-code" && lastAction.code?.id) {
           await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.code.id}`, { method: "DELETE" });
         }
-        fetchCodes();
+        loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
 
       } else if (lastAction.type === "delete-segment") {
@@ -157,7 +176,7 @@ function ProjectPage() {
           }),
         });
         await refreshSegmentsForDocument(segment.document_id);
-        fetchCodes();
+        loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
 
       } else if (lastAction.type === "delete-code") {
@@ -205,7 +224,7 @@ function ProjectPage() {
             body: JSON.stringify({ text: memo.text, target_type: "code", target_id: restoredCodeId }),
           });
         }
-        fetchCodes();
+        loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
 
       } else if (lastAction.type === "edit-code") {
@@ -213,14 +232,14 @@ function ProjectPage() {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(lastAction.previousState),
         });
-        fetchCodes();
+        loadCodes();
 
       } else if (lastAction.type === "reorder-codes") {
         await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ codes: lastAction.previousState }),
         });
-        fetchCodes();
+        loadCodes();
 
       } else if (lastAction.type === "delete-document") {
         const doc = lastAction.document;
@@ -246,7 +265,7 @@ function ProjectPage() {
             }),
           });
         }
-        fetchDocuments();
+        loadDocuments();
       } else if (lastAction.type === "delete-memo") {
         const memo = lastAction.memo;
         await fetch(`${API_BASE}/memos`, {
@@ -268,7 +287,7 @@ function ProjectPage() {
           body: JSON.stringify({ metadata: lastAction.previousMetadata }),
         });
         // This will instantly update the sidebar and active document!
-        fetchDocuments(); 
+        loadDocuments(); 
       }
 
       setUploadStatus("Undo complete.");
@@ -337,17 +356,8 @@ function ProjectPage() {
   }, [activeDocument, documentSegments, pendingQuoteJump]);
 
   useEffect(() => {
-    fetchDocuments(id).then((data) => {
-                      setDocuments(data);
-                      
-                      setActiveDocument((prevActive) => {
-                        if (!prevActive || prevActive.id === "NEW_DOC_PENDING") return prevActive;
-                        
-                        const freshDoc = data.find((d) => d.id === prevActive.id);
-                        return freshDoc ? { ...prevActive, metadata: freshDoc.metadata, folder_id: freshDoc.folder_id } : prevActive;
-                      });
-                    })
-                    .catch((err) => console.error(err));
+    loadDocuments();
+
     fetchProjectDetails(id).then((data) => {
                       if (data.name) {
                         setProjectDetails({
@@ -358,8 +368,7 @@ function ProjectPage() {
                       }
                     })
                     .catch((err) => console.error(err));
-    fetchCodes(id).then((data) => setProjectCodes(data))
-                .catch((err) => console.error(err));
+    loadCodes();
   }, [id]);
 
   useEffect(() => {
@@ -370,7 +379,7 @@ function ProjectPage() {
         seg.code_id === sourceId ? { ...seg, code_id: targetId } : seg
       ));
 
-      fetchCodes(); 
+      loadCodes(); 
     };
     
     window.addEventListener('codes-merged', handleCodesMerged);
@@ -588,7 +597,7 @@ function ProjectPage() {
       setUploadStatus(`Success! All ${successfulUploads.length} items parsed and cataloged offline.`);
       setTimeout(() => setUploadStatus(""), 4000);
     }
-    fetchDocuments();
+    loadDocuments();
     if (eventOrFiles?.target) eventOrFiles.target.value = null;
   };
 
@@ -626,7 +635,7 @@ function ProjectPage() {
           setDocumentSegments([]);
         }
 
-        fetchCodes(); 
+        loadCodes();
 
         pushUndoAction({
           type: "delete-document",
@@ -883,8 +892,8 @@ function ProjectPage() {
     handleDeleteDocument,
     handleRenameDocument,
     handleDeleteCode,
-    fetchCodes,
-    fetchDocuments,
+    loadCodes,
+    loadDocuments,
     openCodePanel,
     handleSaveSettings,
     handleDeleteProject,

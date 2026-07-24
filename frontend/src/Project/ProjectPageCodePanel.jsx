@@ -31,7 +31,7 @@ const ProjectPageCodePanel = ({
   setActiveDocument,
   setDocumentSegments,
   setPendingQuoteJump,
-  fetchCodes,
+  loadCodes,
   pushUndoAction,
 }) => {
   const [selectedQuoteId, setSelectedQuoteId] = useState(null);
@@ -123,7 +123,7 @@ const ProjectPageCodePanel = ({
     try {
       const response = await deleteSegment(projectId, segmentId);
       if (response.ok) {
-        fetchCodes(); // Update the sidebar badge
+        loadCodes(); // Update the sidebar badge
         setLocalSegments((prev) => prev.filter((segment) => segment.id !== segmentId)); // Update panel instantly
         if (setDocumentSegments) {
           setDocumentSegments((prev) => prev.filter((segment) => segment.id !== segmentId));

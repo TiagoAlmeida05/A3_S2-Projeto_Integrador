@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import MarginSidebar from "./MarginSidebar";
-import { fetchDocument, fetchSegmentsForDocument } from "../utils/backend-api";
+import { createCode, deleteSegment, fetchDocument, fetchSegmentsForDocument } from "../utils/backend-api";
 
   const getRandomColor = () => {
     const chars = '6789ABCDEF'; 
@@ -21,7 +21,7 @@ const ProjectPageDocumentPanel = ({
   setUploadStatus,
   setDocumentSegments,
   setActiveDocument, 
-  fetchCodes,
+  loadCodes,
   fetchDocuments,
   pushUndoAction,
   API_BASE,
@@ -262,21 +262,17 @@ const ProjectPageDocumentPanel = ({
         if (exactMatch) {
           finalCodeID = exactMatch.id;
         } else {
-          const codeResponse = await fetch(`${API_BASE}/projects/${projectId}/codes`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
+          const codeResponse = await createCode(projectId, { 
               name: codeName, 
               color: quickCodeColor, 
               description: "Created from selected text", 
               parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null 
-            }),
-          });
+            });
           const createdCodeData = await codeResponse.json();
           if (!codeResponse.ok) throw new Error(createdCodeData.detail || "Failed to create quick code");
           createdCode = createdCodeData;
           finalCodeID = createdCode.id;
-          fetchCodes();
+          loadCodes();
         }
       } else {
         finalCodeID = parseInt(selectedExistingCodeId);
@@ -313,7 +309,7 @@ const ProjectPageDocumentPanel = ({
       clearTextSelection();
       window.getSelection()?.removeAllRanges();
       setDocumentSegments((prev) => [...prev, ...createdSegments]);
-      fetchCodes();
+      loadCodes();
     } catch (error) {
       console.error(error);
       setUploadStatus("Failed to apply code.");
@@ -407,7 +403,7 @@ const ProjectPageDocumentPanel = ({
 
         const deletedSegments = documentSegments.filter(oldSeg => !currentLocalSegments.find(ls => ls.id === oldSeg.id));
         const deletePromises = deletedSegments.map(seg => 
-          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, { method: 'DELETE' })
+          deleteSegment(projectId, seg.id)
         );
         await Promise.all(deletePromises);
 
@@ -554,9 +550,7 @@ const ProjectPageDocumentPanel = ({
 
       const deletedSegments = documentSegments.filter(oldSeg => !localSegments.find(ls => ls.id === oldSeg.id));
       const deletePromises = deletedSegments.map(seg =>
-        fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
-          method: "DELETE",
-        })
+        deleteSegment(projectId, seg.id)
       );
       await Promise.all(deletePromises);
 
@@ -801,9 +795,7 @@ const ProjectPageDocumentPanel = ({
   const handleDeleteSegment = async (segmentId) => {
     const segmentSnapshot = documentSegments.find((seg) => seg.id === segmentId);
     try {
-      const res = await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`, { 
-        method: "DELETE" 
-      });
+      const res = await deleteSegment(projectId, segmentId);
       
       if (res.ok) {
         // Remove from the UI instantly
@@ -815,7 +807,7 @@ const ProjectPageDocumentPanel = ({
         }
         
         setSegmentContextMenu(null);
-        fetchCodes(); // Refresh sidebar to update the frequency count
+        loadCodes(); // Refresh sidebar to update the frequency count
       } else {
         setUploadStatus("Failed to remove code.");
       }

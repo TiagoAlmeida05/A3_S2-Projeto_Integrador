@@ -16,8 +16,8 @@ const ProjectPageSidebarPanel = ({
   handleRenameDocument,
   projectCodes,
   handleDeleteCode,
-  fetchCodes,
-  fetchDocuments,
+  loadCodes,
+  loadDocuments,
   openCodePanel,
   setProjectCodes,
   handleCreateTextDocument,
@@ -169,7 +169,7 @@ const ProjectPageSidebarPanel = ({
             onRenameDocument={handleRenameDocument}
             projectId={id}
             onWriteDocument={handleCreateTextDocument}
-            fetchDocuments={fetchDocuments}
+            loadDocuments={loadDocuments}
             pushUndoAction={pushUndoAction}
           />
         )}
@@ -178,7 +178,7 @@ const ProjectPageSidebarPanel = ({
             projectId={id}
             codes={projectCodes}
             onDeleteCode={handleDeleteCode}
-            onRefreshCodes={fetchCodes}
+            onRefreshCodes={loadCodes}
             onOpenCodePanel={openCodePanel}
             onReorderCodes={setProjectCodes}
             onExportQuotesCSV={handleExportQuotesCSV}

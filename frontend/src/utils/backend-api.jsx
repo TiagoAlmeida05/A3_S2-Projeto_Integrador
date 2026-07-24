@@ -58,10 +58,22 @@ export async function renameDocument(projectId, docId, filename) {
     )
 }
 
+export async function search(projectId, searchQuery) {
+  return await fetch(`${API_BASE}/projects/${projectId}/search?query=${searchQuery}`);
+}
+
 export async function fetchCodes (projectId) {
   return await fetch(`${API_BASE}/projects/${projectId}/codes`)
     .then((res) => res.json());
 };
+
+export async function createCode(projectId, codeData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/codes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(codeData)
+  });
+}
 
 export async function fetchSegmentsForDocument(projectId, documentId) {
   return await fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${documentId}`)
