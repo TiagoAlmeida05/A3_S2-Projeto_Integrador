@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import MarginSidebar from "./MarginSidebar";
-import { createCode, createMemoForSegment, deleteSegment, fetchDocument, fetchSegmentsForDocument } from "../utils/backend-api";
+import { createCode, createMemoForSegment, deleteSegment, fetchDocument, fetchSegmentsForDocument, createSegmentWithCode, updateSegment } from "../utils/backend-api";
 
   const getRandomColor = () => {
     const chars = '6789ABCDEF'; 
@@ -285,11 +285,12 @@ const ProjectPageDocumentPanel = ({
       }
 
       const segmentPromises = codesToApply.map((codeId) =>
-        fetch(`${API_BASE}/projects/${projectId}/segments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ document_id: activeDocument.id, code_id: codeId, start_char: selectionOffsets.start, end_char: selectionOffsets.end, content: selectionText }),
-        }).then(async (res) => {
+        createSegmentWithCode(projectId, { document_id: activeDocument.id, 
+                            code_id: codeId, 
+                            start_char: selectionOffsets.start, 
+                            end_char: selectionOffsets.end, 
+                            content: selectionText })
+        .then(async (res) => {
           const data = await res.json();
           if (!res.ok) throw new Error(data.detail || "Failed to save segment");
           return data;
@@ -391,10 +392,11 @@ const ProjectPageDocumentPanel = ({
 
       if (res.ok) {
         const segmentPromises = currentLocalSegments.map(seg => 
-          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
-          })
+          updateSegment(projectId, 
+                        seg.id, 
+                        { start_char: seg.start_char, 
+                          end_char: seg.end_char, 
+                          content: seg.content })
         );
         await Promise.all(segmentPromises);
 

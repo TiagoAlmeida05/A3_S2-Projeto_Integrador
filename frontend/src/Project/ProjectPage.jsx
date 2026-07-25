@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
 import AudioLanguageModal from "../Modal/AudioLanguageModal"; 
 import ExportFilterModal from '../Modal/ExportFilterModal';
-import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument } from "../utils/backend-api"
+import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument, deleteCode, createSegmentWithCode, fetchMemos, deleteDocument } from "../utils/backend-api"
 
 import axios from "axios";
 
@@ -156,25 +156,24 @@ function ProjectPage() {
     try {
       if (lastAction.type === "create-segment" || lastAction.type === "create-quick-code") {
         for (const segment of lastAction.segments || []) {
-          await fetch(`${API_BASE}/projects/${id}/segments/${segment.id}`, { method: "DELETE" });
+          await deleteSegment(id, segment.id);
         }
         if (lastAction.segments?.length > 0) await refreshSegmentsForDocument(lastAction.segments[0].document_id);
         if (lastAction.type === "create-quick-code" && lastAction.code?.id) {
-          await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.code.id}`, { method: "DELETE" });
+          await deleteCode(id, lastAction.code.id);
         }
         loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
 
       } else if (lastAction.type === "delete-segment") {
         const segment = lastAction.segment;
-        await fetch(`${API_BASE}/projects/${id}/segments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            document_id: segment.document_id, code_id: segment.code_id,
-            start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
-          }),
-        });
+        await createSegmentWithCode(id, {
+            document_id: segment.document_id, 
+            code_id: segment.code_id,
+            start_char: segment.start_char, 
+            end_char: segment.end_char, 
+            content: segment.content,
+          });
         await refreshSegmentsForDocument(segment.document_id);
         loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
@@ -207,13 +206,13 @@ function ProjectPage() {
 
         for (const segment of lastAction.segments || []) {
           const restoredCodeId = restoredCodeIds.get(Number(segment.code_id)) || segment.code_id;
-          await fetch(`${API_BASE}/projects/${id}/segments`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              document_id: segment.document_id, code_id: restoredCodeId,
-              start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
-            }),
-          });
+          await createSegmentWithCode(id, {
+              document_id: segment.document_id, 
+              code_id: restoredCodeId,
+              start_char: segment.start_char, 
+              end_char: segment.end_char, 
+              content: segment.content,
+            });
           await refreshSegmentsForDocument(segment.document_id);
         }
 
@@ -257,12 +256,12 @@ function ProjectPage() {
         }
 
         for (const segment of lastAction.segments || []) {
-          await fetch(`${API_BASE}/projects/${id}/segments`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              document_id: restoredDoc.id, code_id: segment.code_id,
-              start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
-            }),
+          await createSegmentWithCode(id, {
+              document_id: restoredDoc.id, 
+              code_id: segment.code_id,
+              start_char: segment.start_char, 
+              end_char: segment.end_char, 
+              content: segment.content
           });
         }
         loadDocuments();
@@ -416,16 +415,12 @@ function ProjectPage() {
         ? (await fetchAllDocumentSegments()).filter((segment) => codeIdsToDelete.has(Number(segment.code_id)))
         : [];
 
-      const memosRes = await fetch(`${API_BASE}/projects/${id}/memos`);
-      const allMemos = await memosRes.ok ? await memosRes.json() : [];
+      const allMemos = fetchMemos();
       const memosSnapshot = allMemos.filter(m => 
         m.target_type === 'code' && codeIdsToDelete.has(Number(m.target_id))
       );
 
-      const response = await fetch(
-        `${API_BASE}/projects/${id}/codes/${codeId}`,
-        { method: "DELETE" },
-      );
+      const response = deleteCode(id, codeId);
       
       if (response.ok) {
         setProjectCodes((prev) => prev.filter((c) => c.id !== codeId));
@@ -491,7 +486,7 @@ function ProjectPage() {
           if (oldDoc) {
             setUploadStatus(`Replacing ${finalName}...`);
             try {
-              const delRes = await fetch(`${API_BASE}/projects/${id}/documents/${oldDoc.id}`, { method: "DELETE" });
+              const delRes = await deleteDocument(id, oldDoc.id);
               if (delRes.ok) {
                 isNameValid = true;
                 if (activeDocument && activeDocument.id === oldDoc.id) setActiveDocument(null);
@@ -616,17 +611,12 @@ function ProjectPage() {
   const handleDeleteDocument = async (docId, docName) => {
     try {
       const docToSnapshot = documents.find(d => d.id === docId);
-      // const docContentRes = await fetch(`${API_BASE}/projects/${id}/documents/${docId}`);
-      // const docContentData = docContentRes.ok ? await docContentRes.json() : docToSnapshot;
       
       const docContentData = await fetchDocument(id, docId);
 
       const segmentsData = await fetchSegmentsForDocument(id, docId);
 
-      const response = await fetch(
-        `${API_BASE}/projects/${id}/documents/${docId}`,
-        { method: "DELETE" },
-      );
+      const response = deleteDocument(id, docId);
 
       if (response.ok) {
         setDocuments((prevDocs) => prevDocs.filter((doc) => doc.id !== docId));

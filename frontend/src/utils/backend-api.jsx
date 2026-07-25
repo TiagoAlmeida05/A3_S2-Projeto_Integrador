@@ -57,6 +57,13 @@ export async function renameDocument(projectId, docId, filename) {
     )
 }
 
+export async function deleteDocument(projectId, documentId) {
+  return await fetch(
+        `${API_BASE}/projects/${projectId}/documents/${documentId}`,
+        { method: "DELETE" },
+      );
+}
+
 export async function search(projectId, searchQuery) {
   return await fetch(`${API_BASE}/projects/${projectId}/search?query=${searchQuery}`);
 }
@@ -74,13 +81,37 @@ export async function createCode(projectId, codeData) {
   });
 }
 
+export async function deleteCode(projectId, codeId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/codes/${codeId}`, { method: "DELETE" });
+}
+
 export async function fetchSegmentsForDocument(projectId, documentId) {
   return await fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${documentId}`)
               .then((res) => res.json());
 }
 
+export async function createSegmentWithCode(projectId, segmentWithCodeData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/segments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(segmentWithCodeData),
+  });
+}
+
+export async function updateSegment(projectId, segmentId, segmentData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(segmentData)
+          });
+}
+
 export async function deleteSegment(projectId, segmentId) {
   return await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`, { method: "DELETE" })
+}
+
+export async function fetchMemos(projectId) {
+  const memosRes = await fetch(`${API_BASE}/projects/${projectId}/memos`);
+  return await memosRes.ok ? await memosRes.json() : [];
 }
 
 export async function createMemoForSegment(segmentId, memoText) {
