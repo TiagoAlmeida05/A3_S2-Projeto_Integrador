@@ -263,7 +263,7 @@ function DocumentsSidebar({
     }
 
     try {
-      const response = updateDocumentMetadata(projectId, 
+      const response = await updateDocumentMetadata(projectId, 
               metadataDialog.documentId,
               { metadata: nextMetadata });
 
