@@ -528,7 +528,7 @@ const ProjectPageDocumentPanel = ({
       if (!docRes.ok) throw new Error("Failed to save document");
 
       const segmentPromises = localSegments.map((seg) =>
-        await updateSegment(projectId, 
+        updateSegment(projectId, 
                             seg.id, 
                             { start_char: seg.start_char, 
                               end_char: seg.end_char, 

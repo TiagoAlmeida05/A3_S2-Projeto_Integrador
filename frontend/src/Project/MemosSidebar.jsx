@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { deleteMemmo, fetchMemos } from "../utils/backend-api";
+import { deleteMemo, fetchMemos } from "../utils/backend-api";
 
 export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) {
   const [memos, setMemos] = useState([]);
