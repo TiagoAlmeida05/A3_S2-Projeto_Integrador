@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { deleteMemmo } from "../utils/backend-api";
+import { deleteMemmo, fetchMemos } from "../utils/backend-api";
 
 export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) {
   const [memos, setMemos] = useState([]);
@@ -14,9 +14,8 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
     if (!projectId) return;
     if (isInitialLoad) setLoading(true);
 
-    axios
-      .get(`http://127.0.0.1:8000/projects/${projectId}/memos?t=${Date.now()}`)
-      .then((res) => setMemos(res.data))
+    fetchMemos(projectId)
+      .then((res) => setMemos(res))
       .catch((e) => setError("Failed to load memos"))
       .finally(() => {
         if (isInitialLoad) setLoading(false);
@@ -25,10 +24,10 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
 
   useEffect(() => {
     loadMemos(true);
-    const handleBackgroundUpdate = () => fetchMemos(false);
+    const handleBackgroundUpdate = () => loadMemos(false);
     window.addEventListener('memos-updated', handleBackgroundUpdate);
     return () => window.removeEventListener('memos-updated', handleBackgroundUpdate);
-  }, [fetchMemos]);
+  }, [loadMemos]);
 
   // --- ACTIONS ---
   const handleEdit = (memo) => {
@@ -59,7 +58,7 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
       }
     } catch {
       setError("Failed to delete memo");
-      fetchMemos(false);
+      loadMemos(false);
     }
   };
 

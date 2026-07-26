@@ -28,6 +28,14 @@ export async function createProject(projectData) {
     });
 };
 
+export async function updateProjectDetails(projectId, projectSettingsData) {
+    return await fetch(`${API_BASE}/projects/${projectId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(projectSettingsData),
+      });
+}
+
 export async function importProjectFromRefi(formData) {
   return await fetch(`${API_BASE}/projects/import/refi`, {
         method: 'POST',
@@ -127,6 +135,15 @@ export async function updateDocumentContent(projectId, documentId, content) {
       });
 }
 
+export async function moveDocument(projectId, documentId, folderId){
+  const moveUrl = new URL(`${API_BASE}/projects/${projectId}/documents/${documentId}/move`);
+      if (folderId !== null && folderId !== undefined) {
+        moveUrl.searchParams.set('folder_id', String(folderId));
+      }
+  return await fetch(moveUrl.toString(), { method: 'PUT' });
+}
+
+
 export async function deleteDocument(projectId, documentId) {
   return await fetch(
         `${API_BASE}/projects/${projectId}/documents/${documentId}`,
@@ -140,6 +157,47 @@ export async function buildPdfPreviewUrl(projectId, documentId) {
 
 export async function search(projectId, searchQuery) {
   return await fetch(`${API_BASE}/projects/${projectId}/search?query=${searchQuery}`);
+}
+
+export async function fetchFolders(projectId) {
+  return fetch(`${API_BASE}/projects/${projectId}/folders`)
+      .then(res => res.json());
+}
+
+export async function createFolder(projectId, folderData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(folderData)
+      });
+}
+
+export async function renameFolder(projectId, folderId, renameFolderData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/folders/${folderId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(renameFolderData)
+      });
+}
+
+export async function moveFolder(projectId, folderId, moveFolderData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/folders/${folderId}/move`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(moveFolderData)
+          });
+}
+
+export async function reorderFolders(projectId, foldersReorderData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/folders/reorder`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(foldersReorderData)
+          });
+}
+
+export async function deleteFolder(projectId, folderId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/folders/${folderId}`, { method: 'DELETE' });
 }
 
 export async function fetchCodes (projectId) {

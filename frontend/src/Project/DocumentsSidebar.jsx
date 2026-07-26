@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
-import { updateDocumentsOrder } from '../utils/backend-api';
+import { createFolder, deleteFolder, fetchFolders, moveDocument, moveFolder, renameFolder, reorderFolders, updateDocumentMetadata, updateDocumentsOrder } from '../utils/backend-api';
 
 function DocumentsSidebar({ 
   documents, 
@@ -42,7 +42,7 @@ function DocumentsSidebar({
   const [contextMenu, setContextMenu] = useState(null);
 
   useEffect(() => {
-    if (projectId) fetchFolders();
+    if (projectId) loadFolders();
 
     const handleClickOutside = () => setContextMenu(null);
     document.addEventListener('click', handleClickOutside);
@@ -175,13 +175,8 @@ function DocumentsSidebar({
   };
 
   const moveDocumentToFolder = async (documentId, folderId) => {
-    const moveUrl = new URL(`http://127.0.0.1:8000/projects/${projectId}/documents/${documentId}/move`);
-    if (folderId !== null && folderId !== undefined) {
-      moveUrl.searchParams.set('folder_id', String(folderId));
-    }
-
     try {
-      const response = await fetch(moveUrl.toString(), { method: 'PUT' });
+      const response = moveDocument(projectId, documentId, folderId);
       if (!response.ok) throw new Error('Failed to move document');
       if (fetchDocuments) fetchDocuments();
     } catch (err) {
@@ -196,15 +191,11 @@ function DocumentsSidebar({
       return;
     }
     try {
-      const res = await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newSubFolderName, parent_id: parentId })
-      });
+      const res = createFolder(projectId, { name: newSubFolderName, parent_id: parentId });
       if (res.ok) {
         setNewSubFolderName("");
         setAddingSubFolderTo(null);
-        fetchFolders();
+        loadFolders();
       }
     } catch (err) {
       console.error(err);
@@ -232,9 +223,8 @@ function DocumentsSidebar({
     };
   };
 
-  const fetchFolders = () => {
-    fetch(`http://127.0.0.1:8000/projects/${projectId}/folders`)
-      .then(res => res.json())
+  const loadFolders = () => {
+    fetchFolders(projectId)
       .then(data => setFolders(data || []))
       .catch(err => console.error(err));
   };
@@ -273,15 +263,13 @@ function DocumentsSidebar({
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/documents/${metadataDialog.documentId}/metadata`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metadata: nextMetadata }),
-      });
+      const response = updateDocumentMetadata(projectId, 
+              metadataDialog.documentId,
+              { metadata: nextMetadata });
 
       if (!response.ok) throw new Error('Failed to save details');
       if (fetchDocuments) fetchDocuments();
-      fetchFolders();
+      loadFolders();
       closeMetadataDialog();
     } catch (err) {
       console.error(err);
@@ -296,15 +284,11 @@ function DocumentsSidebar({
       return;
     }
     try {
-      const res = await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newFolderName })
-      });
+      const res = createFolder(projectId, { name: newFolderName });
       if (res.ok) {
         setNewFolderName("");
         setIsCreatingFolder(false);
-        fetchFolders();
+        loadFolders();
       }
     } catch (err) {
       console.error(err);
@@ -313,9 +297,9 @@ function DocumentsSidebar({
 
   const handleDeleteFolder = async (folderId) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/${folderId}`, { method: 'DELETE' });
+      const res = deleteFolder(projectId, folderId);
       if (res.ok) {
-        fetchFolders();
+        loadFolders();
         if (fetchDocuments) fetchDocuments();
       }
     } catch (err) {
@@ -395,13 +379,9 @@ function DocumentsSidebar({
     }
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/${renamingFolder.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nextName })
-      });
+      const res = renameFolder(projectId, renamingFolder.id, { name: nextName });
       if (res.ok) {
-        fetchFolders(); // Refresh folders to show the new name
+        loadFolders(); // Refresh folders to show the new name
       }
     } catch (err) {
       console.error(err);
@@ -504,23 +484,15 @@ function DocumentsSidebar({
       if (targetType === 'folder' && dragPosition === 'inside') {
         // Move folder INSIDE another folder
         try {
-          await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/${id}/move`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ parent_id: targetId })
-          });
-          fetchFolders();
+          moveFolder(projectId, id, { parent_id: targetId });
+          loadFolders();
           setExpandedFolders(prev => new Set(prev).add(targetId)); // Auto expand
         } catch (err) { console.error(err); }
       } else if (targetType === 'root') {
         // Move folder OUT to the root (un-nest it)
         try {
-          await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/${id}/move`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ parent_id: null }) // null means root level!
-          });
-          fetchFolders();
+          moveFolder(projectId, id, { parent_id: null }); // null means root level!
+          loadFolders();
         } catch (err) { console.error(err); }
       } else if (targetType === 'folder') {
         // Standard vertical reordering
@@ -534,11 +506,7 @@ function DocumentsSidebar({
 
         const reorderPayload = remaining.map((f, idx) => ({ id: f.id, order_index: idx }));
         try {
-          await fetch(`http://127.0.0.1:8000/projects/${projectId}/folders/reorder`, {
-            method: 'PUT',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ folders: reorderPayload })
-          });
+          reorderFolders(projectId, { folders: reorderPayload });
         } catch (err) { console.error(err); }
       }
     }else if (type === 'doc') {

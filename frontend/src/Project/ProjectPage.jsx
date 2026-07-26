@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
 import AudioLanguageModal from "../Modal/AudioLanguageModal"; 
 import ExportFilterModal from '../Modal/ExportFilterModal';
-import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument, deleteCode, createSegmentWithCode, fetchMemos, deleteDocument, createDocument, uploadDocument, updateCode, createCode, createMemo, updateDocumentMetadata, updateCodesOrder, transcribeAudio, exportProjectToRefi, exportProjectSegmentsToCsv, buildUrlToExportExcel } from "../utils/backend-api"
+import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument, deleteCode, createSegmentWithCode, fetchMemos, deleteDocument, createDocument, uploadDocument, updateCode, createCode, createMemo, updateDocumentMetadata, updateCodesOrder, transcribeAudio, exportProjectToRefi, exportProjectSegmentsToCsv, buildUrlToExportExcel, updateProjectDetails, deleteProject } from "../utils/backend-api"
 
 import axios from "axios";
 
@@ -391,7 +391,7 @@ function ProjectPage() {
         ? (await fetchAllDocumentSegments()).filter((segment) => codeIdsToDelete.has(Number(segment.code_id)))
         : [];
 
-      const allMemos = fetchMemos();
+      const allMemos = fetchMemos(id);
       const memosSnapshot = allMemos.filter(m => 
         m.target_type === 'code' && codeIdsToDelete.has(Number(m.target_id))
       );
@@ -650,11 +650,9 @@ function ProjectPage() {
 
   const handleSaveSettings = async (newName, newDescription) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/projects/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, description: newDescription }),
-      });
+      const res = updateProjectDetails(id, 
+                                      { name: newName, 
+                                        description: newDescription });
 
       if (res.ok) {
         setProjectDetails({ name: newName, description: newDescription }); // Update the UI instantly
@@ -669,7 +667,7 @@ function ProjectPage() {
 
   const handleDeleteProject = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/projects/${id}`, { method: 'DELETE' });
+      const response = await deleteProject();
       if(response.ok) {
         navigate('/');
       } else {
