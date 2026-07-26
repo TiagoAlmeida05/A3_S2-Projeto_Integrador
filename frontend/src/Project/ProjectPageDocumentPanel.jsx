@@ -14,7 +14,7 @@ const ProjectPageDocumentPanel = ({
   setDocumentSegments,
   setActiveDocument, 
   loadCodes,
-  fetchDocuments,
+  loadDocuments,
   pushUndoAction,
   projectId,
   currentSearchResult,
@@ -465,7 +465,7 @@ const ProjectPageDocumentPanel = ({
             previousMetadata: currentMetadata
           });
         }
-        if (fetchDocuments) fetchDocuments();
+        if (loadDocuments) loadDocuments();
       } else {
         setDocumentMetadata(currentMetadata);
         setActiveDocument(prev => ({ ...prev, metadata: currentMetadata }));
@@ -492,7 +492,7 @@ const ProjectPageDocumentPanel = ({
 
         setIsEditing(false);
         setActiveDocument({ ...savedDoc, content: editContent });
-        if (fetchDocuments) fetchDocuments();
+        if (loadDocuments) loadDocuments();
 
         setUploadStatus("Document created successfully!");
         setTimeout(() => setUploadStatus(""), 3000);
