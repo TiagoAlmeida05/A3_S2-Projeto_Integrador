@@ -28,6 +28,13 @@ export async function createProject(projectData) {
     });
 };
 
+export async function importProjectFromRefi(formData) {
+  return await fetch(`${API_BASE}/projects/import/refi`, {
+        method: 'POST',
+        body: formData,
+      });
+}
+
 export async function deleteProject(projectId) {
     return await fetch(`${API_BASE}/projects/${projectId}`, { method: "DELETE" });
 };
@@ -37,6 +44,33 @@ export async function fetchProjectDetails (projectId) {
     .then((res) => res.json());
 };
 
+export async function exportProjectToRefi(projectId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/export/refi`);
+}
+
+export async function exportProjectToDocx(projectId) {
+  return await fetch(`http://${API_BASE}/projects/${projectId}/codes/export/docx`);
+}
+
+export async function exportProjectSegmentsToCsv(projectId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/segments/export/csv`);
+}
+
+export async function buildUrlToExportExcel(selectedDocIds, selectedCodeIds) {
+  let url = `${API_BASE}/projects/${id}/export/excel`;
+
+  // Append the filters to the URL as query parameters
+  const params = new URLSearchParams();
+  if (selectedDocIds.length > 0) params.append("docs", selectedDocIds.join(","));
+  if (selectedCodeIds.length > 0) params.append("codes", selectedCodeIds.join(","));
+
+  if (params.toString()) {
+    url += `?${params.toString()}`;
+  }
+
+  return url;
+}
+
 export async function fetchDocuments (projectId) {
   return await fetch(`${API_BASE}/projects/${projectId}/documents/`)
     .then((res) => res.json());
@@ -45,6 +79,26 @@ export async function fetchDocuments (projectId) {
 export async function fetchDocument(projectId, docId) {
   return await fetch(`${API_BASE}/projects/${projectId}/documents/${docId}`)
       .then((res) => res.json())
+}
+
+export async function updateDocumentsOrder(projectId, documentsOrderData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/documents/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(documentsOrderData),
+      });
+}
+
+export async function createDocument(projectId, documentData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/documents/create`, {
+          method: "POST", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(documentData),
+        });
+}
+
+export async function uploadDocument(projectId, textFormData) {
+  return await fetch(`${API_BASE}/projects/${projectId}/documents/`, { method: "POST", body: textFormData });
 }
 
 export async function renameDocument(projectId, docId, filename) {
@@ -57,11 +111,31 @@ export async function renameDocument(projectId, docId, filename) {
     )
 }
 
+export async function updateDocumentMetadata(projectId, documentId, metadata) {
+  return await fetch(`${API_BASE}/projects/${projectId}/documents/${documentId}/metadata`, {
+             method: 'PUT', 
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify(metadata),
+           });
+}
+
+export async function updateDocumentContent(projectId, documentId, content) {
+  return await fetch(`${API_BASE}/projects/${projectId}/documents/${documentId}/content`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(content),
+      });
+}
+
 export async function deleteDocument(projectId, documentId) {
   return await fetch(
         `${API_BASE}/projects/${projectId}/documents/${documentId}`,
         { method: "DELETE" },
       );
+}
+
+export async function buildPdfPreviewUrl(projectId, documentId) {
+  return `${API_BASE}/projects/${projectId}/documents/${documentId}/file`;
 }
 
 export async function search(projectId, searchQuery) {
@@ -79,6 +153,29 @@ export async function createCode(projectId, codeData) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(codeData)
   });
+}
+
+export async function mergeCodes(projectId, codeMergeData) {
+  return await fetch(`http://${API_BASE}/projects/${projectId}/codes/merge`, {
+                      method: 'POST',
+                      headers: {'Content-Type': 'application/json'},
+                      body: JSON.stringify(codeMergeData)
+                    });
+}
+
+export async function updateCode(projectId, codeId, codeData) {
+  return await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.codeId}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(codeData),
+        });
+}
+
+export async function updateCodesOrder(projectId, codesOrderData) {
+  return await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
+            method: "PUT", 
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(codesOrderData),
+          });
 }
 
 export async function deleteCode(projectId, codeId) {
@@ -100,7 +197,8 @@ export async function createSegmentWithCode(projectId, segmentWithCodeData) {
 
 export async function updateSegment(projectId, segmentId, segmentData) {
   return await fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(segmentData)
           });
 }
@@ -120,4 +218,32 @@ export async function createMemoForSegment(segmentId, memoText) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: memoText, target_type: "segment", target_id: segmentId }),
       });
+}
+
+export async function createMemo(memoData) {
+  return await fetch(`${API_BASE}/memos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(memoData),
+    });
+}
+
+export async function updateMemo(memoId, updateMemoData) {
+  return await fetch(`${API_BASE}/memos/${editingMemo.id}`, {
+                     method: "PUT",
+                     headers: { "Content-Type": "application/json" },
+                     body: JSON.stringify({ text: newMemoText })});
+}
+
+export async function deleteMemo(memoId) {
+  return await fetch(`${API_BASE}/memos/${id}`, { method: "DELETE" });
+}
+
+export async function transcribeAudio(projectId, selectedLanguage, audioFormData) {
+  const url = `${API_BASE}/projects/${projectId}/audio/transcribe?language=${selectedLanguage}`;
+  const res = await fetch(url, {
+    method: "POST",
+    body: audioFormData,
+  });
+  return res;
 }

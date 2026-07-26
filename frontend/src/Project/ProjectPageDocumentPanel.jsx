@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import MarginSidebar from "./MarginSidebar";
-import { createCode, createMemoForSegment, deleteSegment, fetchDocument, fetchSegmentsForDocument, createSegmentWithCode, updateSegment } from "../utils/backend-api";
+import { createCode, createMemoForSegment, deleteSegment, fetchDocument, fetchSegmentsForDocument, createSegmentWithCode, updateSegment, createDocument, updateDocumentMetadata, updateDocumentContent, buildPdfPreviewUrl } from "../utils/backend-api";
 
   const getRandomColor = () => {
     const chars = '6789ABCDEF'; 
@@ -384,11 +384,9 @@ const ProjectPageDocumentPanel = ({
 
     try {
       setAutoSaveStatus("saving");
-      const res = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/content`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: contentToSave }),
-      });
+      const res = await updateDocumentMetadata(projectId, 
+                                          activeDocument.id,
+                                          { content: contentToSave });
 
       if (res.ok) {
         const segmentPromises = currentLocalSegments.map(seg => 
@@ -477,11 +475,9 @@ const ProjectPageDocumentPanel = ({
     setActiveDocument(prev => ({ ...prev, metadata: nextMetadata }));
 
     try {
-      const response = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/metadata`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metadata: nextMetadata }),
-      });
+      const response = await updateDocumentMetadata(projectId,
+                                                    activeDocument.id,
+                                                    { metadata: nextMetadata });
 
       if (response.ok) {
         if (pushUndoAction) {
@@ -509,11 +505,8 @@ const ProjectPageDocumentPanel = ({
     try {
       if (activeDocument.id === "NEW_DOC_PENDING") {
         const title = activeDocument.filename.trim() || "Untitled Document";
-        const docRes = await fetch(`${API_BASE}/projects/${projectId}/documents/create`, {
-          method: "POST", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: title, content: editContent }),
-        });
+        const docRes = await createDocument(projectId, 
+                                            { name: title, content: editContent });
 
         if (!docRes.ok) throw new Error("Failed to create document");
 
@@ -529,20 +522,18 @@ const ProjectPageDocumentPanel = ({
       }
 
       setUploadStatus("Saving document and shifting codes...");
-      const docRes = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/content`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editContent }),
-      });
+      const docRes = await updateDocumentContent(projectId, 
+                                                activeDocument.id, 
+                                                { content: editContent });
 
       if (!docRes.ok) throw new Error("Failed to save document");
 
       const segmentPromises = localSegments.map((seg) =>
-        fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content }),
-        })
+        await updateSegment(projectId, 
+                            seg.id, 
+                            { start_char: seg.start_char, 
+                              end_char: seg.end_char, 
+                              content: seg.content })
       );
 
       await Promise.all(segmentPromises);
@@ -835,7 +826,7 @@ const ProjectPageDocumentPanel = ({
 
   const isPDF = activeDocument?.filename?.toLowerCase().endsWith('.pdf') || activeDocument?.type === "pdf";
   const showPdfPreview = isPDF && !isPdfPreviewCollapsed;
-  const pdfPreviewUrl = `${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/file`;
+  const pdfPreviewUrl = buildPdfPreviewUrl(projectId, activeDocument.id);
 
   const suggestedCodes = (quickCodeMode === "new" && quickCodeName.trim().length > 0)
     ? projectCodes.filter(c => c.name.toLowerCase().includes(quickCodeName.trim().toLowerCase()))

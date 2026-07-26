@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
+import { updateDocumentsOrder } from '../utils/backend-api';
 
 function DocumentsSidebar({ 
   documents, 
@@ -163,11 +164,7 @@ function DocumentsSidebar({
     const reorderPayload = nextDocuments.map((doc, index) => ({ id: doc.id, order_index: index }));
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/documents/reorder`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ documents: reorderPayload }),
-      });
+      const response = updateDocumentsOrder(projectId, { documents: reorderPayload });
 
       if (!response.ok) throw new Error('Failed to reorder documents');
       if (fetchDocuments) fetchDocuments();

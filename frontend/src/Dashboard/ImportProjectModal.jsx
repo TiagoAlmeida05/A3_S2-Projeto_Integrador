@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { importProjectFromRefi } from '../utils/backend-api';
 
 function ImportProjectModal({ isOpen, onClose, onImportSuccess }) {
   const fileInputRef = useRef(null);
@@ -18,10 +19,7 @@ function ImportProjectModal({ isOpen, onClose, onImportSuccess }) {
     formData.append("file", file);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/projects/import/refi', {
-        method: 'POST',
-        body: formData,
-      });
+      const response = importProjectFromRefi(formData);
 
       if (!response.ok) {
         const errData = await response.json();

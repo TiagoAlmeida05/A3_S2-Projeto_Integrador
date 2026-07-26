@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
 import AudioLanguageModal from "../Modal/AudioLanguageModal"; 
 import ExportFilterModal from '../Modal/ExportFilterModal';
-import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument, deleteCode, createSegmentWithCode, fetchMemos, deleteDocument } from "../utils/backend-api"
+import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument, deleteCode, createSegmentWithCode, fetchMemos, deleteDocument, createDocument, uploadDocument, updateCode, createCode, createMemo, updateDocumentMetadata, updateCodesOrder, transcribeAudio, exportProjectToRefi, exportProjectSegmentsToCsv, buildUrlToExportExcel } from "../utils/backend-api"
 
 import axios from "axios";
 
@@ -184,10 +184,9 @@ function ProjectPage() {
 
         for (const code of orderedCodes) {
           const restoredParentId = code.parent_id && restoredCodeIds.has(Number(code.parent_id)) ? restoredCodeIds.get(Number(code.parent_id)) : code.parent_id;
-          const restoreResponse = await fetch(`${API_BASE}/projects/${id}/codes`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: code.name, color: code.color, parent_id: restoredParentId }),
-          });
+          const restoreResponse = await createCode(id, { name: code.name, 
+                                                         color: code.color, 
+                                                         parent_id: restoredParentId });
           const restoredCode = await restoreResponse.json();
           restoredCodeIds.set(Number(code.id), restoredCode.id);
         }
@@ -198,10 +197,7 @@ function ProjectPage() {
             parent_id: code.parent_id && restoredCodeIds.has(Number(code.parent_id)) ? restoredCodeIds.get(Number(code.parent_id)) : code.parent_id,
             order_index: code.order_index ?? index,
           })).filter((item) => item.id);
-          await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
-            method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ codes: reorderPayload }),
-          });
+          updateCodesOrder(id, { codes: reorderPayload });
         }
 
         for (const segment of lastAction.segments || []) {
@@ -218,41 +214,27 @@ function ProjectPage() {
 
         for (const memo of lastAction.memos || []) {
           const restoredCodeId = restoredCodeIds.get(Number(memo.target_id)) || memo.target_id;
-          await fetch(`${API_BASE}/memos`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: memo.text, target_type: "code", target_id: restoredCodeId }),
-          });
+          await createMemo({ text: memo.text, target_type: "code", target_id: restoredCodeId });
         }
         loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
 
       } else if (lastAction.type === "edit-code") {
-        await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.codeId}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(lastAction.previousState),
-        });
+        updateCode(id, lastAction.codeId, lastAction.previousState);
         loadCodes();
 
       } else if (lastAction.type === "reorder-codes") {
-        await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ codes: lastAction.previousState }),
-        });
+        updateCodesOrder(id, { codes: lastAction.previousState });
         loadCodes();
 
       } else if (lastAction.type === "delete-document") {
         const doc = lastAction.document;
-        const docRes = await fetch(`${API_BASE}/projects/${id}/documents/create`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: doc.filename, content: doc.content || "Restored content..." })
-        });
+        const docRes = await createDocument(id, 
+          { name: doc.filename, content: doc.content || "Restored content..." });
         const restoredDoc = await docRes.json();
 
         if (doc.metadata && Object.keys(doc.metadata).length > 0) {
-           await fetch(`${API_BASE}/projects/${id}/documents/${restoredDoc.id}/metadata`, {
-             method: 'PUT', headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ metadata: doc.metadata }),
-           });
+           updateDocumentMetadata(id, restoredDoc.id, { metadata: doc.metadata })
         }
 
         for (const segment of lastAction.segments || []) {
@@ -267,24 +249,18 @@ function ProjectPage() {
         loadDocuments();
       } else if (lastAction.type === "delete-memo") {
         const memo = lastAction.memo;
-        await fetch(`${API_BASE}/memos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        await createMemo({
             text: memo.text,
             target_type: memo.target_type,
             target_id: memo.target_id
-          }),
-        });
+          });
 
         window.dispatchEvent(new CustomEvent('memos-updated'));
         
       } else if (lastAction.type === "edit-metadata") {
-        await fetch(`${API_BASE}/projects/${id}/documents/${lastAction.documentId}/metadata`, {
-          method: "PUT", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ metadata: lastAction.previousMetadata }),
-        });
+        updateDocumentMetadata(id, 
+                               lastAction.documentId, 
+                               { metadata: lastAction.previousMetadata });
         // This will instantly update the sidebar and active document!
         loadDocuments(); 
       }
@@ -541,11 +517,7 @@ function ProjectPage() {
 
           try {
             // Send selected language down to Python backend via URL Query parameter!
-            const url = `${API_BASE}/projects/${id}/audio/transcribe?language=${selectedLanguage}`;
-            const res = await fetch(url, {
-              method: "POST",
-              body: audioFormData,
-            });
+            const res = transcribeAudio(id, selectedLanguage, audioFormData);
 
             if (!res.ok) {
               const errData = await res.json();
@@ -566,7 +538,7 @@ function ProjectPage() {
           const textFormData = new FormData();
           textFormData.append("files", cur);
           try {
-            const res = await fetch(`${API_BASE}/projects/${id}/documents/`, { method: "POST", body: textFormData });
+            const res = await uploadDocument(id, textFormData);
             if (!res.ok) {
               failedUploads.push({ filename: finalName, reason: `HTTP ${res.status}` });
             } else {
@@ -713,7 +685,7 @@ function ProjectPage() {
     setUploadStatus("Generating REFI-QDA export...");
 
     try {
-      const response = await fetch(`${API_BASE}/projects/${id}/export/refi`);
+      const response = exportProjectToRefi(id);
       if (!response.ok) throw new Error("Failed to generate export");
       const blob = await response.blob();
 
@@ -766,7 +738,7 @@ function ProjectPage() {
   const handleExportQuotesCSV = async () => {
     setUploadStatus("Generating Quotes CSV...");
     try {
-      const response = await fetch(`${API_BASE}/projects/${id}/segments/export/csv`);
+      const response = exportProjectSegmentsToCsv(id);
       if (!response.ok) throw new Error("Failed to export quotes");
       
       const blob = await response.blob();
@@ -810,16 +782,8 @@ function ProjectPage() {
   };
 
   const handleExportExcel = async (selectedDocIds, selectedCodeIds) => {
-    let url = `${API_BASE}/projects/${id}/export/excel`;
-
-      // Append the filters to the URL as query parameters
-      const params = new URLSearchParams();
-      if (selectedDocIds.length > 0) params.append("docs", selectedDocIds.join(","));
-      if (selectedCodeIds.length > 0) params.append("codes", selectedCodeIds.join(","));
-
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
+    
+      let url = buildUrlToExportExcel(selectedDocIds, selectedCodeIds);
 
       const link = document.createElement("a");
       link.href = url;

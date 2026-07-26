@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
+import { deleteMemmo } from "../utils/backend-api";
 
 export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) {
   const [memos, setMemos] = useState([]);
@@ -9,7 +10,7 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
   const [error, setError] = useState(null);
 
   // --- DATA FETCHING ---
-  const fetchMemos = useCallback((isInitialLoad = false) => {
+  const loadMemos = useCallback((isInitialLoad = false) => {
     if (!projectId) return;
     if (isInitialLoad) setLoading(true);
 
@@ -23,7 +24,7 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
   }, [projectId]);
 
   useEffect(() => {
-    fetchMemos(true);
+    loadMemos(true);
     const handleBackgroundUpdate = () => fetchMemos(false);
     window.addEventListener('memos-updated', handleBackgroundUpdate);
     return () => window.removeEventListener('memos-updated', handleBackgroundUpdate);
@@ -38,7 +39,7 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
   const handleSave = async () => {
     if (!editingMemo) return;
     try {
-      const res = await axios.put(`http://127.0.0.1:8000/memos/${editingMemo.id}`, { text: newMemoText });
+      const res = updateMemo(editingMemo.id, { text: newMemoText });
       setMemos((prev) => prev.map((m) => (m.id === res.data.id ? { ...res.data, target_name: m.target_name } : m)));
       setEditingMemo(null);
       setNewMemoText("");
@@ -52,7 +53,7 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
     setMemos((prev) => prev.filter((m) => m.id !== id));
 
     try {
-      await axios.delete(`http://127.0.0.1:8000/memos/${id}`);
+      deleteMemo();
       if (pushUndoAction && memoSnapshot) {
         pushUndoAction({ type: "delete-memo", memo: memoSnapshot });
       }
