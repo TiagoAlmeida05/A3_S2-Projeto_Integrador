@@ -151,8 +151,10 @@ export async function deleteDocument(projectId, documentId) {
       );
 }
 
-export async function buildPdfPreviewUrl(projectId, documentId) {
-  return `${API_BASE}/projects/${projectId}/documents/${documentId}/file`;
+export function buildPdfPreviewUrl(projectId, documentId) {
+  let url = `${API_BASE}/projects/${projectId}/documents/${documentId}/file`;
+  console.log(url);
+  return url;
 }
 
 export async function search(projectId, searchQuery) {

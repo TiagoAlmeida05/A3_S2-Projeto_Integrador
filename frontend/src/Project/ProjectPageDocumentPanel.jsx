@@ -5,6 +5,7 @@ import { createCode, createMemoForSegment, deleteSegment, fetchDocument, fetchSe
 import { getRandomColor, hexToRGBA } from "../utils/colors";
 import SegmentMemoModal from "./SegmentMemoModal";
 import QuickCodeModal from "./QuickCodeModal";
+import PdfPreviewPanel from "./PdfPreviewPanel";
 
 const ProjectPageDocumentPanel = ({
   viewerRef,
@@ -1080,17 +1081,7 @@ const ProjectPageDocumentPanel = ({
           {/* PDF Preview Panel */}
           {isPDF && showPdfPreview && (
             <>
-              <Panel defaultSize={35} minSize={20} style={{ display: "flex", flexDirection: "column", backgroundColor: "#0f1115", border: "1px solid #2d2f36", borderRadius: "8px", overflow: "hidden" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #2d2f36", color: "#e5e7eb", backgroundColor: "#151922" }}>
-                  <div style={{ fontSize: "13px", fontWeight: "bold" }}>Original PDF</div>
-                </div>
-                <embed
-                  title={`${activeDocument.filename} preview`}
-                  src={`${pdfPreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                  type="application/pdf"
-                  style={{ width: "100%", flex: 1, border: "none", backgroundColor: "#fff" }}
-                />
-              </Panel>
+              <PdfPreviewPanel pdfPreviewUrl={pdfPreviewUrl} filename={activeDocument.filename} />
               <Separator style={{ width: "16px", cursor: "col-resize", backgroundColor: "transparent", display: "flex", justifyContent: "center" }}>
                  <div style={{ width: "2px", height: "100%", backgroundColor: "#eee" }} />
               </Separator>
