@@ -2,16 +2,8 @@ import { useEffect, useState, useRef } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import MarginSidebar from "./MarginSidebar";
 import { createCode, createMemoForSegment, deleteSegment, fetchDocument, fetchSegmentsForDocument, createSegmentWithCode, updateSegment, createDocument, updateDocumentMetadata, updateDocumentContent, buildPdfPreviewUrl } from "../utils/backend-api";
-
-  const getRandomColor = () => {
-    const chars = '6789ABCDEF'; 
-    let color = '#';
-    for (let i = 0; i < 6; i++) {
-      color += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return color;
-  };
-
+import { getRandomColor, hexToRGBA } from "../utils/colors";
+import SegmentMemoModal from "./SegmentMemoModal";
 
 const ProjectPageDocumentPanel = ({
   viewerRef,
@@ -32,7 +24,6 @@ const ProjectPageDocumentPanel = ({
   const [marginBars, setMarginBars] = useState([]);
   const [segmentContextMenu, setSegmentContextMenu] = useState(null);
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
-  const [memoText, setMemoText] = useState("");
   const [activeSegmentForMemo, setActiveSegmentForMemo] = useState(null);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [selectionRect, setSelectionRect] = useState(null);
@@ -109,16 +100,6 @@ const ProjectPageDocumentPanel = ({
     };
   }, [segmentContextMenu]);
 
-  const hexToRGBA = (hex, opacity) => {
-    if (!hex) return "transparent";
-    hex = hex.replace("#", "");
-    if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-  };
-
   useEffect(() => {
     if (activeDocument && activeDocument.id === "NEW_DOC_PENDING") {
       setIsEditing(true);
@@ -152,7 +133,6 @@ const ProjectPageDocumentPanel = ({
 
   const openMemoModal = (segmentId) => {
     setActiveSegmentForMemo(segmentId);
-    setMemoText("");
     setIsMemoModalOpen(true);
     setSegmentContextMenu(null);
   };
@@ -316,12 +296,11 @@ const ProjectPageDocumentPanel = ({
     }
   };
 
-  const handleSaveLocalSegmentMemo = async () => {
+  const handleSaveLocalSegmentMemo = async (memoText) => {
     if (!memoText.trim()) return;
     try {
       await createMemoForSegment(activeSegmentForMemo, memoText);
       setIsMemoModalOpen(false);
-      setMemoText("");
     } catch (error) {
       alert("Failed to save memo");
     }
@@ -1173,35 +1152,10 @@ const ProjectPageDocumentPanel = ({
       )}
 
       {isMemoModalOpen && (
-        <div style={{position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 9999,display: "flex", alignItems: "center", justifyContent: "center"}}>
-          <div style={{ 
-            backgroundColor: "#242424", 
-            padding: "30px", 
-            borderRadius: "8px", 
-            border: "1px solid #444", 
-            width: "400px", 
-            color: "white", 
-            boxShadow: "0 8px 30px rgba(0,0,0,0.6)" 
-          }}>
-            <h3 style={{ marginTop: 0, marginBottom: "15px" }}>Add Quote Memo</h3>
-            <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)} placeholder="Memo text..." rows={5} autoFocus style={{ width: "100%", padding: "12px", borderRadius: 4, border: "1px solid #555", backgroundColor: "#111", color: "white", boxSizing: "border-box", marginBottom: "16px", resize: "vertical" }} />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button onClick={() => setIsMemoModalOpen(false)} 
-                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "#aaa"; }}
-                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.borderColor = "#555"; }}
-                style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s ease' }}>
-                Cancel
-              </button>
-              <button onClick={handleSaveLocalSegmentMemo} 
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#7a82ff"}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#646cff"}
-                  style={{ padding: '8px 16px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' }}
-                >
-                  Save Memo
-              </button>
-            </div>
-          </div>
-        </div>
+        <SegmentMemoModal 
+            open={isMemoModalOpen}
+            onSave={handleSaveLocalSegmentMemo}
+            onClose={() => setIsMemoModalOpen(false)} />
       )}
 
       {quickMenuOpen && selectionRect && (
