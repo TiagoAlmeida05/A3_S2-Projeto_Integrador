@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
-import { createFolder, deleteFolder, fetchFolders, moveDocument, moveFolder, renameFolder, reorderFolders, updateDocumentMetadata, updateDocumentsOrder } from '../utils/backend-api';
-import DocumentMetadataModal from './DocumentMetadataModal';
+import { createFolder, deleteFolder, fetchFolders, moveDocument, moveFolder, renameFolder, reorderFolders, updateDocumentsOrder, normalizeMetadata } from '../utils/backend-api';
 
 function DocumentsSidebar({ 
   documents, 
@@ -26,8 +25,6 @@ function DocumentsSidebar({
   const [isImportDropActive, setIsImportDropActive] = useState(false);
   const [sortMode, setSortMode] = useState("custom");
   const [metadataFilterKey, setMetadataFilterKey] = useState("");
-  const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false);
-  const [metadataDialog, setMetadataDialog] = useState({ isOpen: false, documentId: null, documentName: "" });
   const [folderToDelete, setFolderToDelete] = useState(null);
   const [renamingFolder, setRenamingFolder] = useState(null);
 
@@ -47,22 +44,6 @@ function DocumentsSidebar({
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [projectId]);
-
-  useEffect(() => {
-    const handleOpenMetadata = (e) => {
-      openMetadataDialog(e.detail.documentId, e.detail.documentName);
-    };
-    
-    window.addEventListener('open-metadata', handleOpenMetadata);
-    return () => window.removeEventListener('open-metadata', handleOpenMetadata);
-  }, []);
-
-  const normalizeMetadata = (doc) => {
-    if (!doc || !doc.metadata || typeof doc.metadata !== "object") {
-      return {};
-    }
-    return doc.metadata;
-  };
 
   const formatImportedDate = (createdAt) => {
     if (!createdAt) return "Unknown date";
@@ -226,44 +207,6 @@ function DocumentsSidebar({
     fetchFolders(projectId)
       .then(data => setFolders(data || []))
       .catch(err => console.error(err));
-  };
-
-  const openMetadataDialog = (documentId, documentName) => {
-    setMetadataDialog({ documentId, documentName: documentName || "Document" });
-    setIsMetadataDialogOpen(true);
-    setContextMenu(null);
-  };
-
-  const closeMetadataDialog = () => {
-    setMetadataDialog({ documentId: null, documentName: "" });
-    setIsMetadataDialogOpen(false);
-  };
-
-  const saveDocumentMetadata = async (finalFieldName, fieldValue) => {
-    
-    const currentDocument = documents.find((doc) => doc.id === metadataDialog.documentId);
-    const currentMetadata = normalizeMetadata(currentDocument);
-    const nextMetadata = { ...currentMetadata };
-
-    if (fieldValue) {
-      nextMetadata[finalFieldName] = fieldValue;
-    } else {
-      delete nextMetadata[finalFieldName];
-    }
-
-    try {
-      const response = await updateDocumentMetadata(projectId, 
-              metadataDialog.documentId,
-              { metadata: nextMetadata });
-
-      if (!response.ok) throw new Error('Failed to save details');
-      if (fetchDocuments) fetchDocuments();
-      loadFolders();
-      closeMetadataDialog();
-    } catch (err) {
-      console.error(err);
-      window.alert('We could not save those details. Please try again.');
-    }
   };
 
   const handleCreateFolder = async (e) => {
@@ -1077,17 +1020,6 @@ function DocumentsSidebar({
               <button 
                 onClick={(e) => { 
                   e.stopPropagation(); 
-                  openMetadataDialog(contextMenu.id, contextMenu.name); 
-                }} 
-                style={{ width: '100%', padding: '8px 12px', backgroundColor: 'transparent', color: 'white', border: 'none', textAlign: 'left', cursor: 'pointer', borderRadius: '4px', fontSize: '13px' }}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#3a3a46'}
-                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-              >
-                Add details
-              </button>
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); 
                   onDeleteDocument(contextMenu.id, contextMenu.name);
                   setContextMenu(null); 
                 }}
@@ -1102,13 +1034,6 @@ function DocumentsSidebar({
         </div>
       )}
 
-      {isMetadataDialogOpen && (
-        <DocumentMetadataModal 
-          documentId={metadataDialog.documentId}
-          documentName={metadataDialog.documentName}
-          onClose={closeMetadataDialog}
-          onSave={saveDocumentMetadata}
-           />)}
       <ConfirmDeleteModal 
         isOpen={!!folderToDelete}
         onClose={() => setFolderToDelete(null)}

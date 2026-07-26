@@ -306,3 +306,10 @@ export async function transcribeAudio(projectId, selectedLanguage, audioFormData
   });
   return res;
 }
+
+export function normalizeMetadata (doc) {
+  if (!doc || !doc.metadata || typeof doc.metadata !== "object") {
+    return {};
+  }
+  return doc.metadata;
+};

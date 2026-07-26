@@ -930,8 +930,10 @@ const ProjectPageDocumentPanel = ({
 
       {activeDocument.id !== "NEW_DOC_PENDING" && (
         <DocumentDetailsTab 
+          projectId={projectId}
           activeDocument={activeDocument}
           documentMetadata={documentMetadata}
+          setDocumentMetadata={setDocumentMetadata}
           handleDeleteDetail={handleDeleteDetail} />
       )}
 
