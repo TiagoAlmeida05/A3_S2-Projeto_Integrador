@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import CodeMemoModal from './CodeMemoModal';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
-import axios from 'axios';
 import { createCode, createMemo, exportProjectToDocx, mergeCodes, updateCode, updateCodesOrder } from '../utils/backend-api';
 
 const getRandomColor = () => {

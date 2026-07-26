@@ -5,8 +5,6 @@ import AudioLanguageModal from "../Modal/AudioLanguageModal";
 import ExportFilterModal from '../Modal/ExportFilterModal';
 import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument, deleteCode, createSegmentWithCode, fetchMemos, deleteDocument, createDocument, uploadDocument, updateCode, createCode, createMemo, updateDocumentMetadata, updateCodesOrder, transcribeAudio, exportProjectToRefi, exportProjectSegmentsToCsv, buildUrlToExportExcel, updateProjectDetails, deleteProject } from "../utils/backend-api"
 
-import axios from "axios";
-
 const hexToRGBA = (hex, opacity) => {
   if (!hex) return "transparent";
   hex = hex.replace("#", "");
