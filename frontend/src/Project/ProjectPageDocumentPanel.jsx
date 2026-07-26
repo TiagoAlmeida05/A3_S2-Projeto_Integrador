@@ -24,7 +24,6 @@ const ProjectPageDocumentPanel = ({
   loadCodes,
   fetchDocuments,
   pushUndoAction,
-  API_BASE,
   projectId,
   currentSearchResult,
   setCurrentSearchResult,

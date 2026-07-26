@@ -7,8 +7,6 @@ import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSe
 
 import axios from "axios";
 
-const API_BASE = "http://127.0.0.1:8000";
-
 const hexToRGBA = (hex, opacity) => {
   if (!hex) return "transparent";
   hex = hex.replace("#", "");
@@ -809,7 +807,6 @@ function ProjectPage() {
 
   const page = {
     id,
-    API_BASE,
     navigate,
     viewerRef,
     projectDetails,

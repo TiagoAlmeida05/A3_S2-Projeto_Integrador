@@ -10,7 +10,6 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 const ProjectPageView = ({ page }) => {
   const {
     id,
-    API_BASE,
     projectDetails,
     conflictDialog,
     handleSaveSettings,
@@ -161,7 +160,6 @@ const ProjectPageView = ({ page }) => {
               setActiveDocument={setActiveDocument}
               loadCodes={loadCodes}
               loadDocuments={loadDocuments}
-              API_BASE={API_BASE}
               projectId={id}
               pushUndoAction={pushUndoAction}
               currentSearchResult={currentSearchResult}
