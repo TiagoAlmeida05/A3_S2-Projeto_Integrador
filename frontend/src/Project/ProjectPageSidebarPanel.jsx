@@ -1,8 +1,8 @@
-import CodeSidebar from "./CodeSidebar";
-import DocumentSidebar from "./DocumentSidebar";
-import MemosTab from "./MemosTab";
+import CodesSidebar from "./CodesSidebar";
+import DocumentsSidebar from "./DocumentsSidebar";
+import MemosSidebar from "./MemosSidebar";
 
-const ProjectPageSidebar = ({
+const ProjectPageSidebarPanel = ({
   id,
   activeTab,
   setActiveTab,
@@ -16,8 +16,8 @@ const ProjectPageSidebar = ({
   handleRenameDocument,
   projectCodes,
   handleDeleteCode,
-  fetchCodes,
-  fetchDocuments,
+  loadCodes,
+  loadDocuments,
   openCodePanel,
   setProjectCodes,
   handleCreateTextDocument,
@@ -158,7 +158,7 @@ const ProjectPageSidebar = ({
         }}
       >
         {activeTab === "documents" && (
-          <DocumentSidebar
+          <DocumentsSidebar
             documents={documents}
             activeDocumentId={activeDocument?.id}
             uploadStatus={uploadStatus}
@@ -169,26 +169,26 @@ const ProjectPageSidebar = ({
             onRenameDocument={handleRenameDocument}
             projectId={id}
             onWriteDocument={handleCreateTextDocument}
-            fetchDocuments={fetchDocuments}
+            loadDocuments={loadDocuments}
             pushUndoAction={pushUndoAction}
           />
         )}
         {activeTab === "codes" && (
-          <CodeSidebar
+          <CodesSidebar
             projectId={id}
             codes={projectCodes}
             onDeleteCode={handleDeleteCode}
-            onRefreshCodes={fetchCodes}
+            onRefreshCodes={loadCodes}
             onOpenCodePanel={openCodePanel}
             onReorderCodes={setProjectCodes}
             onExportQuotesCSV={handleExportQuotesCSV}
             pushUndoAction={pushUndoAction}
           />
         )}
-        {activeTab === "memos" && <MemosTab projectId={id} codes={projectCodes} pushUndoAction={pushUndoAction}/>}
+        {activeTab === "memos" && <MemosSidebar projectId={id} codes={projectCodes} pushUndoAction={pushUndoAction}/>}
       </div>
     </div>
   );
 };
 
-export default ProjectPageSidebar;
+export default ProjectPageSidebarPanel;

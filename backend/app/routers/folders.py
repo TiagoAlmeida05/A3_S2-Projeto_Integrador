@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends,HTTPException
 from sqlalchemy.orm import Session
-from database import get_db
-import schemas
-from repositories.folder_repo import FolderRepository
+
+from app.database import get_db
+import app.schemas as schemas
+from app.repositories import FolderRepository
 
 router = APIRouter(prefix="/projects/{project_id}/folders", tags=["Folders"])
 

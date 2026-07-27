@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
 from typing import Optional
-import models
-import schemas
+
+import app.models as models
+import app.schemas as schemas
 
 class SegmentRepository:
     def __init__(self, db: Session):
@@ -20,7 +21,7 @@ class SegmentRepository:
         self.db.refresh(new_segment)
         return new_segment
 
-    def get_by_project(self, project_id: int, document_id: Optional[int] = None):
+    def get_by_document(self, project_id: int, document_id: Optional[int] = None):
         query = self.db.query(models.Segment).join(models.Document).filter(
             models.Document.project_id == project_id
         )

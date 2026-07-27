@@ -1,18 +1,16 @@
+import os
+import shutil
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
-import os
-import shutil
-import io
-import urllib.parse
 from fastapi.responses import StreamingResponse
-from database import get_db
-import schemas
-from repositories.project_repo import ProjectRepository
-import models
-import openpyxl
-from openpyxl.styles import Font, PatternFill
 from typing import Optional
+
+from app.database import get_db
+import app.schemas as schemas
+from app.repositories import ProjectRepository
+import app.models as models
+from app.services.xlsx_service import create_codebook_xlsx
 
 router = APIRouter(
     prefix="/projects",
@@ -26,13 +24,17 @@ def get_project_repo(db: Session = Depends(get_db)):
 @router.post("/import/refi", response_model=schemas.ProjectResponse)
 async def import_refi_xml_route(file: UploadFile = File(...), db: Session = Depends(get_db)):
     # Import locally to avoid circular dependencies
-    from refi_service import import_refi_xml
+    from app.services.refi_service import import_refi_xml
     return await import_refi_xml(file, db)
 
 @router.get("/{project_id}/export/refi")
 def export_refi_xml_route(project_id: int, db: Session = Depends(get_db)):
-    from refi_service import export_refi_xml
-    return export_refi_xml(project_id, db)
+    project = db.query(models.Project).filter(models.Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    from app.services.refi_service import RefiExporter
+    return RefiExporter().export_refi_xml(project)
 
 @router.get("", response_model=List[schemas.ProjectResponse])
 def get_projects(repo: ProjectRepository = Depends(get_project_repo)):
@@ -89,26 +91,15 @@ def delete_project(project_id: int, repo: ProjectRepository = Depends(get_projec
     return {"message": "Project deleted successfully"}
 
 @router.get("/{project_id}/export/excel")
-def export_project_excel(project_id: int,docs: Optional[str] = None,codes: Optional[str] = None, db: Session = Depends(get_db)):
+def export_project_excel(project_id: int,
+                         docs: Optional[str] = None,
+                         codes: Optional[str] = None, 
+                         db: Session = Depends(get_db)):
     project = db.query(models.Project).filter(models.Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # create a native Excel Workbook
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Interview Statistics"
-
-    # define and style the header row 
-    headers = ["Document Name", "Code Name", "Parent Code", "The Text Segment", "Timestamp"]
-    ws.append(headers)
-
-    header_fill = PatternFill(start_color="333333", end_color="333333", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True)
-    for col_idx in range(1, len(headers) + 1):
-        cell = ws.cell(row=1, column=col_idx)
-        cell.fill = header_fill
-        cell.font = header_font
+    project_codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
 
     query = db.query(models.Segment).join(models.Document).filter(
         models.Document.project_id == project_id
@@ -126,43 +117,8 @@ def export_project_excel(project_id: int,docs: Optional[str] = None,codes: Optio
 
     segments = query.order_by(models.Segment.document_id, models.Segment.start_char).all()
 
-    project_codes = db.query(models.Code).filter(models.Code.project_id == project_id).all()
-    code_dict = {c.id: c for c in project_codes}
-
-    for seg in segments:
-            doc_name = seg.document.filename if seg.document else "Unknown"
-            
-            # Resolve Code and Parent Code
-            code = code_dict.get(seg.code_id)
-            code_name = code.name if code else "Unknown"
-            
-            parent_code_name = "N/A"
-            if code and code.parent_id:
-                parent = code_dict.get(code.parent_id)
-                parent_code_name = parent.name if parent else "N/A"
-
-            text_segment = seg.content
-            
-            timestamp = getattr(seg, 'created_at', getattr(seg.document, 'created_at', "N/A"))
-            if timestamp != "N/A" and hasattr(timestamp, "strftime"):
-                timestamp = timestamp.strftime("%Y-%m-%d %H:%M")
-
-            ws.append([doc_name, code_name, parent_code_name, text_segment, timestamp])
-
-    # Auto-adjust column widths for readability
-    ws.column_dimensions['A'].width = 25 # Document Name
-    ws.column_dimensions['B'].width = 20 # Code Name
-    ws.column_dimensions['C'].width = 20 # Parent Code
-    ws.column_dimensions['D'].width = 60 # Text Segment (Wider)
-    ws.column_dimensions['E'].width = 18 # Timestamp
-
-    ws.freeze_panes = "A2"
-
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-
-    safe_filename = urllib.parse.quote(f"{project.name}_Statistics.xlsx")
+    # create a native Excel Workbook
+    output, safe_filename = create_codebook_xlsx(project, project_codes, segments)
 
     return StreamingResponse(
         output,

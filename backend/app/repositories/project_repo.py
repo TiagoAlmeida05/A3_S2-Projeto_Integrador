@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
-import models
-import schemas
+
+import app.models as models
+import app.schemas as schemas
 
 class ProjectRepository:
     def __init__(self, db: Session):

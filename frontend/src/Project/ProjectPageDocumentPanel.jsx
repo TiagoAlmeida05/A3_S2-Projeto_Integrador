@@ -1,16 +1,12 @@
 import { useEffect, useState, useRef } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import MarginSidebar from "./MarginSidebar";
-
-  const getRandomColor = () => {
-    const chars = '6789ABCDEF'; 
-    let color = '#';
-    for (let i = 0; i < 6; i++) {
-      color += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return color;
-  };
-
+import { createCode, createMemoForSegment, deleteSegment, fetchDocument, fetchSegmentsForDocument, createSegmentWithCode, updateSegment, createDocument, updateDocumentMetadata, updateDocumentContent, buildPdfPreviewUrl } from "../utils/backend-api";
+import { getRandomColor, hexToRGBA } from "../utils/colors";
+import SegmentMemoModal from "./SegmentMemoModal";
+import QuickCodeModal from "./QuickCodeModal";
+import PdfPreviewPanel from "./PdfPreviewPanel";
+import DocumentDetailsTab from "./DocumentDetailsTab";
 
 const ProjectPageDocumentPanel = ({
   viewerRef,
@@ -20,10 +16,9 @@ const ProjectPageDocumentPanel = ({
   setUploadStatus,
   setDocumentSegments,
   setActiveDocument, 
-  fetchCodes,
-  fetchDocuments,
+  loadCodes,
+  loadDocuments,
   pushUndoAction,
-  API_BASE,
   projectId,
   currentSearchResult,
   setCurrentSearchResult,
@@ -32,7 +27,6 @@ const ProjectPageDocumentPanel = ({
   const [marginBars, setMarginBars] = useState([]);
   const [segmentContextMenu, setSegmentContextMenu] = useState(null);
   const [isMemoModalOpen, setIsMemoModalOpen] = useState(false);
-  const [memoText, setMemoText] = useState("");
   const [activeSegmentForMemo, setActiveSegmentForMemo] = useState(null);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [selectionRect, setSelectionRect] = useState(null);
@@ -60,7 +54,6 @@ const ProjectPageDocumentPanel = ({
   const [autoSaveStatus, setAutoSaveStatus] = useState(""); 
   const autoSaveIntervalRef = useRef(null);
   const [documentMetadata, setDocumentMetadata] = useState({});
-  const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
 
   useEffect(() => {
     if (currentSearchResult && viewerRef.current) {
@@ -109,16 +102,6 @@ const ProjectPageDocumentPanel = ({
     };
   }, [segmentContextMenu]);
 
-  const hexToRGBA = (hex, opacity) => {
-    if (!hex) return "transparent";
-    hex = hex.replace("#", "");
-    if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-    const r = parseInt(hex.substring(0, 2), 16);
-    const g = parseInt(hex.substring(2, 4), 16);
-    const b = parseInt(hex.substring(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-  };
-
   useEffect(() => {
     if (activeDocument && activeDocument.id === "NEW_DOC_PENDING") {
       setIsEditing(true);
@@ -143,16 +126,8 @@ const ProjectPageDocumentPanel = ({
     setSegmentContextMenu({ x: e.clientX, y: e.clientY, segmentId });
   };
 
-  const getFullPath = (code, allCodes) => {
-    if (!code.parent_id) return code.name;
-    const parent = allCodes.find((c) => c.id === code.parent_id);
-    if (parent) return `${getFullPath(parent, allCodes)} > ${code.name}`;
-    return code.name;
-  };
-
   const openMemoModal = (segmentId) => {
     setActiveSegmentForMemo(segmentId);
-    setMemoText("");
     setIsMemoModalOpen(true);
     setSegmentContextMenu(null);
   };
@@ -261,21 +236,17 @@ const ProjectPageDocumentPanel = ({
         if (exactMatch) {
           finalCodeID = exactMatch.id;
         } else {
-          const codeResponse = await fetch(`${API_BASE}/projects/${projectId}/codes`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
+          const codeResponse = await createCode(projectId, { 
               name: codeName, 
               color: quickCodeColor, 
               description: "Created from selected text", 
               parent_id: quickCodeParentId ? parseInt(quickCodeParentId) : null 
-            }),
-          });
+            });
           const createdCodeData = await codeResponse.json();
           if (!codeResponse.ok) throw new Error(createdCodeData.detail || "Failed to create quick code");
           createdCode = createdCodeData;
           finalCodeID = createdCode.id;
-          fetchCodes();
+          loadCodes();
         }
       } else {
         finalCodeID = parseInt(selectedExistingCodeId);
@@ -288,11 +259,12 @@ const ProjectPageDocumentPanel = ({
       }
 
       const segmentPromises = codesToApply.map((codeId) =>
-        fetch(`${API_BASE}/projects/${projectId}/segments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ document_id: activeDocument.id, code_id: codeId, start_char: selectionOffsets.start, end_char: selectionOffsets.end, content: selectionText }),
-        }).then(async (res) => {
+        createSegmentWithCode(projectId, { document_id: activeDocument.id, 
+                            code_id: codeId, 
+                            start_char: selectionOffsets.start, 
+                            end_char: selectionOffsets.end, 
+                            content: selectionText })
+        .then(async (res) => {
           const data = await res.json();
           if (!res.ok) throw new Error(data.detail || "Failed to save segment");
           return data;
@@ -312,22 +284,18 @@ const ProjectPageDocumentPanel = ({
       clearTextSelection();
       window.getSelection()?.removeAllRanges();
       setDocumentSegments((prev) => [...prev, ...createdSegments]);
-      fetchCodes();
+      loadCodes();
     } catch (error) {
       console.error(error);
       setUploadStatus("Failed to apply code.");
     }
   };
 
-  const handleSaveLocalSegmentMemo = async () => {
+  const handleSaveLocalSegmentMemo = async (memoText) => {
     if (!memoText.trim()) return;
     try {
-      await fetch(`${API_BASE}/memos`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: memoText, target_type: "segment", target_id: activeSegmentForMemo }),
-      });
+      await createMemoForSegment(activeSegmentForMemo, memoText);
       setIsMemoModalOpen(false);
-      setMemoText("");
     } catch (error) {
       alert("Failed to save memo");
     }
@@ -389,24 +357,23 @@ const ProjectPageDocumentPanel = ({
 
     try {
       setAutoSaveStatus("saving");
-      const res = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/content`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: contentToSave }),
-      });
+      const res = await updateDocumentContent(projectId, 
+                                          activeDocument.id,
+                                          { content: contentToSave });
 
       if (res.ok) {
         const segmentPromises = currentLocalSegments.map(seg => 
-          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
-            method: 'PUT', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content })
-          })
+          updateSegment(projectId, 
+                        seg.id, 
+                        { start_char: seg.start_char, 
+                          end_char: seg.end_char, 
+                          content: seg.content })
         );
         await Promise.all(segmentPromises);
 
         const deletedSegments = documentSegments.filter(oldSeg => !currentLocalSegments.find(ls => ls.id === oldSeg.id));
         const deletePromises = deletedSegments.map(seg => 
-          fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, { method: 'DELETE' })
+          deleteSegment(projectId, seg.id)
         );
         await Promise.all(deletePromises);
 
@@ -481,11 +448,9 @@ const ProjectPageDocumentPanel = ({
     setActiveDocument(prev => ({ ...prev, metadata: nextMetadata }));
 
     try {
-      const response = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/metadata`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ metadata: nextMetadata }),
-      });
+      const response = await updateDocumentMetadata(projectId,
+                                                    activeDocument.id,
+                                                    { metadata: nextMetadata });
 
       if (response.ok) {
         if (pushUndoAction) {
@@ -495,7 +460,7 @@ const ProjectPageDocumentPanel = ({
             previousMetadata: currentMetadata
           });
         }
-        if (fetchDocuments) fetchDocuments();
+        if (loadDocuments) loadDocuments();
       } else {
         setDocumentMetadata(currentMetadata);
         setActiveDocument(prev => ({ ...prev, metadata: currentMetadata }));
@@ -513,11 +478,8 @@ const ProjectPageDocumentPanel = ({
     try {
       if (activeDocument.id === "NEW_DOC_PENDING") {
         const title = activeDocument.filename.trim() || "Untitled Document";
-        const docRes = await fetch(`${API_BASE}/projects/${projectId}/documents/create`, {
-          method: "POST", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: title, content: editContent }),
-        });
+        const docRes = await createDocument(projectId, 
+                                            { name: title, content: editContent });
 
         if (!docRes.ok) throw new Error("Failed to create document");
 
@@ -525,7 +487,7 @@ const ProjectPageDocumentPanel = ({
 
         setIsEditing(false);
         setActiveDocument({ ...savedDoc, content: editContent });
-        if (fetchDocuments) fetchDocuments();
+        if (loadDocuments) loadDocuments();
 
         setUploadStatus("Document created successfully!");
         setTimeout(() => setUploadStatus(""), 3000);
@@ -533,38 +495,32 @@ const ProjectPageDocumentPanel = ({
       }
 
       setUploadStatus("Saving document and shifting codes...");
-      const docRes = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/content`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: editContent }),
-      });
+      const docRes = await updateDocumentContent(projectId, 
+                                                activeDocument.id, 
+                                                { content: editContent });
 
       if (!docRes.ok) throw new Error("Failed to save document");
 
       const segmentPromises = localSegments.map((seg) =>
-        fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ start_char: seg.start_char, end_char: seg.end_char, content: seg.content }),
-        })
+        updateSegment(projectId, 
+                            seg.id, 
+                            { start_char: seg.start_char, 
+                              end_char: seg.end_char, 
+                              content: seg.content })
       );
 
       await Promise.all(segmentPromises);
 
       const deletedSegments = documentSegments.filter(oldSeg => !localSegments.find(ls => ls.id === oldSeg.id));
       const deletePromises = deletedSegments.map(seg =>
-        fetch(`${API_BASE}/projects/${projectId}/segments/${seg.id}`, {
-          method: "DELETE",
-        })
+        deleteSegment(projectId, seg.id)
       );
       await Promise.all(deletePromises);
 
-      const updatedDocRes = await fetch(`${API_BASE}/projects/${projectId}/documents/${activeDocument.id}`);
-      const updatedDoc = await updatedDocRes.json();
+      const updatedDoc = await fetchDocument(projectId, activeDocument.id);
       setActiveDocument(updatedDoc);
 
-      const updatedSegRes = await fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${activeDocument.id}`);
-      const updatedSeg = await updatedSegRes.json();
+      const updatedSeg = await fetchSegmentsForDocument(projectId, activeDocument.id);
       setDocumentSegments(updatedSeg);
 
       setIsEditing(false);
@@ -575,23 +531,6 @@ const ProjectPageDocumentPanel = ({
       setUploadStatus("Failed to save edits.");
     }
     };
-
-  const orderedDropdownCodes = [];
-  if (projectCodes) {
-    const buildDropdownTree = (parentId) => {
-      const children = projectCodes.filter((code) => code.parent_id === parentId);
-      children.forEach((child) => {
-        orderedDropdownCodes.push(child);
-        buildDropdownTree(child.id);
-      });
-    };
-    buildDropdownTree(null);
-    projectCodes.forEach((code) => {
-      if (!orderedDropdownCodes.find((oc) => oc.id === code.id) && !code.parent_id) {
-        orderedDropdownCodes.push(code);
-      }
-    });
-  }
 
   useEffect(() => {
     const targetSegments = isEditing ? localSegments : documentSegments;
@@ -802,9 +741,7 @@ const ProjectPageDocumentPanel = ({
   const handleDeleteSegment = async (segmentId) => {
     const segmentSnapshot = documentSegments.find((seg) => seg.id === segmentId);
     try {
-      const res = await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`, { 
-        method: "DELETE" 
-      });
+      const res = await deleteSegment(projectId, segmentId);
       
       if (res.ok) {
         // Remove from the UI instantly
@@ -816,7 +753,7 @@ const ProjectPageDocumentPanel = ({
         }
         
         setSegmentContextMenu(null);
-        fetchCodes(); // Refresh sidebar to update the frequency count
+        loadCodes(); // Refresh sidebar to update the frequency count
       } else {
         setUploadStatus("Failed to remove code.");
       }
@@ -845,11 +782,7 @@ const ProjectPageDocumentPanel = ({
 
   const isPDF = activeDocument?.filename?.toLowerCase().endsWith('.pdf') || activeDocument?.type === "pdf";
   const showPdfPreview = isPDF && !isPdfPreviewCollapsed;
-  const pdfPreviewUrl = `${API_BASE}/projects/${projectId}/documents/${activeDocument.id}/file`;
-
-  const suggestedCodes = (quickCodeMode === "new" && quickCodeName.trim().length > 0)
-    ? projectCodes.filter(c => c.name.toLowerCase().includes(quickCodeName.trim().toLowerCase()))
-    : [];
+  const pdfPreviewUrl = buildPdfPreviewUrl(projectId, activeDocument.id);
 
   return (
     <div style={documentShellStyle}>
@@ -996,97 +929,12 @@ const ProjectPageDocumentPanel = ({
       </div>
 
       {activeDocument.id !== "NEW_DOC_PENDING" && (
-        <div style={{ marginBottom: "18px", padding: "14px", border: "1px solid #ddd", borderRadius: "8px", backgroundColor: "#fafafa" }}>
-          
-          {/* Clickable Header for Toggling */}
-          <div 
-            onClick={() => setIsMetadataExpanded(!isMetadataExpanded)}
-            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", cursor: "pointer", userSelect: "none" }}
-          >
-            <div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#222", display: "flex", alignItems: "center", gap: "10px" }}>
-                Document details {isMetadataExpanded ? "▼" : "▶"}
-                
-                {isMetadataExpanded && (
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.dispatchEvent(new CustomEvent('open-metadata', { 
-                        detail: { documentId: activeDocument.id, documentName: activeDocument.filename } 
-                      }));
-                    }}
-                    style={{ padding: "4px 8px", fontSize: "11px", backgroundColor: "transparent", color: "#646cff", border: "1px solid #646cff", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}
-                    onMouseOver={(e) => { e.target.style.backgroundColor = "#eef2ff"; }}
-                    onMouseOut={(e) => { e.target.style.backgroundColor = "transparent"; }}
-                  >
-                    + Add Detail
-                  </button>
-                )}
-              </div>
-              {isMetadataExpanded && (
-                <div style={{ fontSize: "12px", color: "#666", marginTop: "4px" }}>
-                  These are simple labels like “Interview date” or “Location”.
-                </div>
-              )}
-            </div>
-            <div style={{ fontSize: "12px", color: "#666", fontWeight: "bold" }}>
-              {Object.keys(documentMetadata).length} tag(s)
-            </div>
-          </div>
-
-          {/* Collapsible Tag Container */}
-          {isMetadataExpanded && (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "14px" }}>
-              {Object.keys(documentMetadata).length === 0 ? (
-                <div style={{ fontSize: "13px", color: "#777" }}>No details added yet.</div>
-              ) : (
-                Object.entries(documentMetadata)
-                  .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-                  .map(([key, value]) => (
-                    <div
-                      key={key}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        backgroundColor: "#eef2ff",
-                        border: "1px solid #c7d2fe",
-                        color: "#1e293b",
-                        fontSize: "12px",
-                      }}
-                    >
-                      <strong>{key}:</strong>
-                      <span>{value}</span>
-                      
-                      <button
-                        onClick={(e) => handleDeleteDetail(e, key)}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          color: "#818cf8",
-                          cursor: "pointer",
-                          fontSize: "14px",
-                          marginLeft: "2px",
-                          padding: 0,
-                          lineHeight: 1,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center"
-                        }}
-                        title="Remove detail"
-                        onMouseOver={(e) => e.target.style.color = "#ef4444"}
-                        onMouseOut={(e) => e.target.style.color = "#818cf8"}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))
-              )}
-            </div>
-          )}
-        </div>
+        <DocumentDetailsTab 
+          projectId={projectId}
+          activeDocument={activeDocument}
+          documentMetadata={documentMetadata}
+          setDocumentMetadata={setDocumentMetadata}
+          handleDeleteDetail={handleDeleteDetail} />
       )}
 
       <div style={{ flex: 1, minHeight: 0, position: "relative", display: "flex", height: "100%" }}>
@@ -1148,17 +996,7 @@ const ProjectPageDocumentPanel = ({
           {/* PDF Preview Panel */}
           {isPDF && showPdfPreview && (
             <>
-              <Panel defaultSize={35} minSize={20} style={{ display: "flex", flexDirection: "column", backgroundColor: "#0f1115", border: "1px solid #2d2f36", borderRadius: "8px", overflow: "hidden" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", borderBottom: "1px solid #2d2f36", color: "#e5e7eb", backgroundColor: "#151922" }}>
-                  <div style={{ fontSize: "13px", fontWeight: "bold" }}>Original PDF</div>
-                </div>
-                <embed
-                  title={`${activeDocument.filename} preview`}
-                  src={`${pdfPreviewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-                  type="application/pdf"
-                  style={{ width: "100%", flex: 1, border: "none", backgroundColor: "#fff" }}
-                />
-              </Panel>
+              <PdfPreviewPanel pdfPreviewUrl={pdfPreviewUrl} filename={activeDocument.filename} />
               <Separator style={{ width: "16px", cursor: "col-resize", backgroundColor: "transparent", display: "flex", justifyContent: "center" }}>
                  <div style={{ width: "2px", height: "100%", backgroundColor: "#eee" }} />
               </Separator>
@@ -1193,151 +1031,33 @@ const ProjectPageDocumentPanel = ({
       )}
 
       {isMemoModalOpen && (
-        <div style={{position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", zIndex: 9999,display: "flex", alignItems: "center", justifyContent: "center"}}>
-          <div style={{ 
-            backgroundColor: "#242424", 
-            padding: "30px", 
-            borderRadius: "8px", 
-            border: "1px solid #444", 
-            width: "400px", 
-            color: "white", 
-            boxShadow: "0 8px 30px rgba(0,0,0,0.6)" 
-          }}>
-            <h3 style={{ marginTop: 0, marginBottom: "15px" }}>Add Quote Memo</h3>
-            <textarea value={memoText} onChange={(e) => setMemoText(e.target.value)} placeholder="Memo text..." rows={5} autoFocus style={{ width: "100%", padding: "12px", borderRadius: 4, border: "1px solid #555", backgroundColor: "#111", color: "white", boxSizing: "border-box", marginBottom: "16px", resize: "vertical" }} />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button onClick={() => setIsMemoModalOpen(false)} 
-                onMouseOver={(e) => { e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)"; e.currentTarget.style.borderColor = "#aaa"; }}
-                onMouseOut={(e) => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.borderColor = "#555"; }}
-                style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#ccc', border: '1px solid #555', borderRadius: 6, cursor: 'pointer', transition: 'all 0.2s ease' }}>
-                Cancel
-              </button>
-              <button onClick={handleSaveLocalSegmentMemo} 
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#7a82ff"}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#646cff"}
-                  style={{ padding: '8px 16px', backgroundColor: '#646cff', color: 'white', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s ease' }}
-                >
-                  Save Memo
-              </button>
-            </div>
-          </div>
-        </div>
+        <SegmentMemoModal 
+            open={isMemoModalOpen}
+            onSave={handleSaveLocalSegmentMemo}
+            onClose={() => setIsMemoModalOpen(false)} />
       )}
 
       {quickMenuOpen && selectionRect && (
-        <div style={{ position: "fixed", top: selectionRect.top, left: selectionRect.left, zIndex: 1000, backgroundColor: "#23232a", border: "1px solid #444", borderRadius: "10px", padding: "12px", width: "280px", color: "white", boxShadow: "0 12px 30px rgba(0, 0, 0, 0.4)" }}>
-          <div style={{ marginBottom: "6px", fontSize: "11px", color: "#b0b0c3", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: "bold" }}>Selected Text</div>          
-          <div style={{ marginBottom: "12px", fontSize: "13px", lineHeight: "1.5", color: "#e5e7eb",fontStyle: "italic",backgroundColor: "#1a1a24",padding: "8px 10px",borderRadius: "6px",borderLeft: "3px solid #646cff",wordBreak: "break-word"}}>
-            "{selectionText.length > 120 
-              ? selectionText.replace(/\s+/g, ' ').substring(0, 120).trim() + "..." 
-              : selectionText.replace(/\s+/g, ' ')}"
-          </div>
-          
-          <div style={{ display: "grid", gap: "8px", marginBottom: "10px" }}>
-            <select value={quickCodeMode === "new" ? "new" : selectedExistingCodeId} onChange={(e) => { if (e.target.value === "new") setQuickCodeMode("new"); else { setQuickCodeMode("existing"); setSelectedExistingCodeId(e.target.value); } }} style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", cursor: "pointer" }}>
-              <optgroup label="Hierarchical Codes">
-                {orderedDropdownCodes.map((code) => (<option key={code.id} value={code.id}>{getFullPath(code, projectCodes)}</option>))}
-              </optgroup>
-              <option value="new">✨ Create New Code...</option>
-            </select>
-
-            {/* Auto-upcode checkbox for existing codes */}
-            {quickCodeMode === "existing" && (
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", color: "#b0b0c3", cursor: "pointer" }}>
-                <input type="checkbox" checked={autoUpcode} onChange={(e) => setAutoUpcode(e.target.checked)} style={{ cursor: "pointer", accentColor: "#646cff" }} />
-                Auto-apply to parent themes
-              </label>
-            )}
-
-            {/* Inputs for NEW codes */}
-            {quickCodeMode === "new" && (
-              <>
-                <div style={{ position: "relative" }}>
-                  <input
-                    type="text"
-                    value={quickCodeName}
-                    onChange={(e) => setQuickCodeName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleQuickCodeAction(); } }}
-                    placeholder="Code name"
-                    style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", boxSizing: "border-box" }}
-                  />
-                  {suggestedCodes.length > 0 && (
-                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: "4px", backgroundColor: "#2a2a35", border: "1px solid #555", borderRadius: "6px", maxHeight: "150px", overflowY: "auto", zIndex: 10, boxShadow: "0 4px 12px rgba(0,0,0,0.5)" }}>
-                      {suggestedCodes.map(code => (
-                        <div
-                          key={code.id}
-                          onClick={() => {
-                            setQuickCodeMode("existing");
-                            setSelectedExistingCodeId(code.id.toString());
-                          }}
-                          style={{ padding: "8px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", borderBottom: "1px solid #333" }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#3a3a44"}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                        >
-                          <div style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: code.color, flexShrink: 0 }}></div>
-                          <span style={{ fontSize: "13px", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{getFullPath(code, projectCodes)}</span>
-                          <span style={{ fontSize: "11px", color: "#888", marginLeft: "auto", flexShrink: 0 }}>Reuse</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                
-                <select
-                  value={quickCodeParentId}
-                  onChange={(e) => setQuickCodeParentId(e.target.value)}
-                  style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", cursor: "pointer" }}
-                >
-                  <option value="">No Parent (Root Code)</option>
-                  {orderedDropdownCodes.map((code) => (
-                    <option key={code.id} value={code.id}>
-                      Assign to: {getFullPath(code, projectCodes)}
-                    </option>
-                  ))}
-                </select>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <label htmlFor="quick-color" style={{ color: "#b0b0c3", fontSize: "13px", minWidth: "70px" }}>Color</label>
-                  <input id="quick-color" type="color" value={quickCodeColor} onChange={(e) => setQuickCodeColor(e.target.value)} style={{ width: "40px", height: "40px", padding: 0, border: "none", background: "transparent", cursor: "pointer" }} />
-                </div>
-              </>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button 
-              onClick={handleQuickCodeAction} 
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#7a82ff"}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#646cff"}
-              style={{ 
-                flex: 1, padding: "8px 10px", backgroundColor: "#646cff", border: "none", 
-                borderRadius: "6px", color: "white", cursor: "pointer", fontWeight: "bold",
-                transition: "all 0.2s ease"
-              }}
-            >
-              Apply
-            </button>
-            <button 
-              onClick={clearTextSelection} 
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
-                e.currentTarget.style.borderColor = "#aaa";
-                e.currentTarget.style.color = "#fff";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.borderColor = "#555";
-                e.currentTarget.style.color = "#ccc";
-              }}
-              style={{ 
-                padding: "8px 10px", backgroundColor: "transparent", border: "1px solid #555", 
-                color: "#ccc", borderRadius: "6px", cursor: "pointer",
-                transition: "all 0.2s ease"
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <QuickCodeModal
+          isOpen={quickMenuOpen} 
+          selectionRect={selectionRect}
+          selectionText={selectionText}
+          quickCodeMode={quickCodeMode}
+          setQuickCodeMode={setQuickCodeMode}
+          selectedExistingCodeId={selectedExistingCodeId}
+          setSelectedExistingCodeId={setSelectedExistingCodeId}
+          autoUpcode={autoUpcode}
+          setAutoUpcode={setAutoUpcode}
+          quickCodeName={quickCodeName}
+          setQuickCodeName={setQuickCodeName}
+          quickCodeColor={quickCodeColor}
+          setQuickCodeColor={setQuickCodeColor}
+          projectCodes={projectCodes}
+          quickCodeParentId={quickCodeParentId}
+          setQuickCodeParentId={setQuickCodeParentId}
+          onApply={handleQuickCodeAction}
+          onCancel={clearTextSelection}
+        />
       )}
     </div>
   );

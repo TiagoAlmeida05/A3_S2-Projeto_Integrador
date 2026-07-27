@@ -1,15 +1,17 @@
-# === USER FUNCTIONALITY DISABLED FOR NOW ===
-# class User(Base):
-#     __tablename__ = "users"
-#     id = Column(Integer, primary_key=True, index=True)
-#     name = Column(String, nullable=False, index=True)
-#     email = Column(String, nullable=False, unique=True, index=True)
-#     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
-
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, and_
+from sqlalchemy.orm import foreign, relationship
 from datetime import datetime, timezone
-from database import Base
+
+from app.database import Base
+
+class Memo(Base):
+    __tablename__ = "memos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    text = Column(Text, nullable=False)
+    target_type = Column(String, nullable=False)
+    target_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Project(Base):
     __tablename__ = "projects"
@@ -23,6 +25,13 @@ class Project(Base):
     # owner = relationship("User", back_populates="projects")  # Disabled for now
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     codes = relationship("Code", back_populates="project", cascade="all, delete-orphan")
+    memos = relationship("Memo", 
+                         primaryjoin=and_(
+                             Memo.target_id == id,
+                             Memo.target_type == "project"
+                         ),
+                         foreign_keys=[Memo.target_id],
+                         viewonly=True)
     document_folders = relationship("DocumentFolder", back_populates="project", cascade="all, delete-orphan")
     last_accessed = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
@@ -66,6 +75,13 @@ class Code(Base):
     project = relationship("Project", back_populates="codes")
     segments = relationship("Segment", back_populates="code", cascade="all, delete-orphan")
     parent = relationship("Code", remote_side=[id], backref="children")
+    memos = relationship("Memo", 
+                         primaryjoin=and_(
+                             Memo.target_id == id,
+                             Memo.target_type == "code"
+                         ),
+                         foreign_keys=[Memo.target_id],
+                         viewonly=True)
 
 class Segment(Base):
     __tablename__ = "segments"
@@ -80,15 +96,15 @@ class Segment(Base):
 
     document = relationship("Document", back_populates="segments")
     code = relationship("Code", back_populates="segments")
+    memos = relationship("Memo", 
+                         primaryjoin=and_(
+                             Memo.target_id == id,
+                             Memo.target_type == "segment"
+                         ),
+                         foreign_keys=[Memo.target_id],
+                         viewonly=True)
 
-class Memo(Base):
-    __tablename__ = "memos"
 
-    id = Column(Integer, primary_key=True, index=True)
-    text = Column(Text, nullable=False)
-    target_type = Column(String, nullable=False)
-    target_id = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class DocumentFolder(Base):
     __tablename__ = "document_folders"
@@ -102,3 +118,12 @@ class DocumentFolder(Base):
     project = relationship("Project", back_populates="document_folders")
     documents = relationship("Document", back_populates="folder")
     parent = relationship("DocumentFolder", remote_side=[id], backref="children")
+
+
+# === USER FUNCTIONALITY DISABLED FOR NOW ===
+# class User(Base):
+#     __tablename__ = "users"
+#     id = Column(Integer, primary_key=True, index=True)
+#     name = Column(String, nullable=False, index=True)
+#     email = Column(String, nullable=False, unique=True, index=True)
+#     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")    

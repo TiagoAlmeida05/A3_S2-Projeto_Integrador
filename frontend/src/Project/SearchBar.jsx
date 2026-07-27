@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
-
-const API_BASE = "http://127.0.0.1:8000";
+import { search } from "../utils/backend-api";
 
 const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
   const [query, setQuery] = useState("");
@@ -89,9 +88,7 @@ const SearchBar = ({ projectId, onSearchResults, onResultClick }) => {
 
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `${API_BASE}/projects/${projectId}/search?query=${encodeURIComponent(searchQuery)}`
-      );
+      const response = await search(projectId, encodeURIComponent(searchQuery));
       if (response.ok) {
         const rawData = await response.json();
         

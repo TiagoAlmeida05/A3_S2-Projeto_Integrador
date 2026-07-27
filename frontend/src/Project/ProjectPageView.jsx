@@ -1,7 +1,7 @@
 import CollisionModal from "./CollisionModal";
 import ProjectPageCodePanel from "./ProjectPageCodePanel";
 import ProjectPageDocumentPanel from "./ProjectPageDocumentPanel";
-import ProjectPageSidebar from "./ProjectPageSidebar";
+import ProjectPageSidebarPanel from "./ProjectPageSidebarPanel";
 import ProjectPageTopBar from "./ProjectPageTopBar";
 import ProjectSettingsModal from "./ProjectSettingsModal";
 // V4 Imports
@@ -10,7 +10,6 @@ import { Group, Panel, Separator } from "react-resizable-panels";
 const ProjectPageView = ({ page }) => {
   const {
     id,
-    API_BASE,
     projectDetails,
     conflictDialog,
     handleSaveSettings,
@@ -40,8 +39,8 @@ const ProjectPageView = ({ page }) => {
     setPendingQuoteJump,
     setUploadStatus,
     setDocumentSegments,
-    fetchCodes,
-    fetchDocuments,
+    loadCodes,
+    loadDocuments,
     handleFileUpload,
     handleDocumentClick,
     handleDeleteDocument,
@@ -98,7 +97,7 @@ const ProjectPageView = ({ page }) => {
         <Group orientation="horizontal" autoSaveId="project-page-layout">
           
           <Panel defaultSize={28} minSize={20}>
-            <ProjectPageSidebar
+            <ProjectPageSidebarPanel
               id={id}
               activeTab={activeTab}
               setActiveTab={setActiveTab}
@@ -112,8 +111,8 @@ const ProjectPageView = ({ page }) => {
               handleRenameDocument={handleRenameDocument}
               projectCodes={projectCodes}
               handleDeleteCode={handleDeleteCode}
-              fetchCodes={fetchCodes}
-              fetchDocuments={fetchDocuments}
+              loadCodes={loadCodes}
+              loadDocuments={loadDocuments}
               openCodePanel={openCodePanel}
               setProjectCodes={setProjectCodes}
               handleCreateTextDocument={handleCreateTextDocument}
@@ -129,7 +128,6 @@ const ProjectPageView = ({ page }) => {
             <>
               <Panel defaultSize={30} minSize={20} style={{ minWidth: 0 }}>
                 <ProjectPageCodePanel
-                  API_BASE={API_BASE}
                   projectId={id}
                   projectCodes={projectCodes}
                   documents={documents}
@@ -143,7 +141,7 @@ const ProjectPageView = ({ page }) => {
                   setActiveDocument={setActiveDocument}
                   setDocumentSegments={setDocumentSegments}
                   setPendingQuoteJump={setPendingQuoteJump}
-                  fetchCodes={fetchCodes}
+                  loadCodes={loadCodes}
                   pushUndoAction={pushUndoAction}
                 />
               </Panel>
@@ -160,9 +158,8 @@ const ProjectPageView = ({ page }) => {
               setUploadStatus={setUploadStatus}
               setDocumentSegments={setDocumentSegments}
               setActiveDocument={setActiveDocument}
-              fetchCodes={fetchCodes}
-              fetchDocuments={fetchDocuments}
-              API_BASE={API_BASE}
+              loadCodes={loadCodes}
+              loadDocuments={loadDocuments}
               projectId={id}
               pushUndoAction={pushUndoAction}
               currentSearchResult={currentSearchResult}

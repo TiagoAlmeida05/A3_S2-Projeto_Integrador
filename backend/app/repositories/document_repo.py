@@ -2,7 +2,8 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from sqlalchemy import func
 import json
-import models
+
+import app.models as models
 
 class DocumentRepository:
     def __init__(self, db: Session):

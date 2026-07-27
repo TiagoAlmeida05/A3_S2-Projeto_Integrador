@@ -3,24 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import ProjectPageView from "./ProjectPageView";
 import AudioLanguageModal from "../Modal/AudioLanguageModal"; 
 import ExportFilterModal from '../Modal/ExportFilterModal';
-
-
-import axios from "axios";
-
-const API_BASE = "http://127.0.0.1:8000";
-
-
-
-const hexToRGBA = (hex, opacity) => {
-  if (!hex) return "transparent";
-  hex = hex.replace("#", "");
-  if (hex.length === 3)
-    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-};
+import { fetchProjectDetails, fetchDocuments, fetchCodes, fetchDocument, fetchSegmentsForDocument, renameDocument, deleteCode, createSegmentWithCode, fetchMemos, deleteDocument, createDocument, uploadDocument, updateCode, createCode, createMemo, updateDocumentMetadata, updateCodesOrder, transcribeAudio, exportProjectToRefi, exportProjectSegmentsToCsv, buildUrlToExportExcel, updateProjectDetails, deleteProject } from "../utils/backend-api"
 
 function ProjectPage() {
   const { id } = useParams();
@@ -77,42 +60,23 @@ function ProjectPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [currentSearchResult, setCurrentSearchResult] = useState(null);
 
-  const fetchProjectDetails = () => {
-    fetch(`http://127.0.0.1:8000/projects/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.name) {
-          setProjectDetails({
-            name: data.name,
-            description: data.description || "",
-            localPath: data.local_path || "",
-          });
-        }
-      })
-      .catch((err) => console.error(err));
+  const loadDocuments = () => {
+    fetchDocuments(id).then((data) => {
+                      setDocuments(data);
+                      
+                      setActiveDocument((prevActive) => {
+                        if (!prevActive || prevActive.id === "NEW_DOC_PENDING") return prevActive;
+                        
+                        const freshDoc = data.find((d) => d.id === prevActive.id);
+                        return freshDoc ? { ...prevActive, metadata: freshDoc.metadata, folder_id: freshDoc.folder_id } : prevActive;
+                      });
+                    })
+                    .catch((err) => console.error(err));
   };
 
-  const fetchDocuments = () => {
-    fetch(`${API_BASE}/projects/${id}/documents/`)
-      .then((res) => res.json())
-      .then((data) => {
-        setDocuments(data);
-        
-        setActiveDocument((prevActive) => {
-          if (!prevActive || prevActive.id === "NEW_DOC_PENDING") return prevActive;
-          
-          const freshDoc = data.find((d) => d.id === prevActive.id);
-          return freshDoc ? { ...prevActive, metadata: freshDoc.metadata, folder_id: freshDoc.folder_id } : prevActive;
-        });
-      })
-      .catch((err) => console.error(err));
-  };
-
-  const fetchCodes = () => {
-    fetch(`${API_BASE}/projects/${id}/codes`)
-      .then((res) => res.json())
-      .then((data) => setProjectCodes(data))
-      .catch((err) => console.error(err));
+  const loadCodes = () => {
+    fetchCodes(id).then((data) => setProjectCodes(data))
+                  .catch((err) => console.error(err)); 
   };
 
   const pushUndoAction = (action) => {
@@ -123,7 +87,7 @@ function ProjectPage() {
   const fetchAllDocumentSegments = async () => {
     const segmentResponses = await Promise.all(
       documents.map((doc) =>
-        fetch(`${API_BASE}/projects/${id}/segments?document_id=${doc.id}`).then((res) => res.json()),
+        fetchSegmentsForDocument(id, doc.id),
       ),
     );
 
@@ -151,8 +115,7 @@ function ProjectPage() {
   const refreshSegmentsForDocument = async (documentId) => {
     if (!activeDocument || Number(activeDocument.id) !== Number(documentId)) return;
 
-    const res = await fetch(`${API_BASE}/projects/${id}/segments?document_id=${documentId}`);
-    const data = await res.json();
+    const data = await fetchSegmentsForDocument(id, documentId);
     setDocumentSegments(Array.isArray(data) ? data : []);
   };
 
@@ -178,27 +141,26 @@ function ProjectPage() {
     try {
       if (lastAction.type === "create-segment" || lastAction.type === "create-quick-code") {
         for (const segment of lastAction.segments || []) {
-          await fetch(`${API_BASE}/projects/${id}/segments/${segment.id}`, { method: "DELETE" });
+          await deleteSegment(id, segment.id);
         }
         if (lastAction.segments?.length > 0) await refreshSegmentsForDocument(lastAction.segments[0].document_id);
         if (lastAction.type === "create-quick-code" && lastAction.code?.id) {
-          await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.code.id}`, { method: "DELETE" });
+          await deleteCode(id, lastAction.code.id);
         }
-        fetchCodes();
+        loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
 
       } else if (lastAction.type === "delete-segment") {
         const segment = lastAction.segment;
-        await fetch(`${API_BASE}/projects/${id}/segments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            document_id: segment.document_id, code_id: segment.code_id,
-            start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
-          }),
-        });
+        await createSegmentWithCode(id, {
+            document_id: segment.document_id, 
+            code_id: segment.code_id,
+            start_char: segment.start_char, 
+            end_char: segment.end_char, 
+            content: segment.content,
+          });
         await refreshSegmentsForDocument(segment.document_id);
-        fetchCodes();
+        loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
 
       } else if (lastAction.type === "delete-code") {
@@ -207,10 +169,9 @@ function ProjectPage() {
 
         for (const code of orderedCodes) {
           const restoredParentId = code.parent_id && restoredCodeIds.has(Number(code.parent_id)) ? restoredCodeIds.get(Number(code.parent_id)) : code.parent_id;
-          const restoreResponse = await fetch(`${API_BASE}/projects/${id}/codes`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: code.name, color: code.color, parent_id: restoredParentId }),
-          });
+          const restoreResponse = await createCode(id, { name: code.name, 
+                                                         color: code.color, 
+                                                         parent_id: restoredParentId });
           const restoredCode = await restoreResponse.json();
           restoredCodeIds.set(Number(code.id), restoredCode.id);
         }
@@ -221,95 +182,72 @@ function ProjectPage() {
             parent_id: code.parent_id && restoredCodeIds.has(Number(code.parent_id)) ? restoredCodeIds.get(Number(code.parent_id)) : code.parent_id,
             order_index: code.order_index ?? index,
           })).filter((item) => item.id);
-          await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
-            method: "PUT", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ codes: reorderPayload }),
-          });
+          updateCodesOrder(id, { codes: reorderPayload });
         }
 
         for (const segment of lastAction.segments || []) {
           const restoredCodeId = restoredCodeIds.get(Number(segment.code_id)) || segment.code_id;
-          await fetch(`${API_BASE}/projects/${id}/segments`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              document_id: segment.document_id, code_id: restoredCodeId,
-              start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
-            }),
-          });
+          await createSegmentWithCode(id, {
+              document_id: segment.document_id, 
+              code_id: restoredCodeId,
+              start_char: segment.start_char, 
+              end_char: segment.end_char, 
+              content: segment.content,
+            });
           await refreshSegmentsForDocument(segment.document_id);
         }
 
         for (const memo of lastAction.memos || []) {
           const restoredCodeId = restoredCodeIds.get(Number(memo.target_id)) || memo.target_id;
-          await fetch(`${API_BASE}/memos`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: memo.text, target_type: "code", target_id: restoredCodeId }),
-          });
+          await createMemo({ text: memo.text, target_type: "code", target_id: restoredCodeId });
         }
-        fetchCodes();
+        loadCodes();
         setCodePanelRefreshTick((tick) => tick + 1);
 
       } else if (lastAction.type === "edit-code") {
-        await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.codeId}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(lastAction.previousState),
-        });
-        fetchCodes();
+        updateCode(id, lastAction.codeId, lastAction.previousState);
+        loadCodes();
 
       } else if (lastAction.type === "reorder-codes") {
-        await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
-          method: "PUT", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ codes: lastAction.previousState }),
-        });
-        fetchCodes();
+        updateCodesOrder(id, { codes: lastAction.previousState });
+        loadCodes();
 
       } else if (lastAction.type === "delete-document") {
         const doc = lastAction.document;
-        const docRes = await fetch(`${API_BASE}/projects/${id}/documents/create`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: doc.filename, content: doc.content || "Restored content..." })
-        });
+        const docRes = await createDocument(id, 
+          { name: doc.filename, content: doc.content || "Restored content..." });
         const restoredDoc = await docRes.json();
 
         if (doc.metadata && Object.keys(doc.metadata).length > 0) {
-           await fetch(`${API_BASE}/projects/${id}/documents/${restoredDoc.id}/metadata`, {
-             method: 'PUT', headers: { 'Content-Type': 'application/json' },
-             body: JSON.stringify({ metadata: doc.metadata }),
-           });
+           updateDocumentMetadata(id, restoredDoc.id, { metadata: doc.metadata })
         }
 
         for (const segment of lastAction.segments || []) {
-          await fetch(`${API_BASE}/projects/${id}/segments`, {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              document_id: restoredDoc.id, code_id: segment.code_id,
-              start_char: segment.start_char, end_char: segment.end_char, content: segment.content,
-            }),
+          await createSegmentWithCode(id, {
+              document_id: restoredDoc.id, 
+              code_id: segment.code_id,
+              start_char: segment.start_char, 
+              end_char: segment.end_char, 
+              content: segment.content
           });
         }
-        fetchDocuments();
+        loadDocuments();
       } else if (lastAction.type === "delete-memo") {
         const memo = lastAction.memo;
-        await fetch(`${API_BASE}/memos`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        await createMemo({
             text: memo.text,
             target_type: memo.target_type,
             target_id: memo.target_id
-          }),
-        });
+          });
 
         window.dispatchEvent(new CustomEvent('memos-updated'));
         
       } else if (lastAction.type === "edit-metadata") {
-        await fetch(`${API_BASE}/projects/${id}/documents/${lastAction.documentId}/metadata`, {
-          method: "PUT", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ metadata: lastAction.previousMetadata }),
-        });
+        updateDocumentMetadata(id, 
+                               lastAction.documentId, 
+                               { metadata: lastAction.previousMetadata });
         // This will instantly update the sidebar and active document!
-        fetchDocuments(); 
+        loadDocuments(); 
       }
 
       setUploadStatus("Undo complete.");
@@ -328,7 +266,7 @@ function ProjectPage() {
     try {
       // Fetch segments for every document we know exists
       const segmentPromises = documents.map((doc) =>
-        fetch(`${API_BASE}/projects/${id}/segments?document_id=${doc.id}`).then((res) => res.json())
+        fetchSegmentsForDocument(id, doc.id)
       );
       
       const segmentsArrays = await Promise.all(segmentPromises);
@@ -346,14 +284,12 @@ function ProjectPage() {
       setCurrentSearchResult(null);
     }
 
-    fetch(`${API_BASE}/projects/${id}/documents/${docId}`)
-      .then((res) => res.json())
+    fetchDocument(id, docId)
       .then((data) => setActiveDocument(data))
       .catch((err) => console.error("Failed to fetch document content:", err));
 
     // Fetch segments for this document
-    fetch(`${API_BASE}/projects/${id}/segments?document_id=${docId}`)
-      .then((res) => res.json())
+    fetchSegmentsForDocument(id, docId)
       .then((data) => setDocumentSegments(data))
       .catch((err) => console.error("Failed to fetch segments:", err));
   };
@@ -380,9 +316,19 @@ function ProjectPage() {
   }, [activeDocument, documentSegments, pendingQuoteJump]);
 
   useEffect(() => {
-    fetchDocuments();
-    fetchProjectDetails();
-    fetchCodes();
+    loadDocuments();
+
+    fetchProjectDetails(id).then((data) => {
+                      if (data.name) {
+                        setProjectDetails({
+                          name: data.name,
+                          description: data.description || "",
+                          localPath: data.local_path || "",
+                        });
+                      }
+                    })
+                    .catch((err) => console.error(err));
+    loadCodes();
   }, [id]);
 
   useEffect(() => {
@@ -393,7 +339,7 @@ function ProjectPage() {
         seg.code_id === sourceId ? { ...seg, code_id: targetId } : seg
       ));
 
-      fetchCodes(); 
+      loadCodes(); 
     };
     
     window.addEventListener('codes-merged', handleCodesMerged);
@@ -430,16 +376,12 @@ function ProjectPage() {
         ? (await fetchAllDocumentSegments()).filter((segment) => codeIdsToDelete.has(Number(segment.code_id)))
         : [];
 
-      const memosRes = await fetch(`${API_BASE}/projects/${id}/memos`);
-      const allMemos = await memosRes.ok ? await memosRes.json() : [];
+      const allMemos = fetchMemos(id);
       const memosSnapshot = allMemos.filter(m => 
         m.target_type === 'code' && codeIdsToDelete.has(Number(m.target_id))
       );
 
-      const response = await fetch(
-        `${API_BASE}/projects/${id}/codes/${codeId}`,
-        { method: "DELETE" },
-      );
+      const response = deleteCode(id, codeId);
       
       if (response.ok) {
         setProjectCodes((prev) => prev.filter((c) => c.id !== codeId));
@@ -505,7 +447,7 @@ function ProjectPage() {
           if (oldDoc) {
             setUploadStatus(`Replacing ${finalName}...`);
             try {
-              const delRes = await fetch(`${API_BASE}/projects/${id}/documents/${oldDoc.id}`, { method: "DELETE" });
+              const delRes = await deleteDocument(id, oldDoc.id);
               if (delRes.ok) {
                 isNameValid = true;
                 if (activeDocument && activeDocument.id === oldDoc.id) setActiveDocument(null);
@@ -560,11 +502,7 @@ function ProjectPage() {
 
           try {
             // Send selected language down to Python backend via URL Query parameter!
-            const url = `${API_BASE}/projects/${id}/audio/transcribe?language=${selectedLanguage}`;
-            const res = await fetch(url, {
-              method: "POST",
-              body: audioFormData,
-            });
+            const res = transcribeAudio(id, selectedLanguage, audioFormData);
 
             if (!res.ok) {
               const errData = await res.json();
@@ -585,7 +523,7 @@ function ProjectPage() {
           const textFormData = new FormData();
           textFormData.append("files", cur);
           try {
-            const res = await fetch(`${API_BASE}/projects/${id}/documents/`, { method: "POST", body: textFormData });
+            const res = await uploadDocument(id, textFormData);
             if (!res.ok) {
               failedUploads.push({ filename: finalName, reason: `HTTP ${res.status}` });
             } else {
@@ -611,7 +549,7 @@ function ProjectPage() {
       setUploadStatus(`Success! All ${successfulUploads.length} items parsed and cataloged offline.`);
       setTimeout(() => setUploadStatus(""), 4000);
     }
-    fetchDocuments();
+    loadDocuments();
     if (eventOrFiles?.target) eventOrFiles.target.value = null;
   };
 
@@ -630,16 +568,12 @@ function ProjectPage() {
   const handleDeleteDocument = async (docId, docName) => {
     try {
       const docToSnapshot = documents.find(d => d.id === docId);
-      const docContentRes = await fetch(`${API_BASE}/projects/${id}/documents/${docId}`);
-      const docContentData = docContentRes.ok ? await docContentRes.json() : docToSnapshot;
       
-      const segmentsRes = await fetch(`${API_BASE}/projects/${id}/segments?document_id=${docId}`);
-      const segmentsData = segmentsRes.ok ? await segmentsRes.json() : [];
+      const docContentData = await fetchDocument(id, docId);
 
-      const response = await fetch(
-        `${API_BASE}/projects/${id}/documents/${docId}`,
-        { method: "DELETE" },
-      );
+      const segmentsData = await fetchSegmentsForDocument(id, docId);
+
+      const response = deleteDocument(id, docId);
 
       if (response.ok) {
         setDocuments((prevDocs) => prevDocs.filter((doc) => doc.id !== docId));
@@ -648,7 +582,7 @@ function ProjectPage() {
           setDocumentSegments([]);
         }
 
-        fetchCodes(); 
+        loadCodes();
 
         pushUndoAction({
           type: "delete-document",
@@ -673,14 +607,7 @@ function ProjectPage() {
       throw new Error("Document name cannot be empty.");
     }
 
-    const response = await fetch(
-      `${API_BASE}/projects/${id}/documents/${docId}/rename`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename }),
-      },
-    );
+    const response = await renameDocument(id, docId, filename);
 
     const data = await response.json();
     if (!response.ok) {
@@ -708,11 +635,9 @@ function ProjectPage() {
 
   const handleSaveSettings = async (newName, newDescription) => {
     try {
-      const res = await fetch(`http://127.0.0.1:8000/projects/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName, description: newDescription }),
-      });
+      const res = updateProjectDetails(id, 
+                                      { name: newName, 
+                                        description: newDescription });
 
       if (res.ok) {
         setProjectDetails({ name: newName, description: newDescription }); // Update the UI instantly
@@ -727,7 +652,7 @@ function ProjectPage() {
 
   const handleDeleteProject = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/projects/${id}`, { method: 'DELETE' });
+      const response = await deleteProject();
       if(response.ok) {
         navigate('/');
       } else {
@@ -743,7 +668,7 @@ function ProjectPage() {
     setUploadStatus("Generating REFI-QDA export...");
 
     try {
-      const response = await fetch(`${API_BASE}/projects/${id}/export/refi`);
+      const response = exportProjectToRefi(id);
       if (!response.ok) throw new Error("Failed to generate export");
       const blob = await response.blob();
 
@@ -796,7 +721,7 @@ function ProjectPage() {
   const handleExportQuotesCSV = async () => {
     setUploadStatus("Generating Quotes CSV...");
     try {
-      const response = await fetch(`${API_BASE}/projects/${id}/segments/export/csv`);
+      const response = exportProjectSegmentsToCsv(id);
       if (!response.ok) throw new Error("Failed to export quotes");
       
       const blob = await response.blob();
@@ -840,16 +765,8 @@ function ProjectPage() {
   };
 
   const handleExportExcel = async (selectedDocIds, selectedCodeIds) => {
-    let url = `${API_BASE}/projects/${id}/export/excel`;
-
-      // Append the filters to the URL as query parameters
-      const params = new URLSearchParams();
-      if (selectedDocIds.length > 0) params.append("docs", selectedDocIds.join(","));
-      if (selectedCodeIds.length > 0) params.append("codes", selectedCodeIds.join(","));
-
-      if (params.toString()) {
-        url += `?${params.toString()}`;
-      }
+    
+      let url = buildUrlToExportExcel(selectedDocIds, selectedCodeIds);
 
       const link = document.createElement("a");
       link.href = url;
@@ -877,8 +794,6 @@ function ProjectPage() {
 
   const page = {
     id,
-    API_BASE,
-    navigate,
     viewerRef,
     projectDetails,
     documents,
@@ -912,8 +827,8 @@ function ProjectPage() {
     handleDeleteDocument,
     handleRenameDocument,
     handleDeleteCode,
-    fetchCodes,
-    fetchDocuments,
+    loadCodes,
+    loadDocuments,
     openCodePanel,
     handleSaveSettings,
     handleDeleteProject,

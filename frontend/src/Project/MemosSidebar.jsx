@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
-import axios from "axios";
+import { deleteMemo, fetchMemos } from "../utils/backend-api";
 
-export default function MemosTab({ projectId, codes = [], pushUndoAction }) {
+export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) {
   const [memos, setMemos] = useState([]);
   const [editingMemo, setEditingMemo] = useState(null);
   const [newMemoText, setNewMemoText] = useState("");
@@ -9,13 +9,12 @@ export default function MemosTab({ projectId, codes = [], pushUndoAction }) {
   const [error, setError] = useState(null);
 
   // --- DATA FETCHING ---
-  const fetchMemos = useCallback((isInitialLoad = false) => {
+  const loadMemos = useCallback((isInitialLoad = false) => {
     if (!projectId) return;
     if (isInitialLoad) setLoading(true);
 
-    axios
-      .get(`http://127.0.0.1:8000/projects/${projectId}/memos?t=${Date.now()}`)
-      .then((res) => setMemos(res.data))
+    fetchMemos(projectId)
+      .then((res) => setMemos(res))
       .catch((e) => setError("Failed to load memos"))
       .finally(() => {
         if (isInitialLoad) setLoading(false);
@@ -23,11 +22,11 @@ export default function MemosTab({ projectId, codes = [], pushUndoAction }) {
   }, [projectId]);
 
   useEffect(() => {
-    fetchMemos(true);
-    const handleBackgroundUpdate = () => fetchMemos(false);
+    loadMemos(true);
+    const handleBackgroundUpdate = () => loadMemos(false);
     window.addEventListener('memos-updated', handleBackgroundUpdate);
     return () => window.removeEventListener('memos-updated', handleBackgroundUpdate);
-  }, [fetchMemos]);
+  }, [loadMemos]);
 
   // --- ACTIONS ---
   const handleEdit = (memo) => {
@@ -38,7 +37,7 @@ export default function MemosTab({ projectId, codes = [], pushUndoAction }) {
   const handleSave = async () => {
     if (!editingMemo) return;
     try {
-      const res = await axios.put(`http://127.0.0.1:8000/memos/${editingMemo.id}`, { text: newMemoText });
+      const res = updateMemo(editingMemo.id, { text: newMemoText });
       setMemos((prev) => prev.map((m) => (m.id === res.data.id ? { ...res.data, target_name: m.target_name } : m)));
       setEditingMemo(null);
       setNewMemoText("");
@@ -52,13 +51,13 @@ export default function MemosTab({ projectId, codes = [], pushUndoAction }) {
     setMemos((prev) => prev.filter((m) => m.id !== id));
 
     try {
-      await axios.delete(`http://127.0.0.1:8000/memos/${id}`);
+      deleteMemo();
       if (pushUndoAction && memoSnapshot) {
         pushUndoAction({ type: "delete-memo", memo: memoSnapshot });
       }
     } catch {
       setError("Failed to delete memo");
-      fetchMemos(false);
+      loadMemos(false);
     }
   };
 

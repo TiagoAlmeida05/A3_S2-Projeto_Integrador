@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import CodeMemoModal from './CodeMemoModal';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
-import axios from 'axios';
+import { createCode, createMemo, exportProjectToDocx, mergeCodes, updateCode, updateCodesOrder } from '../utils/backend-api';
 
 const getRandomColor = () => {
   const chars = '6789ABCDEF'; 
@@ -12,7 +12,7 @@ const getRandomColor = () => {
   return color;
 };
 
-function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV, pushUndoAction }) {
+function CodesSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV, pushUndoAction }) {
   const [memoModalOpen, setMemoModalOpen] = useState(false);
   const [memoTargetCode, setMemoTargetCode] = useState(null);
   const [memoError, setMemoError] = useState(null);
@@ -52,15 +52,11 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     if (!newCodeName.trim()) return;
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+      const response = await createCode(projectId, { 
           name: newCodeName, 
           color: newCodeColor,
           parent_id: null
-        })
-      });
+        });
 
       if (response.ok) {
         setNewCodeName(""); // Clear the input
@@ -79,15 +75,11 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     if (!subCodeName.trim()) return;
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const response = await createCode(projectId, {
           name: subCodeName, 
           color: subCodeColor,
           parent_id: parentId
-        })
-      });
+        });
 
       if (response.ok) {
         setSubCodeName("");
@@ -114,11 +106,9 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/${editingCodeId}`, {
-        method: 'PUT',
-        headers: {'Content-Type' : 'application/json'},
-        body: JSON.stringify({name: editName, color: editColor})
-      });
+      const response = await updateCode(projectId, 
+                                        editingCodeId, 
+                                        {name: editName, color: editColor});
 
       if (response.ok) {
         setEditingCodeId(null);
@@ -146,7 +136,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     if (!memoTargetCode) return;
     setMemoError(null);
     try {
-      await axios.post(`http://127.0.0.1:8000/memos`, {
+      await createMemo({
         text,
         target_type: 'code',
         target_id: memoTargetCode
@@ -262,11 +252,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
     if (onReorderCodes) onReorderCodes(remainingCodes);
 
     try {
-      await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/reorder`, {
-        method: 'PUT',
-        headers: {'Content-Type' : 'application/json'},
-        body: JSON.stringify({codes: reorderPayload})
-      });
+      await updateCodesOrder(projectId, {codes: reorderPayload});
       if (onRefreshCodes) onRefreshCodes();
     } catch (error) {
       console.error("Failed to reorder codes:", error);
@@ -318,11 +304,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
 
   const handleMoveCode = async (codeId, newParentId) => {
     try {
-      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/${codeId}`, {
-        method: 'PUT',
-        headers: {'Content-Type' : 'application/json'},
-        body: JSON.stringify({parent_id: newParentId})
-      });
+      const response = await updateCode(projectId, codeId, {parent_id: newParentId});
 
       if (response.ok) {
         setExpandedCodes(prev => new Set(prev).add(newParentId));
@@ -358,7 +340,7 @@ function CodeSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCod
   const handleExportCodebook = async () => {
     try {
   
-      const response = await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/export/docx`);
+      const response = exportProjectToDocx(projectId);
       if (!response.ok) throw new Error("Failed to generate Codebook");
       
       const blob = await response.blob();
@@ -885,16 +867,12 @@ return (
                 disabled={!mergeModalConfig.newName.trim()}
                 onClick={async () => {
                   try {
-                    await fetch(`http://127.0.0.1:8000/projects/${projectId}/codes/merge`, {
-                      method: 'POST',
-                      headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify({ 
+                    await mergeCodes(projectId, { 
                         source_code_id: mergeModalConfig.source.id, 
                         target_code_id: mergeModalConfig.target.id,
                         new_name: mergeModalConfig.newName.trim(),
                         new_color: mergeModalConfig.newColor
-                      })
-                    });
+                      });
                     
                     if(onRefreshCodes) onRefreshCodes();
 
@@ -919,4 +897,4 @@ return (
   );
 }
 
-export default CodeSidebar;
+export default CodesSidebar;

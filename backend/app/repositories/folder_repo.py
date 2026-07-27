@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
-import models
+
+import app.models as models
 
 class FolderRepository:
     def __init__(self, db: Session):

@@ -1,13 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import models
-from database import engine
 
-from routers import projects, documents, codes, segments, folders, memos, audio
-from refi_service import export_refi_xml, import_refi_xml
+from app.database import engine, Base
+from app.routers import audio, codes, documents, folders, memos, projects, segments
 
-
-models.Base.metadata.create_all(bind=engine)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="jUPiter QDA API")
 
@@ -23,7 +20,6 @@ app.add_middleware(
 def root():
     return {"message": "SQLAlchemy Backend is running with Clean Architecture!"}
 
-# --- ATTACH ALL ROUTERS ---
 app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(codes.router)
