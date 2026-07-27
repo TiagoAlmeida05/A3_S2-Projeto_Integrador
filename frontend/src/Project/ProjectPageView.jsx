@@ -103,6 +103,7 @@ const ProjectPageView = ({ page }) => {
               setActiveTab={setActiveTab}
               documents={documents}
               activeDocument={activeDocument}
+              setActiveDocument={setActiveDocument}
               uploadStatus={uploadStatus}
               uploadProgress={uploadProgress}
               handleFileUpload={handleFileUpload}
@@ -118,6 +119,7 @@ const ProjectPageView = ({ page }) => {
               handleCreateTextDocument={handleCreateTextDocument}
               handleExportQuotesCSV={handleExportQuotesCSV}
               handleExportExcel={handleExportExcel}
+              setDocumentSegments={setDocumentSegments}
             />
           </Panel>
 

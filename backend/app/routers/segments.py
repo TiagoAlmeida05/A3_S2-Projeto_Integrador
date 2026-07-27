@@ -32,6 +32,13 @@ def get_segments(project_id: int,
     segments = repo.get_by_document(project_id, document_id)
     return segments
 
+@router.get("/projects/{project_id}/segments/{segment_id}", response_model=schemas.SegmentDetail)
+def get_segment(project_id: int, 
+                 segment_id: Optional[int] = None, 
+                 repo: SegmentRepository = Depends(get_seg_repo)):
+    segments = repo.get(project_id, segment_id)
+    return segments
+
 @router.put("/projects/{project_id}/segments/{segment_id}")
 def update_segment(project_id: int, 
                    segment_id: int, 

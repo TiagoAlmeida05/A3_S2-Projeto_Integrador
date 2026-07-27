@@ -8,6 +8,7 @@ const ProjectPageSidebarPanel = ({
   setActiveTab,
   documents,
   activeDocument,
+  setActiveDocument,
   uploadStatus,
   uploadProgress,
   handleFileUpload,
@@ -23,6 +24,7 @@ const ProjectPageSidebarPanel = ({
   handleCreateTextDocument,
   handleExportQuotesCSV,
   pushUndoAction,
+  setDocumentSegments
 }) => {
 
   return (
@@ -185,7 +187,12 @@ const ProjectPageSidebarPanel = ({
             pushUndoAction={pushUndoAction}
           />
         )}
-        {activeTab === "memos" && <MemosSidebar projectId={id} codes={projectCodes} pushUndoAction={pushUndoAction}/>}
+        {activeTab === "memos" && <MemosSidebar 
+                                      projectId={id} 
+                                      codes={projectCodes} 
+                                      pushUndoAction={pushUndoAction} 
+                                      setActiveDocument={setActiveDocument}
+                                      setDocumentSegments={setDocumentSegments} />}
       </div>
     </div>
   );
