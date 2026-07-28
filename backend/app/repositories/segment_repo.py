@@ -21,6 +21,11 @@ class SegmentRepository:
         self.db.refresh(new_segment)
         return new_segment
 
+    def get(self, project_id: int, segment_id: int):
+        return self.db.query(models.Segment).filter(
+                    models.Segment.id == segment_id, models.Code.project_id == project_id
+                ).first()
+
     def get_by_document(self, project_id: int, document_id: Optional[int] = None):
         query = self.db.query(models.Segment).join(models.Document).filter(
             models.Document.project_id == project_id

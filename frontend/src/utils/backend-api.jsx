@@ -241,6 +241,11 @@ export async function deleteCode(projectId, codeId) {
   return await fetch(`${API_BASE}/projects/${projectId}/codes/${codeId}`, { method: "DELETE" });
 }
 
+export async function fetchSegment(projectId, segmentId) {
+  return await fetch(`${API_BASE}/projects/${projectId}/segments/${segmentId}`)
+              .then((res) => res.json());
+}
+
 export async function fetchSegmentsForDocument(projectId, documentId) {
   return await fetch(`${API_BASE}/projects/${projectId}/segments?document_id=${documentId}`)
               .then((res) => res.json());

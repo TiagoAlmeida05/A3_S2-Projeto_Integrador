@@ -2,15 +2,7 @@ import { useState, useEffect } from 'react';
 import CodeMemoModal from './CodeMemoModal';
 import ConfirmDeleteModal from '../Modal/ConfirmDeleteModal';
 import { createCode, createMemo, exportProjectToDocx, mergeCodes, updateCode, updateCodesOrder } from '../utils/backend-api';
-
-const getRandomColor = () => {
-  const chars = '6789ABCDEF'; 
-  let color = '#';
-  for (let i = 0; i < 6; i++) {
-    color += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return color;
-};
+import { getRandomColor } from '../utils/colors';
 
 function CodesSidebar({ projectId, codes, onDeleteCode, onRefreshCodes, onOpenCodePanel, onReorderCodes, onExportQuotesCSV, pushUndoAction }) {
   const [memoModalOpen, setMemoModalOpen] = useState(false);

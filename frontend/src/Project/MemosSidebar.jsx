@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { deleteMemo, fetchMemos } from "../utils/backend-api";
+import { deleteMemo, fetchMemos, fetchDocument, fetchSegment } from "../utils/backend-api";
 
-export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) {
+export default function MemosSidebar({ projectId, codes = [], pushUndoAction, setActiveDocument, setDocumentSegments }) {
   const [memos, setMemos] = useState([]);
   const [editingMemo, setEditingMemo] = useState(null);
   const [newMemoText, setNewMemoText] = useState("");
@@ -61,6 +61,21 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
     }
   };
 
+  const handleSegmentMemoClick = async (segmentId) => {
+
+    try {
+      const segmentData = await fetchSegment(projectId, segmentId);
+
+      const docData = await fetchDocument(projectId, segmentData.document_id);
+      setActiveDocument(docData);
+
+      setDocumentSegments([segmentData]);
+    } catch(error) {
+      console.error("Failed to load memo document: ", error);
+    }
+
+  }
+
   // --- UI RENDERER ---
   const renderMemoItem = (memo) => {
     const isEditing = editingMemo && editingMemo.id === memo.id;
@@ -82,7 +97,8 @@ export default function MemosSidebar({ projectId, codes = [], pushUndoAction }) 
       );
     } else if (memo.target_type === "segment") {
       headerContent = (
-        <div style={{ marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px solid #333", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+        <div onClick={() => handleSegmentMemoClick(memo.target_id) }
+          style={{ marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px solid #333", display: "flex", alignItems: "flex-start", gap: "8px" }}>
           <span style={{ color: "#646cff", fontSize: "16px", lineHeight: "1" }}>❝</span>
           <span style={{ fontSize: "13px", color: "#888", fontStyle: "italic", lineHeight: "1.4", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
             {memo.target_name || "Unnamed Segment"}
