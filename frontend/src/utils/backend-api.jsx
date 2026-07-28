@@ -215,7 +215,7 @@ export async function createCode(projectId, codeData) {
 }
 
 export async function mergeCodes(projectId, codeMergeData) {
-  return await fetch(`http://${API_BASE}/projects/${projectId}/codes/merge`, {
+  return await fetch(`${API_BASE}/projects/${projectId}/codes/merge`, {
                       method: 'POST',
                       headers: {'Content-Type': 'application/json'},
                       body: JSON.stringify(codeMergeData)
@@ -223,14 +223,14 @@ export async function mergeCodes(projectId, codeMergeData) {
 }
 
 export async function updateCode(projectId, codeId, codeData) {
-  return await fetch(`${API_BASE}/projects/${id}/codes/${lastAction.codeId}`, {
+  return await fetch(`${API_BASE}/projects/${projectId}/codes/${codeId}`, {
           method: "PUT", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(codeData),
         });
 }
 
 export async function updateCodesOrder(projectId, codesOrderData) {
-  return await fetch(`${API_BASE}/projects/${id}/codes/reorder`, {
+  return await fetch(`${API_BASE}/projects/${projectId}/codes/reorder`, {
             method: "PUT", 
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(codesOrderData),

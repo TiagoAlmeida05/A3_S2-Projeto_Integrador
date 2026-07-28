@@ -82,7 +82,7 @@ export default function QuickCodeModal({ isOpen,
                     type="text"
                     value={quickCodeName}
                     onChange={(e) => setQuickCodeName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleQuickCodeAction(); } }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onApply(); } }}
                     placeholder="Code name"
                     style={{ width: "100%", padding: "8px", borderRadius: "8px", border: "1px solid #555", backgroundColor: "#1f1f28", color: "white", boxSizing: "border-box" }}
                   />

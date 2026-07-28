@@ -376,12 +376,12 @@ function ProjectPage() {
         ? (await fetchAllDocumentSegments()).filter((segment) => codeIdsToDelete.has(Number(segment.code_id)))
         : [];
 
-      const allMemos = fetchMemos(id);
+      const allMemos = await fetchMemos(id);
       const memosSnapshot = allMemos.filter(m => 
         m.target_type === 'code' && codeIdsToDelete.has(Number(m.target_id))
       );
 
-      const response = deleteCode(id, codeId);
+      const response = await deleteCode(id, codeId);
       
       if (response.ok) {
         setProjectCodes((prev) => prev.filter((c) => c.id !== codeId));
@@ -668,7 +668,7 @@ function ProjectPage() {
     setUploadStatus("Generating REFI-QDA export...");
 
     try {
-      const response = exportProjectToRefi(id);
+      const response = await exportProjectToRefi(id);
       if (!response.ok) throw new Error("Failed to generate export");
       const blob = await response.blob();
 

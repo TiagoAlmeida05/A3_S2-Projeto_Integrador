@@ -501,7 +501,7 @@ const ProjectPageDocumentPanel = ({
 
       if (!docRes.ok) throw new Error("Failed to save document");
 
-      const segmentPromises = localSegments.map((seg) =>
+      localSegments.map((seg) =>
         updateSegment(projectId, 
                             seg.id, 
                             { start_char: seg.start_char, 
@@ -509,7 +509,7 @@ const ProjectPageDocumentPanel = ({
                               content: seg.content })
       );
 
-      await Promise.all(segmentPromises);
+      //await Promise.all(segmentPromises);
 
       const deletedSegments = documentSegments.filter(oldSeg => !localSegments.find(ls => ls.id === oldSeg.id));
       const deletePromises = deletedSegments.map(seg =>

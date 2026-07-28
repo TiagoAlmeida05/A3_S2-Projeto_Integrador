@@ -19,7 +19,7 @@ function ImportProjectModal({ isOpen, onClose, onImportSuccess }) {
     formData.append("file", file);
 
     try {
-      const response = importProjectFromRefi(formData);
+      const response = await importProjectFromRefi(formData);
 
       if (!response.ok) {
         const errData = await response.json();
