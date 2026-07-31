@@ -13,7 +13,7 @@ function DocumentsSidebar({
   onDeleteDocument,
   onRenameDocument,
   projectId,
-  fetchDocuments,
+  loadDocuments,
 }) {
   const [folders, setFolders] = useState([]);
   const [newFolderName, setNewFolderName] = useState("");
@@ -144,13 +144,13 @@ function DocumentsSidebar({
     const reorderPayload = nextDocuments.map((doc, index) => ({ id: doc.id, order_index: index }));
 
     try {
-      const response = updateDocumentsOrder(projectId, { documents: reorderPayload });
+      const response = await updateDocumentsOrder(projectId, { documents: reorderPayload });
 
       if (!response.ok) throw new Error('Failed to reorder documents');
-      if (fetchDocuments) fetchDocuments();
+      if (loadDocuments) loadDocuments();
     } catch (err) {
       console.error(err);
-      if (fetchDocuments) fetchDocuments();
+      if (loadDocuments) loadDocuments();
     }
   };
 
@@ -158,7 +158,7 @@ function DocumentsSidebar({
     try {
       const response = moveDocument(projectId, documentId, folderId);
       if (!response.ok) throw new Error('Failed to move document');
-      if (fetchDocuments) fetchDocuments();
+      if (loadDocuments) loadDocuments();
     } catch (err) {
       console.error(err);
     }
@@ -232,7 +232,7 @@ function DocumentsSidebar({
       const res = deleteFolder(projectId, folderId);
       if (res.ok) {
         loadFolders();
-        if (fetchDocuments) fetchDocuments();
+        if (loadDocuments) loadDocuments();
       }
     } catch (err) {
       console.error(err);
